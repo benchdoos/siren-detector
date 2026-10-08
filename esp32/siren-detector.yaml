@@ -1,0 +1,163 @@
+esphome:
+  name: siren-detector
+  friendly_name: Siren Detector
+  on_boot:
+    - priority: -100
+      then:
+        - delay: 5s
+        - switch.turn_on: microphone_capture
+  includes:
+    - <cstring>
+    - <lwip/inet.h>
+    - <lwip/sockets.h>
+
+esp32:
+  variant: esp32s3
+  framework:
+    type: esp-idf
+
+logger:
+  level: DEBUG
+
+# INMP441 wiring:
+#   SCK/BCLK  -> GPIO4
+#   WS/LRCLK  -> GPIO5
+#   SD/DOUT   -> GPIO6
+#   L/R       -> GND  (left channel)
+# No MCLK wire is required for this microphone.
+i2s_audio:
+  - id: i2s_bus
+    i2s_bclk_pin: GPIO4
+    i2s_lrclk_pin: GPIO5
+
+microphone:
+  - platform: i2s_audio
+    id: inmp441
+    adc_type: external
+    i2s_din_pin: GPIO6
+    i2s_audio_id: i2s_bus
+    channel: left
+    sample_rate: 16000
+    # INMP441 carries 24-bit audio in 32-bit I2S slots.
+    bits_per_sample: 32bit
+    use_apll: true
+    on_data:
+      - lambda: |-
+          id(audio_chunks)++;
+          // INMP441 data is 24-bit audio packed into 32-bit I2S slots.
+          // Shift away the unused low byte and normalize to the 24-bit range.
+          const int32_t *samples = reinterpret_cast<const int32_t *>(x.data());
+          const size_t sample_count = x.size() / sizeof(int32_t);
+          double sum_squares = 0.0;
+          float peak = 0.0f;
+          for (size_t i = 0; i < sample_count; i++) {
+            const float sample = static_cast<float>(samples[i] >> 8) / 8388608.0f;
+            const float magnitude = fabsf(sample);
+            sum_squares += static_cast<double>(sample) * sample;
+            if (magnitude > peak) {
+              peak = magnitude;
+            }
+          }
+          const float rms = sample_count > 0
+                              ? sqrtf(static_cast<float>(sum_squares / sample_count))
+                              : 0.0f;
+          // Temporary raw transport for the first recorder prototype.
+          // Raspberry Pi 5: 192.168.1.100, UDP port 9000.
+          static int udp_socket = -1;
+          static sockaddr_in udp_address{};
+          static uint32_t udp_sequence = 0;
+          static uint32_t udp_sent = 0;
+          static uint32_t udp_errors = 0;
+          if (udp_socket < 0) {
+            udp_socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+            udp_address.sin_family = AF_INET;
+            udp_address.sin_port = htons(9000);
+            inet_aton("192.168.1.100", &udp_address.sin_addr);
+          }
+          if (udp_socket >= 0) {
+            // Packet format: magic(4), sequence(4), payload size(2), reserved(2), PCM payload.
+            // The sequence lets the recorder preserve real time when UDP drops a packet.
+            static uint8_t packet[12 + 1024];
+            if (x.size() <= 1024) {
+              const uint32_t magic = htonl(0x53445231);  // "SDR1"
+              const uint32_t sequence_number = udp_sequence++;
+              const uint32_t sequence = htonl(sequence_number);
+              const uint16_t payload_size = htons(static_cast<uint16_t>(x.size()));
+              const uint16_t reserved = 0;
+              memcpy(packet + 0, &magic, sizeof(magic));
+              memcpy(packet + 4, &sequence, sizeof(sequence));
+              memcpy(packet + 8, &payload_size, sizeof(payload_size));
+              memcpy(packet + 10, &reserved, sizeof(reserved));
+              memcpy(packet + 12, x.data(), x.size());
+              const int result = sendto(udp_socket, packet, 12 + x.size(), 0,
+                                        reinterpret_cast<const sockaddr *>(&udp_address), sizeof(udp_address));
+              if (result == static_cast<int>(12 + x.size())) {
+                udp_sent++;
+              } else {
+                udp_errors++;
+              }
+              const uint32_t udp_total = udp_sent + udp_errors;
+              if (udp_total % 100 == 0) {
+                ESP_LOGI("udp", "audio packets: sent=%u errors=%u last_seq=%u last_result=%d",
+                         (unsigned) udp_sent, (unsigned) udp_errors,
+                         (unsigned) sequence_number, result);
+              }
+            }
+          }
+          // Send every audio block; throttle only diagnostic log lines.
+          if (id(audio_chunks) % 32 == 0) {
+            ESP_LOGI("audio", "INMP441 data: %u bytes, chunks=%u, samples=%u, rms=%.5f, peak=%.5f",
+                     (unsigned) x.size(), (unsigned) id(audio_chunks),
+                     (unsigned) sample_count, rms, peak);
+          }
+
+globals:
+  - id: audio_chunks
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+
+sensor:
+  - platform: uptime
+    name: "Uptime"
+    update_interval: 30s
+    entity_category: diagnostic
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 30s
+    entity_category: diagnostic
+
+binary_sensor:
+  - platform: status
+    name: "Online"
+    entity_category: diagnostic
+
+switch:
+  - platform: template
+    id: microphone_capture
+    name: "Microphone capture"
+    icon: "mdi:microphone"
+    entity_category: config
+    restore_mode: ALWAYS_OFF
+    optimistic: true
+    turn_on_action:
+      - microphone.capture:
+          id: inmp441
+    turn_off_action:
+      - microphone.stop_capture:
+          id: inmp441
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  ap:
+    ssid: "Siren Detector Fallback"
+    password: "changeme"
+
+captive_portal:

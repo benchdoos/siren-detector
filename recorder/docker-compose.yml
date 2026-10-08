@@ -1,0 +1,16 @@
+services:
+  recorder:
+    build:
+      context: ./recorder-files
+      dockerfile: Dockerfile
+    container_name: siren-audio-recorder
+    network_mode: host
+    volumes:
+      - ./dataset/inbox:/recordings
+    command:
+      - --bind
+      - 0.0.0.0
+      - --port
+      - "9000"
+      - --output-dir
+      - /recordings
