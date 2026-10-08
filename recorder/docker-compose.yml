@@ -6,7 +6,7 @@ services:
     container_name: siren-audio-recorder
     network_mode: host
     volumes:
-      - ./dataset/inbox:/recordings
+      - ./dataset:/recordings
     command:
       - --bind
       - 0.0.0.0
@@ -14,3 +14,7 @@ services:
       - "9000"
       - --output-dir
       - /recordings
+      - --label
+      - ${LABEL:-inbox}
+      - --duration
+      - ${DURATION:-0}

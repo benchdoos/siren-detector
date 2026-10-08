@@ -16,6 +16,7 @@ SAMPLE_RATE = 16_000
 PACKET_SIZE = 4096
 HEADER = struct.Struct("!IIHH")
 MAGIC = 0x53445231  # "SDR1"
+LABELS = ("siren", "explosion", "motorcycle", "background", "unknown", "inbox")
 
 
 def convert_i2s_32_to_pcm16(data: bytes) -> bytes:
@@ -32,11 +33,21 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bind", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=9000)
-    parser.add_argument("--output-dir", type=Path, default=Path("dataset/inbox"))
+    parser.add_argument("--output-dir", type=Path, default=Path("dataset"))
+    parser.add_argument("--label", choices=LABELS, default="inbox")
+    parser.add_argument(
+        "--duration",
+        type=int,
+        default=0,
+        help="recording length in seconds; 0 records until Ctrl-C",
+    )
     args = parser.parse_args()
+    if args.duration < 0:
+        parser.error("--duration must be 0 or greater")
 
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = args.output_dir / f"{datetime.now():%Y%m%d-%H%M%S}.wav"
+    output_dir = args.output_dir / args.label
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / f"{datetime.now():%Y%m%d-%H%M%S-%f}.wav"
 
     udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp.bind((args.bind, args.port))
@@ -45,6 +56,8 @@ def main() -> None:
     started_at = datetime.now().astimezone()
     started_monotonic = time.monotonic()
     print(f"Started at {started_at.isoformat(timespec='seconds')}")
+    print(f"Label: {args.label}")
+    print(f"Duration: {args.duration}s" if args.duration else "Duration: until Ctrl-C")
     print(f"Listening on {args.bind}:{args.port}")
     print(f"Writing {output_path}")
     print("Press Ctrl-C to stop and close the WAV file.")
@@ -55,16 +68,28 @@ def main() -> None:
     expected_sequence = None
     last_sequence = None
     frames = 0
+    stop_reason = "Ctrl-C"
     with wave.open(str(output_path), "wb") as wav:
         wav.setnchannels(1)
         wav.setsampwidth(2)
         wav.setframerate(SAMPLE_RATE)
         try:
             while True:
+                elapsed = time.monotonic() - started_monotonic
+                if args.duration and elapsed >= args.duration:
+                    stop_reason = "duration reached"
+                    break
+                timeout = 5.0
+                if args.duration:
+                    timeout = min(timeout, max(0.1, args.duration - elapsed))
+                udp.settimeout(timeout)
                 try:
                     data, address = udp.recvfrom(PACKET_SIZE + HEADER.size)
                 except socket.timeout:
                     elapsed = time.monotonic() - started_monotonic
+                    if args.duration and elapsed >= args.duration:
+                        stop_reason = "duration reached"
+                        break
                     print(
                         f"No packets for 5s; wall_seconds={elapsed:.1f}, "
                         f"packets={packets}, last_seq={last_sequence}"
@@ -111,12 +136,15 @@ def main() -> None:
                         f"dropped={dropped_packets}, invalid={invalid_packets}, "
                         f"last_seq={last_sequence}, source={address[0]}"
                     )
+                if args.duration and time.monotonic() - started_monotonic >= args.duration:
+                    stop_reason = "duration reached"
+                    break
         except KeyboardInterrupt:
             pass
         finally:
             stopped_at = datetime.now().astimezone()
             elapsed = time.monotonic() - started_monotonic
-            print(f"Stopped at {stopped_at.isoformat(timespec='seconds')}")
+            print(f"Stopped at {stopped_at.isoformat(timespec='seconds')} ({stop_reason})")
             print(f"Wall-clock duration: {elapsed:.1f}s")
             print(
                 f"Saved {frames / SAMPLE_RATE:.1f}s to {output_path}; "

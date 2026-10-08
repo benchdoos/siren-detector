@@ -316,7 +316,13 @@ recorder/
 ├── recorder-files/
 │   ├── Dockerfile
 │   └── udp_recorder.py
-└── dataset/inbox/
+└── dataset/
+    ├── siren/
+    ├── explosion/
+    ├── motorcycle/
+    ├── background/
+    ├── unknown/
+    └── inbox/
 ```
 
 Скопировать папку на Raspberry Pi:
@@ -325,9 +331,9 @@ recorder/
 scp -r recorder doos@192.168.1.100:~/Projects/esphome/
 ssh doos@192.168.1.100
 cd ~/Projects/esphome/recorder
-mkdir -p dataset/inbox
+mkdir -p dataset/{siren,explosion,motorcycle,background,unknown,inbox}
 docker compose build
-docker compose run --rm recorder
+LABEL=background DURATION=10 docker compose run --rm recorder
 ```
 
 После изменений в формате UDP-пакетов нужно заново собрать и прошить ESP32, а затем пересобрать recorder:
@@ -337,7 +343,17 @@ cd ~/Projects/esphome/recorder
 docker compose build --no-cache
 ```
 
-Запустить recorder — захват ESP32 уже работает автоматически. Оставить запись на нужное время и остановить recorder через `Ctrl-C`. WAV-файл появится в `dataset/inbox/`.
+`LABEL` выбирает подпапку, а `DURATION` задаёт длину записи в секундах. Например, команда выше создаст 10-секундный WAV в `dataset/background/` и завершится автоматически. Допустимые метки: `siren`, `explosion`, `motorcycle`, `background`, `unknown`, `inbox`. Если `DURATION` не задан или равен `0`, запись идёт до `Ctrl-C`.
+
+Примеры:
+
+```bash
+LABEL=siren DURATION=10 docker compose run --rm recorder
+LABEL=background DURATION=30 docker compose run --rm recorder
+docker compose run --rm recorder
+```
+
+Последняя команда сохраняет непрерывную запись в `dataset/inbox/`.
 
 Перед прошивкой версии с UDP-транспортом на Raspberry Pi выполнить:
 
@@ -491,7 +507,7 @@ MODEL_INFO
 
 ## Phase 4 — Recording / Dataset
 
-**Статус: recorder сохраняет WAV в `dataset/inbox`; разметка и набор данных ещё не готовы.**
+**Статус: recorder умеет сохранять размеченные WAV по категориям; набор записей ещё нужно собрать.**
 
 Raspberry Pi должен уметь сохранять реальные записи:
 
