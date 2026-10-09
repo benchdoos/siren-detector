@@ -84,7 +84,7 @@ def main() -> None:
 
     for task in tasks:
         audio_url = task.get("data", {}).get("audio", "")
-        if not audio_url.startswith(LS_FILE_PREFIX):
+        if not audio_url.startswith(AUDIO_BASE_URL):
             continue
         source = ls_url_to_path(audio_url)
         if not source.exists():
