@@ -31,6 +31,9 @@ services:
     network_mode: host
     volumes:
       - tfhub_cache:/root/.cache/tfhub_modules
+      - ../ml/results:/models:ro
+      - ../dataset:/dataset
+      - clips:/clips
     command:
       - --bind
       - 127.0.0.1
@@ -38,6 +41,11 @@ services:
       - "9002"
       - --source
       - siren-detector-01
+      - --classifier-weights
+      - /models/classifier_weights.npz
+      - --classifier-labels
+      - /models/classifier_labels.json
 
 volumes:
   tfhub_cache:
+  clips:

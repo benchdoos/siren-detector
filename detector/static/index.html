@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Siren Detector</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #0f0f0f; color: #e0e0e0; }
+  header { padding: 16px 24px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 18px; font-weight: 600; }
+  #status { font-size: 12px; padding: 3px 8px; border-radius: 4px; background: #333; color: #888; }
+  #status.connected { background: #1a3a1a; color: #4caf50; }
+
+  .score-panel { padding: 20px 24px; border-bottom: 1px solid #222; }
+  .score-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+  .score-bar-wrap { background: #1a1a1a; border-radius: 6px; height: 28px; overflow: hidden; position: relative; }
+  .score-bar { height: 100%; width: 0%; background: #4caf50; transition: width .2s, background .2s; border-radius: 6px; }
+  .score-value { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; font-weight: 600; }
+  .state-badge { display: inline-block; margin-top: 8px; font-size: 12px; padding: 2px 10px; border-radius: 4px; background: #222; color: #888; }
+  .state-badge.possible  { background: #3a2a00; color: #ffa726; }
+  .state-badge.confirmed { background: #3a0000; color: #ef5350; }
+
+  .events-header { padding: 12px 24px 8px; font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: .08em; display: flex; justify-content: space-between; align-items: center; }
+  .events-header button { font-size: 11px; background: none; border: 1px solid #333; color: #555; padding: 2px 8px; border-radius: 4px; cursor: pointer; }
+  .events-header button:hover { color: #aaa; border-color: #555; }
+  .filter-bar { padding: 0 24px 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .fbtn { font-size: 11px; padding: 3px 10px; border-radius: 4px; border: 1px solid #333; background: none; color: #666; cursor: pointer; }
+  .fbtn:hover { color: #aaa; border-color: #555; }
+  .fbtn.active { background: #222; border-color: #888; color: #e0e0e0; }
+
+  #events { padding: 0 24px 24px; display: flex; flex-direction: column; gap: 10px; }
+  .event-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 14px 16px; }
+  .event-card.confirmed { border-color: #5a1a1a; }
+  .event-card.possible  { border-color: #3a2a00; }
+  .event-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+  .badge.confirmed { background: #5a1a1a; color: #ef5350; }
+  .badge.possible  { background: #3a2a00; color: #ffa726; }
+  .event-time { font-size: 12px; color: #666; }
+  .event-conf { font-size: 12px; color: #888; }
+  .event-engine { font-size: 11px; color: #444; }
+  audio { width: 100%; height: 32px; filter: invert(1) hue-rotate(180deg) brightness(0.8); }
+  .no-clip { font-size: 12px; color: #444; font-style: italic; }
+  .empty { text-align: center; padding: 40px; color: #444; font-size: 14px; }
+  .label-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+  .label-row span { font-size: 11px; color: #555; }
+  .lbtn { font-size: 11px; padding: 3px 10px; border-radius: 4px; border: 1px solid #333; background: none; color: #888; cursor: pointer; }
+  .lbtn:hover { border-color: #666; color: #ccc; }
+  .lbtn.active { background: #1a3a1a; border-color: #4caf50; color: #4caf50; cursor: default; }
+  .lbtn.siren { border-color: #5a1a1a; color: #ef5350; }
+  .lbtn.siren:hover { background: #3a0000; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🚨 Siren Detector</h1>
+  <span id="status">disconnected</span>
+</header>
+
+<div class="score-panel">
+  <div class="score-label">Siren probability</div>
+  <div class="score-bar-wrap">
+    <div class="score-bar" id="score-bar"></div>
+    <span class="score-value" id="score-value">—</span>
+  </div>
+  <span class="state-badge" id="state-badge">idle</span>
+</div>
+
+<div class="events-header">
+  <span>Events</span>
+  <button onclick="clearEvents()">Clear</button>
+</div>
+<div class="filter-bar">
+  <button class="fbtn active" data-filter="siren" onclick="setFilter(this)">siren</button>
+  <button class="fbtn" data-filter="background" onclick="setFilter(this)">background</button>
+  <button class="fbtn" data-filter="motorcycle" onclick="setFilter(this)">motorcycle</button>
+  <button class="fbtn" data-filter="unknown" onclick="setFilter(this)">unknown</button>
+  <button class="fbtn" data-filter="all" onclick="setFilter(this)">all</button>
+</div>
+<div id="events"><div class="empty" id="empty">No events yet</div></div>
+
+<script>
+const scoreBar   = document.getElementById('score-bar');
+const scoreValue = document.getElementById('score-value');
+const stateBadge = document.getElementById('state-badge');
+const statusEl   = document.getElementById('status');
+const eventsEl   = document.getElementById('events');
+let   emptyEl    = document.getElementById('empty');
+
+function setScore(score, state) {
+  const pct = Math.min(score * 100, 100);
+  const color = score >= 0.3 ? '#ef5350' : score >= 0.10 ? '#ffa726' : '#4caf50';
+  scoreBar.style.width  = pct + '%';
+  scoreBar.style.background = color;
+  scoreValue.textContent = (score * 100).toFixed(1) + '%';
+  stateBadge.textContent = state;
+  stateBadge.className = 'state-badge ' + state;
+}
+
+function addEvent(ev) {
+  if (!ev.clip_url) return;  // show only confirmed events with audio
+  if (emptyEl) { emptyEl.remove(); emptyEl = null; }
+  const ts = new Date(ev.timestamp).toLocaleTimeString();
+  const filename = ev.clip_url.split('/').pop();
+  const card = document.createElement('div');
+  card.className = 'event-card';
+  card.innerHTML = `
+    <div class="event-meta">
+      <span class="badge confirmed">${ev.event.toUpperCase()}</span>
+      <span class="event-time">${ts}</span>
+      <span class="event-conf">${(ev.confidence * 100).toFixed(1)}%</span>
+      <span class="event-engine">${ev.engine}</span>
+    </div>
+    <audio controls src="${ev.clip_url}"></audio>
+    <div class="label-row">
+      <span>Label:</span>
+      ${['siren','background','motorcycle','unknown'].map(l =>
+        `<button class="lbtn" data-label="${l}" onclick="sendLabel(this,'${filename}','${l}')">${l}</button>`
+      ).join('')}
+    </div>
+  `;
+  eventsEl.insertBefore(card, eventsEl.firstChild);
+  applyCardLabel(card, ev.label || ev.event);
+}
+
+const LABEL_COLORS = {
+  siren:      { border: '#5a1a1a', bg: '#2a0a0a', text: '#ef5350' },
+  background: { border: '#1a3a2a', bg: '#0a1a10', text: '#4caf50' },
+  motorcycle: { border: '#2a2a00', bg: '#1a1a00', text: '#ffd54f' },
+  explosion:  { border: '#3a1a00', bg: '#1a0a00', text: '#ff7043' },
+  unknown:    { border: '#2a2a2a', bg: '#1a1a1a', text: '#888'    },
+};
+
+let activeFilter = 'siren';
+
+function setFilter(btn) {
+  document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeFilter = btn.dataset.filter;
+  document.querySelectorAll('#events .event-card').forEach(card => {
+    const lbl = card.dataset.label;
+    card.style.display = (activeFilter === 'all' || lbl === activeFilter) ? '' : 'none';
+  });
+}
+
+function applyCardLabel(card, label) {
+  card.dataset.label = label;
+  const c = LABEL_COLORS[label] || LABEL_COLORS.unknown;
+  card.style.borderColor = c.border;
+  card.style.background  = c.bg;
+  const row = card.querySelector('.label-row');
+  if (row) {
+    row.querySelectorAll('.lbtn').forEach(b => {
+      b.classList.toggle('active', b.dataset.label === label);
+      b.textContent = (b.dataset.label === label ? '✓ ' : '') + b.dataset.label;
+    });
+    const span = row.querySelector('span');
+    span.textContent = '✓ saved as:';
+    span.style.color = c.text;
+  }
+  // apply current filter
+  card.style.display = (activeFilter === 'all' || label === activeFilter) ? '' : 'none';
+}
+
+async function sendLabel(btn, filename, label) {
+  const card = btn.closest('.event-card');
+  const res = await fetch('/feedback', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({filename, label}),
+  });
+  if (res.ok) applyCardLabel(card, label);
+}
+
+function clearEvents() {
+  eventsEl.innerHTML = '<div class="empty" id="empty">No events yet</div>';
+}
+
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen  = () => { statusEl.textContent = 'connected'; statusEl.className = 'connected'; };
+  ws.onclose = () => { statusEl.textContent = 'reconnecting…'; statusEl.className = ''; setTimeout(connect, 2000); };
+  ws.onmessage = ({ data }) => {
+    const msg = JSON.parse(data);
+    if (msg.type === 'score') setScore(msg.score, msg.state);
+    if (msg.type === 'event') addEvent(msg);
+  };
+}
+connect();
+</script>
+</body>
+</html>

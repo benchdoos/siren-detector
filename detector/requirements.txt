@@ -2,3 +2,6 @@ tensorflow==2.16.2
 tensorflow-hub==0.16.1
 tf-keras==2.16.0
 numpy<2
+soundfile
+fastapi
+uvicorn[standard]
