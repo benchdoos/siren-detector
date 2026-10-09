@@ -89,3 +89,8 @@ docker compose run --rm esphome logs /config/siren-detector.yaml --device siren-
 - `ml/results/` and `ml/.venv/` are git-ignored.
 - INMP441 sends 24-bit audio in 32-bit I2S slots — the firmware shifts right by 8 bits before normalizing.
 - Current ESP32 IP: `192.168.88.49` / hostname: `siren-detector.local`.
+
+
+## After edits
+- claude or codex should update `README.md` with a summary of the project, setup instructions, and usage examples.
+- claude or codex should also update `TODO.md` with a clear list of tasks, marking completed items and indicating next steps for development and testing.
