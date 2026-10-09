@@ -11,3 +11,16 @@ __pycache__/
 
 # Audio datasets are large and may have separate redistribution licenses.
 /dataset/external/esc50/audio/
+/dataset/background/
+/dataset/siren/
+/dataset/unknown/
+/dataset/inbox/
+
+# IDE and tooling
+/.idea/
+/.claude/
+/.tokensave/
+
+# Label Studio local data
+/label-studio/data/
+/label-studio/export.json
