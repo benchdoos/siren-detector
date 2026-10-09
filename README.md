@@ -643,7 +643,7 @@ dataset/
 
 ## Phase 5 — Baseline Engine
 
-**Статус: локальный sanity-check YAMNet на ESC-50 пройден; backend на Raspberry Pi ещё не подключён.**
+**Статус: YAMNet + MLP-классификатор задеплоены на Raspberry Pi, работают на живом потоке.**
 
 Первый baseline запускается на Mac; см. [`ml/README.md`](ml/README.md). Результат
 первого прогона: siren-vs-selected-others ROC AUC `0.996`, top-1 `siren` `60%`.
@@ -676,6 +676,8 @@ classification
 - устойчивость к шуму.
 
 ## Phase 6 — Event Engine
+
+**Статус: реализован и работает.**
 
 Сырые predictions не должны сразу превращаться в тревогу.
 
@@ -902,7 +904,7 @@ ESP32 + TinyML
 
 **Проект:** `Sound Detector`
 
-**Фаза:** Baseline Detection.
+**Фаза:** Live Detection + Feedback Collection.
 
 Уже работает:
 
@@ -911,25 +913,25 @@ INMP441
    ↓
 ESP32-S3 (I2S, UDP transport)
    ↓
-Hub (fan-out relay, RPi)
-   ├──> Recorder → WAV dataset
-   └──> Detector → YAMNet → события (stdout)
+Hub (fan-out relay, RPi :9000)
+   ├──> Recorder (:9001) → WAV dataset (по запросу)
+   └──> Detector (:9002) → YAMNet + MLP → события → Web UI
 ```
 
-Собраны записи: `siren/` (включая два уличных оригинала) и `background/` (разнообразный). YAMNet прогнан по всему датасету: порог 0.10, ложные срабатывания практически отсутствуют.
+**Detector** (`http://192.168.1.100:8080`):
+- YAMNet (frozen, TF Hub) извлекает 1024-dim embeddings каждые 0.5 с
+- MLP-классификатор (`siren` / `background`) поверх embeddings
+- Temporal smoother: 4 триггера → possible, 8 → confirmed (окно 30 с, cooldown 60 с)
+- На confirmed: сохраняется 30-секундный WAV-клип в `/clips/`
+- WebSocket бродкаст: score каждые 0.5 с + события
 
-Ближайшая задача:
+**Web UI**:
+- Реал-тайм шкала confidence с pulse-анимацией при possible/confirmed
+- Список событий с аудиоплеером (только confirmed с клипом)
+- Кнопки лейблинга: при нажатии клип копируется в `/dataset/{label}/` для дообучения
+- Фильтры по типу, история 100 событий
 
-```text
-Hub + Detector → запустить на RPi → проверить на живом потоке
-```
-
-После этого:
-
-```text
-Web UI для мониторинга детектора и разметки пропущенных/ложных срабатываний
-→ накопить данные для дообучения собственной модели
-```
+Следующий шаг: накопить размеченные примеры через UI → дообучить модель → снизить false positive.
 
 ---
 

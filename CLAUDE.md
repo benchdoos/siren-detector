@@ -12,7 +12,10 @@ Universal **Audio Event Detection** platform. ESP32-S3 with INMP441 microphone a
 esp32/           # ESPHome YAML config for ESP32-S3 firmware
 recorder/        # Docker-based UDP recorder (runs on Raspberry Pi)
 ml/              # ML baseline scripts (run on Mac)
+hub/             # UDP fan-out relay + detector (Docker Compose, runs on RPi)
+detector/        # FastAPI detection engine: YAMNet + MLP + WebSocket UI
 dataset/         # Labeled WAV recordings (not committed to Git)
+label-studio/    # Label Studio annotation stack (Docker Compose, runs on Mac)
 ```
 
 ## Commands
@@ -90,6 +93,45 @@ docker compose run --rm esphome logs /config/siren-detector.yaml --device siren-
 - INMP441 sends 24-bit audio in 32-bit I2S slots — the firmware shifts right by 8 bits before normalizing.
 - Current ESP32 IP: `192.168.88.49` / hostname: `siren-detector.local`.
 
+
+## Detector / Web UI
+
+The detector stack runs on RPi from `hub/docker-compose.yml` (not `detector/docker-compose.yml`):
+
+```bash
+# Deploy (from Mac)
+scp -r detector/ doos@192.168.1.100:~/Projects/esphome/
+scp hub/docker-compose.yml doos@192.168.1.100:~/Projects/esphome/hub/
+
+# Rebuild & restart (on RPi)
+cd ~/Projects/esphome/hub
+docker compose up --build -d detector
+
+# Static-only update (no rebuild needed)
+scp detector/static/index.html doos@192.168.1.100:~/Projects/esphome/detector/static/
+ssh doos@192.168.1.100 "docker cp ~/Projects/esphome/detector/static/index.html siren-detector-engine:/app/static/index.html"
+```
+
+Web UI: `http://192.168.1.100:8080`
+
+Key architectural notes:
+- **WebSocket** uses `await ws.receive()` (not `receive_text()`) — handles ping frames correctly; `receive_text()` causes silent client drop
+- **Feedback flow**: confirmed clip saved to `/clips/` → user clicks label button → `POST /feedback` copies WAV to `/dataset/{label}/` on RPi → ready for retraining
+- `_feedback` dict is in-memory only — labels are lost on container restart; history replay includes current labels so UI restores correctly after browser reload
+- **Volumes**: `clips` (named, for WAV clips), `../dataset` (bind mount for feedback copies), `../ml/results` (read-only, classifier weights)
+- Thresholds: `POSSIBLE_TRIGGERS=4`, `CONFIRMED_TRIGGERS=8`, `SIREN_THRESHOLD=0.10`, `COOLDOWN_SECONDS=60`
+
+## Retraining workflow
+
+```bash
+# On Mac, after collecting feedback via UI:
+rsync -av doos@192.168.1.100:~/Projects/esphome/dataset/ dataset/
+ml/.venv/bin/python ml/train_classifier.py
+python3 convert.py
+scp ml/results/classifier_weights.npz ml/results/classifier_labels.json \
+    doos@192.168.1.100:~/Projects/esphome/ml/results/
+ssh doos@192.168.1.100 "docker restart siren-detector-engine"
+```
 
 ## After edits
 - claude or codex should update `README.md` with a summary of the project, setup instructions, and usage examples.
