@@ -9,9 +9,9 @@ services:
       - ./dataset:/recordings
     command:
       - --bind
-      - 0.0.0.0
+      - 127.0.0.1
       - --port
-      - "9000"
+      - "9001"
       - --output-dir
       - /recordings
       - --label

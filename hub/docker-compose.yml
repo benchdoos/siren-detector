@@ -1,0 +1,43 @@
+# Persistent services: hub receives audio from ESP32 and fans out to detector.
+# Recorder is a separate on-demand service (see recorder/docker-compose.yml).
+#
+# ESP32 → UDP:9000 → hub → detector(:9002)
+#                       └──> recorder(:9001)  ← started separately when collecting dataset
+
+services:
+  hub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: siren-hub
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - --bind
+      - 0.0.0.0
+      - --port
+      - "9000"
+      - --forward
+      - 127.0.0.1:9001
+      - --forward
+      - 127.0.0.1:9002
+
+  detector:
+    build:
+      context: ../detector
+      dockerfile: Dockerfile
+    container_name: siren-detector-engine
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - tfhub_cache:/root/.cache/tfhub_modules
+    command:
+      - --bind
+      - 127.0.0.1
+      - --port
+      - "9002"
+      - --source
+      - siren-detector-01
+
+volumes:
+  tfhub_cache:

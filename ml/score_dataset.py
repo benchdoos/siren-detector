@@ -98,6 +98,10 @@ def score_file(
                 all_siren_scores.append(float(s_score))
                 all_top1.append(top1_name)
 
+    if not all_siren_scores:
+        print(f"  skipped: no audio frames produced (file may be empty)", flush=True)
+        return [], None
+
     siren_arr = np.array(all_siren_scores)
     top1_mode = Counter(all_top1).most_common(1)[0][0] if all_top1 else ""
     summary = {
@@ -195,6 +199,8 @@ def main() -> int:
                 model, class_names, siren_index, path,
                 args.chunk_seconds, args.max_seconds,
             )
+            if summary is None:
+                continue
             window_writer.writerows(window_rows)
             summary_rows.append(summary)
 

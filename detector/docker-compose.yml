@@ -10,9 +10,9 @@ services:
       - tfhub_cache:/root/.cache/tfhub_modules
     command:
       - --bind
-      - 0.0.0.0
+      - 127.0.0.1
       - --port
-      - "9000"
+      - "9002"
       - --source
       - siren-detector-01
 
