@@ -50,3 +50,50 @@ would erase their provenance and make future evaluation harder to trust.
 The isolated YAMNet sanity-check on the Mac is documented in [`../ml/README.md`](../ml/README.md).
 Its dependencies, model cache, and results stay outside the recorder and ESP32
 firmware workflow.
+
+## Непрерывная запись и разметка по времени
+
+Recorder по умолчанию пишет в `inbox`. Для сессии запусти на Raspberry Pi:
+
+```bash
+cd ~/Projects/esphome/recorder
+LABEL=inbox DURATION=0 docker compose run --rm recorder
+```
+
+Останови `Ctrl-C`. Рядом с WAV появится JSON sidecar с точным временем начала и
+часовым поясом. Скопируй **оба файла с одинаковым basename** (`.wav` и `.json`)
+в `dataset/inbox/` на Mac; не переименовывай их.
+
+Потом можно задать один или несколько интервалов по местному времени:
+
+```bash
+python3 dataset/annotate_recording.py \
+  dataset/inbox/20261008-120000-000000.wav \
+  --timezone Europe/Moscow \
+  --segment siren 12:03 12:08 \
+  --segment background 12:08 12:15
+```
+
+Скрипт вырежет соответствующие WAV в `dataset/siren/` и
+`dataset/background/`, исходную запись оставит в `inbox`, а разметку и смещения
+сохранит в `dataset/annotations.csv`. Времена можно указывать как `HH:MM`,
+`HH:MM:SS` или полную ISO-8601 дату-время. По умолчанию принимаются локальные
+часы `Europe/Moscow`; при необходимости замени `--timezone`.
+
+Чтобы указать интервалы относительно начала WAV, поставь `-f` сразу после
+`--segment`. Формат `MM:SS` означает минуты и секунды от начала файла,
+`HH:MM:SS` — часы, минуты и секунды:
+
+```bash
+python3 dataset/annotate_recording.py dataset/inbox/<recording>.wav \\
+  --segment -f siren 12:03 12:08 \\
+  --segment -f background 1:12:08 1:15:00
+```
+
+В примере первый фрагмент — с 12:03 до 12:08 от начала записи, второй — с
+1:12:08 до 1:15:00. Режим `-f` задаётся отдельно для каждого `--segment`;
+без него значения трактуются как время на часах.
+
+Не оставляй запись без присмотра сутками: PCM 16 kHz mono занимает около
+115 MB в час. Для очень длинных сессий останови recorder и начни новую, чтобы
+файлы оставались удобными для разметки и переноса.

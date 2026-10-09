@@ -6,6 +6,8 @@
 /ml/.venv/
 /ml/results/
 **/.DS_Store
+__pycache__/
+*.py[cod]
 
 # Audio datasets are large and may have separate redistribution licenses.
 /dataset/external/esc50/audio/

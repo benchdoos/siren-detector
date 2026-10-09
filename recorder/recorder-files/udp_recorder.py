@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import socket
 import struct
 import time
@@ -150,6 +151,23 @@ def main() -> None:
                 f"Saved {frames / SAMPLE_RATE:.1f}s to {output_path}; "
                 f"dropped packets: {dropped_packets}; invalid packets: {invalid_packets}"
             )
+            metadata = {
+                "schema_version": 1,
+                "audio_file": output_path.name,
+                "started_at": started_at.isoformat(timespec="microseconds"),
+                "stopped_at": stopped_at.isoformat(timespec="microseconds"),
+                "sample_rate_hz": SAMPLE_RATE,
+                "channels": 1,
+                "sample_width_bytes": 2,
+                "audio_duration_seconds": frames / SAMPLE_RATE,
+                "wall_duration_seconds": elapsed,
+                "packets": packets,
+                "dropped_packets": dropped_packets,
+                "invalid_packets": invalid_packets,
+            }
+            metadata_path = output_path.with_suffix(".json")
+            metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+            print(f"Session metadata: {metadata_path}")
             udp.close()
 
 
