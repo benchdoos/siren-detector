@@ -210,8 +210,12 @@ async def ws_endpoint(ws: WebSocket):
     _ws_clients.add(ws)
     try:
         while True:
-            await ws.receive_text()
-    except WebSocketDisconnect:
+            msg = await ws.receive()
+            if msg["type"] == "websocket.disconnect":
+                break
+    except Exception:
+        pass
+    finally:
         _ws_clients.discard(ws)
 
 
