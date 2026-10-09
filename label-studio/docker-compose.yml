@@ -1,0 +1,17 @@
+services:
+  label-studio:
+    image: heartexlabs/label-studio:latest
+    container_name: siren-label-studio
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/label-studio/data
+
+  audio-server:
+    image: nginx:alpine
+    container_name: siren-audio-server
+    ports:
+      - "8081:80"
+    volumes:
+      - ../dataset:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro

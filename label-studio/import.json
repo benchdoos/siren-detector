@@ -1,0 +1,340 @@
+[
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261008-113531.wav",
+      "filename": "20261008-113531.wav"
+    }
+  },
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261008-114039.wav",
+      "filename": "20261008-114039.wav"
+    }
+  },
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261008-114258.wav",
+      "filename": "20261008-114258.wav"
+    }
+  },
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261008-115635.wav",
+      "filename": "20261008-115635.wav"
+    }
+  },
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261008-121819.wav",
+      "filename": "20261008-121819.wav"
+    }
+  },
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261008-123357.wav",
+      "filename": "20261008-123357.wav"
+    }
+  },
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261008-125507.wav",
+      "filename": "20261008-125507.wav"
+    }
+  },
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261008-130016.wav",
+      "filename": "20261008-130016.wav"
+    }
+  },
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261008-132239.wav",
+      "filename": "20261008-132239.wav"
+    }
+  },
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261008-170717-067727.wav",
+      "filename": "20261008-170717-067727.wav"
+    }
+  },
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261008-170952-131242.wav",
+      "filename": "20261008-170952-131242.wav"
+    }
+  },
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261008-171205-611625.wav",
+      "filename": "20261008-171205-611625.wav"
+    },
+    "predictions": [
+      {
+        "model_version": "yamnet",
+        "result": [
+          {
+            "from_name": "label",
+            "to_name": "audio",
+            "type": "labels",
+            "value": {
+              "start": 398.86,
+              "end": 400.82,
+              "labels": [
+                "siren"
+              ],
+              "score": 0.662
+            }
+          },
+          {
+            "from_name": "label",
+            "to_name": "audio",
+            "type": "labels",
+            "value": {
+              "start": 4144.78,
+              "end": 4146.74,
+              "labels": [
+                "siren"
+              ],
+              "score": 0.146
+            }
+          },
+          {
+            "from_name": "label",
+            "to_name": "audio",
+            "type": "labels",
+            "value": {
+              "start": 4153.9,
+              "end": 4155.86,
+              "labels": [
+                "siren"
+              ],
+              "score": 0.336
+            }
+          },
+          {
+            "from_name": "label",
+            "to_name": "audio",
+            "type": "labels",
+            "value": {
+              "start": 5464.78,
+              "end": 5466.74,
+              "labels": [
+                "siren"
+              ],
+              "score": 0.333
+            }
+          },
+          {
+            "from_name": "label",
+            "to_name": "audio",
+            "type": "labels",
+            "value": {
+              "start": 38354.86,
+              "end": 38356.82,
+              "labels": [
+                "siren"
+              ],
+              "score": 0.116
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261009-035807-123820.wav",
+      "filename": "20261009-035807-123820.wav"
+    }
+  },
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261009-070807-994781.wav",
+      "filename": "20261009-070807-994781.wav"
+    },
+    "predictions": [
+      {
+        "model_version": "yamnet",
+        "result": [
+          {
+            "from_name": "label",
+            "to_name": "audio",
+            "type": "labels",
+            "value": {
+              "start": 1338.7,
+              "end": 1340.66,
+              "labels": [
+                "siren"
+              ],
+              "score": 0.373
+            }
+          },
+          {
+            "from_name": "label",
+            "to_name": "audio",
+            "type": "labels",
+            "value": {
+              "start": 1997.26,
+              "end": 2002.1,
+              "labels": [
+                "siren"
+              ],
+              "score": 0.852
+            }
+          },
+          {
+            "from_name": "label",
+            "to_name": "audio",
+            "type": "labels",
+            "value": {
+              "start": 2061.58,
+              "end": 2063.54,
+              "labels": [
+                "siren"
+              ],
+              "score": 0.117
+            }
+          },
+          {
+            "from_name": "label",
+            "to_name": "audio",
+            "type": "labels",
+            "value": {
+              "start": 2090.86,
+              "end": 2092.82,
+              "labels": [
+                "siren"
+              ],
+              "score": 0.109
+            }
+          },
+          {
+            "from_name": "label",
+            "to_name": "audio",
+            "type": "labels",
+            "value": {
+              "start": 2102.86,
+              "end": 2104.82,
+              "labels": [
+                "siren"
+              ],
+              "score": 0.14
+            }
+          },
+          {
+            "from_name": "label",
+            "to_name": "audio",
+            "type": "labels",
+            "value": {
+              "start": 2111.5,
+              "end": 2113.46,
+              "labels": [
+                "siren"
+              ],
+              "score": 0.183
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261009-074711-497701.wav",
+      "filename": "20261009-074711-497701.wav"
+    },
+    "predictions": [
+      {
+        "model_version": "yamnet",
+        "result": [
+          {
+            "from_name": "label",
+            "to_name": "audio",
+            "type": "labels",
+            "value": {
+              "start": 3.34,
+              "end": 5.3,
+              "labels": [
+                "siren"
+              ],
+              "score": 0.102
+            }
+          },
+          {
+            "from_name": "label",
+            "to_name": "audio",
+            "type": "labels",
+            "value": {
+              "start": 41.26,
+              "end": 43.22,
+              "labels": [
+                "siren"
+              ],
+              "score": 0.195
+            }
+          },
+          {
+            "from_name": "label",
+            "to_name": "audio",
+            "type": "labels",
+            "value": {
+              "start": 64.78,
+              "end": 66.74,
+              "labels": [
+                "siren"
+              ],
+              "score": 0.116
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261009-075032-982028.wav",
+      "filename": "20261009-075032-982028.wav"
+    },
+    "predictions": [
+      {
+        "model_version": "yamnet",
+        "result": [
+          {
+            "from_name": "label",
+            "to_name": "audio",
+            "type": "labels",
+            "value": {
+              "start": 35.02,
+              "end": 36.98,
+              "labels": [
+                "siren"
+              ],
+              "score": 0.118
+            }
+          },
+          {
+            "from_name": "label",
+            "to_name": "audio",
+            "type": "labels",
+            "value": {
+              "start": 4129.9,
+              "end": 4132.34,
+              "labels": [
+                "siren"
+              ],
+              "score": 0.217
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "data": {
+      "audio": "http://localhost:8081/inbox/20261009-093630-755333.wav",
+      "filename": "20261009-093630-755333.wav"
+    }
+  }
+]
