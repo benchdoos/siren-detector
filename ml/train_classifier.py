@@ -43,12 +43,16 @@ LABELS = ["siren", "background"]   # unknown/explosion/motorcycle have too few s
 VAL_SPLIT = 0.2
 MAX_WINDOWS_PER_FILE = 300          # cap long files so one recording doesn't dominate
 RANDOM_SEED = 42
+# read at most this many seconds from any single file to avoid OOM on long recordings
+MAX_SECONDS_PER_FILE = MAX_WINDOWS_PER_FILE * 0.5 + 5.0  # ~155s
 
 
 # ── audio helpers ──────────────────────────────────────────────────────────────
 
-def load_mono_16k(path: Path) -> np.ndarray:
-    audio, rate = sf.read(path, dtype="float32", always_2d=True)
+def load_mono_16k(path: Path, max_seconds: float | None = None) -> np.ndarray:
+    info = sf.info(path)
+    frames = int(max_seconds * info.samplerate) if max_seconds else -1
+    audio, rate = sf.read(path, dtype="float32", always_2d=True, frames=frames)
     audio = audio.mean(axis=1)
     if rate != SAMPLE_RATE:
         divisor = np.gcd(rate, SAMPLE_RATE)
@@ -75,7 +79,7 @@ def extract_embeddings(
     all_emb, all_lbl, all_src = [], [], []
 
     for path in files:
-        audio = load_mono_16k(path)
+        audio = load_mono_16k(path, max_seconds=MAX_SECONDS_PER_FILE)
         _, embeddings, _ = yamnet(audio)
         emb = embeddings.numpy()                        # (n_windows, 1024)
 
@@ -252,8 +256,10 @@ def main() -> None:
     labels_path.write_text(json.dumps(LABELS), encoding="utf-8")
     print(f"Saved: {labels_path}")
 
-    # export TFLite
-    converter = tf.lite.TFLiteConverter.from_keras_model(model)
+    # export TFLite (via SavedModel to avoid TF 2.16 from_keras_model bug)
+    saved_model_path = RESULTS / "classifier_saved_model"
+    tf.saved_model.save(model, str(saved_model_path))
+    converter = tf.lite.TFLiteConverter.from_saved_model(str(saved_model_path))
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
     tflite_model = converter.convert()
     tflite_path = RESULTS / "classifier.tflite"
