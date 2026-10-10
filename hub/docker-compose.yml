@@ -12,6 +12,11 @@ services:
     container_name: siren-hub
     restart: unless-stopped
     network_mode: host
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     command:
       - --bind
       - 0.0.0.0
@@ -29,8 +34,16 @@ services:
     container_name: siren-detector-engine
     restart: unless-stopped
     network_mode: host
+    user: "1000:1000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      - TFHUB_CACHE_DIR=/tfhub_cache
     volumes:
-      - tfhub_cache:/root/.cache/tfhub_modules
+      - tfhub_cache:/tfhub_cache
       - ../ml/results:/models:ro
       - ../dataset:/dataset
       - clips:/clips

@@ -27,6 +27,12 @@
   .events-header { padding: 12px 24px 8px; font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: .08em; display: flex; justify-content: space-between; align-items: center; }
   .events-header button { font-size: 11px; background: none; border: 1px solid #333; color: #555; padding: 2px 8px; border-radius: 4px; cursor: pointer; }
   .events-header button:hover { color: #aaa; border-color: #555; }
+  .events-count { font-variant-numeric: tabular-nums; color: #666; }
+  .batch-bar { padding: 0 24px 10px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; display: none; }
+  .batch-bar.visible { display: flex; }
+  .batch-bar span { font-size: 11px; color: #888; }
+  .batch-bar .lbtn { font-size: 11px; }
+  .event-card .ev-check { margin-right: 8px; accent-color: #4caf50; cursor: pointer; }
   .filter-bar { padding: 0 24px 10px; display: flex; gap: 6px; flex-wrap: wrap; }
   .fbtn { font-size: 11px; padding: 3px 10px; border-radius: 4px; border: 1px solid #333; background: none; color: #666; cursor: pointer; }
   .fbtn:hover { color: #aaa; border-color: #555; }
@@ -74,8 +80,18 @@
 </div>
 
 <div class="events-header">
-  <span>Events</span>
-  <button onclick="clearEvents()">Clear</button>
+  <span>Events <span class="events-count" id="events-count"></span></span>
+  <span style="display:flex;gap:6px;align-items:center">
+    <label style="font-size:11px;color:#666;cursor:pointer"><input type="checkbox" id="select-all" onchange="toggleSelectAll(this.checked)"> Select all</label>
+    <button onclick="clearEvents()">Clear</button>
+  </span>
+</div>
+<div class="batch-bar" id="batch-bar">
+  <span id="selected-count">0</span><span>selected:</span>
+  <button class="lbtn" onclick="batchLabel('siren')">siren</button>
+  <button class="lbtn" onclick="batchLabel('background')">background</button>
+  <button class="lbtn" onclick="batchLabel('motorcycle')">motorcycle</button>
+  <button class="lbtn" onclick="batchLabel('unknown')">unknown</button>
 </div>
 <div class="filter-bar">
   <button class="fbtn active" data-filter="siren" onclick="setFilter(this)">siren</button>
@@ -129,8 +145,10 @@ function addEvent(ev) {
     if (ev.mlp != null)    p.push(`mlp: ${(ev.mlp * 100).toFixed(0)}%`);
     return p.join('  ·  ');
   })();
+  card.dataset.filename = filename;
   card.innerHTML = `
     <div class="event-meta">
+      <input type="checkbox" class="ev-check" onchange="updateSelection()">
       <span class="badge confirmed">${ev.event.toUpperCase()}</span>
       <span class="event-time">${ts}</span>
       <span class="event-conf">${(ev.confidence * 100).toFixed(1)}%</span>
@@ -157,6 +175,7 @@ function addEvent(ev) {
     if (currentAudio && currentAudio !== this) { currentAudio.pause(); currentAudio.currentTime = 0; }
     currentAudio = this;
   });
+  updateEventsCount();
 }
 
 const LABEL_COLORS = {
@@ -176,7 +195,11 @@ function setFilter(btn) {
   document.querySelectorAll('#events .event-card').forEach(card => {
     const lbl = card.dataset.label;
     card.style.display = (activeFilter === 'all' || lbl === activeFilter) ? '' : 'none';
+    const cb = card.querySelector('.ev-check');
+    if (cb) cb.checked = false;
   });
+  document.getElementById('select-all').checked = false;
+  updateSelection();
 }
 
 function applyCardLabel(card, label) {
@@ -215,9 +238,58 @@ async function sendLabel(btn, filename, label) {
   if (res.ok) applyCardLabel(card, label);
 }
 
+function updateEventsCount() {
+  const total = eventsEl.querySelectorAll('.event-card').length;
+  document.getElementById('events-count').textContent = total ? `(${total})` : '';
+}
+
+function updateSelection() {
+  const visible = [...eventsEl.querySelectorAll('.event-card')].filter(c => c.style.display !== 'none');
+  const checked = visible.filter(c => c.querySelector('.ev-check')?.checked);
+  const count = checked.length;
+  document.getElementById('selected-count').textContent = count;
+  const bar = document.getElementById('batch-bar');
+  bar.classList.toggle('visible', count > 0);
+  const selectAll = document.getElementById('select-all');
+  selectAll.checked = visible.length > 0 && count === visible.length;
+  selectAll.indeterminate = count > 0 && count < visible.length;
+}
+
+function toggleSelectAll(checked) {
+  eventsEl.querySelectorAll('.event-card').forEach(card => {
+    if (card.style.display !== 'none') {
+      const cb = card.querySelector('.ev-check');
+      if (cb) cb.checked = checked;
+    }
+  });
+  updateSelection();
+}
+
+async function batchLabel(label) {
+  const cards = [...eventsEl.querySelectorAll('.event-card')].filter(c =>
+    c.style.display !== 'none' && c.querySelector('.ev-check')?.checked
+  );
+  for (const card of cards) {
+    const filename = card.dataset.filename;
+    const res = await fetch('/feedback', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({filename, label}),
+    });
+    if (res.ok) {
+      applyCardLabel(card, label);
+      card.querySelector('.ev-check').checked = false;
+    }
+  }
+  updateSelection();
+}
+
 function clearEvents() {
   eventsEl.innerHTML = '<div class="empty" id="empty">No events yet</div>';
   emptyEl = document.getElementById('empty');
+  document.getElementById('select-all').checked = false;
+  updateSelection();
+  updateEventsCount();
 }
 
 function connect() {

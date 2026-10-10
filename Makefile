@@ -8,7 +8,7 @@ WEB_UI      = http://192.168.1.100:8080
 ## Full rebuild: copy detector + rebuild Docker container on RPi
 deploy:
 	scp -r detector/ $(RPI):$(RPI_BASE)/
-	ssh $(RPI) "cd $(RPI_BASE)/hub && docker compose up --build -d detector"
+	ssh $(RPI) "cd $(RPI_BASE)/hub && docker compose up --build -d detector && docker image prune -f"
 
 ## Deploy only frontend (no rebuild needed)
 deploy-ui:
@@ -46,6 +46,18 @@ deploy-model:
 ## Full retrain cycle: sync dataset → train → deploy model → restart
 retrain: sync-dataset train deploy-model
 
+## Clean saved clips on RPi
+clean-clips:
+	ssh $(RPI) "docker exec $(CONTAINER) rm -rf /clips/*.wav"
+
+## Clean dataset on RPi (sync first!)
+clean-dataset:
+	ssh $(RPI) "rm -rf $(RPI_BASE)/dataset/siren/* $(RPI_BASE)/dataset/background/* $(RPI_BASE)/dataset/motorcycle/* $(RPI_BASE)/dataset/explosion/* $(RPI_BASE)/dataset/unknown/*"
+
+## Clean Docker build cache and dangling images on RPi (preserves volumes)
+clean-docker:
+	ssh $(RPI) "docker system prune -a -f"
+
 # ── Dataset ───────────────────────────────────────────────────────────────────
 
 ## Download and extract ESC-50 dataset
@@ -77,6 +89,9 @@ help:
 	@echo "    make train           Train MLP classifier"
 	@echo "    make deploy-model    Push weights to RPi + restart"
 	@echo "    make retrain         Full cycle: sync → train → deploy"
+	@echo "    make clean-clips     Delete saved clips on RPi"
+	@echo "    make clean-dataset   Delete labeled WAVs on RPi"
+	@echo "    make clean-docker    Prune Docker images/cache (keeps volumes)"
 	@echo ""
 	@echo "  Other"
 	@echo "    make unlock          Unlock SSH key for 10 min"
@@ -86,4 +101,5 @@ help:
 
 .PHONY: deploy deploy-ui deploy-compose restart logs \
         sync-dataset train deploy-model retrain \
+        clean-clips clean-dataset clean-docker \
         fetch-esc50 open unlock help
