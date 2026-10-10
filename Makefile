@@ -44,11 +44,11 @@ deploy-model:
 	ssh $(RPI) "docker restart $(CONTAINER)"
 
 ## Full retrain cycle: sync dataset → train → deploy model → restart
-retrain: sync-dataset train deploy-model
+retrain: sync-dataset train deploy-model clean-clips clean-dataset
 
 ## Clean saved clips on RPi
 clean-clips:
-	ssh $(RPI) "docker exec $(CONTAINER) rm -rf /clips/*.wav"
+	ssh $(RPI) "docker exec $(CONTAINER) find /clips -name '*.wav' -delete"
 
 ## Clean dataset on RPi (sync first!)
 clean-dataset:
