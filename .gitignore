@@ -24,3 +24,6 @@ __pycache__/
 # Label Studio local data
 /label-studio/data/
 /label-studio/export.json
+
+# Freesound audio (downloaded locally)
+/dataset/external/freesound/audio/

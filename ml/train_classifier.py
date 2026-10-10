@@ -22,6 +22,7 @@ Outputs:
 
 from __future__ import annotations
 
+import csv
 import json
 import random
 from collections import defaultdict
@@ -44,7 +45,19 @@ VAL_SPLIT = 0.2
 MAX_WINDOWS_PER_FILE = 300          # cap long files so one recording doesn't dominate
 RANDOM_SEED = 42
 # read at most this many seconds from any single file to avoid OOM on long recordings
-MAX_SECONDS_PER_FILE = MAX_WINDOWS_PER_FILE * 0.5 + 5.0  # ~155s
+MAX_SECONDS_PER_FILE = MAX_WINDOWS_PER_FILE * 0.5 + 5.0
+
+ESC50_DIR = DATASET / "external" / "esc50"
+ESC50_VAL_FOLD = 5
+ESC50_LABEL_MAP: dict[str, str] = {
+    "siren":           "siren",
+    "rain":            "background",
+    "wind":            "background",
+    "washing_machine": "background",
+    "keyboard_typing": "background",
+    "engine":          "background",
+    # fireworks — пропускаем (амбивалентен)
+}  # ~155s
 
 
 # ── audio helpers ──────────────────────────────────────────────────────────────
@@ -153,10 +166,9 @@ def main() -> None:
     print(f"Loading YAMNet from {MODEL_URL} ...", flush=True)
     yamnet = hub.load(MODEL_URL)
 
-    # collect embeddings per label
-    print("\nExtracting embeddings:")
-    all_emb, all_lbl, all_src = [], [], []
-
+    # ── собственные записи (split by source) ────────────────────────────────
+    print("\nExtracting own-recording embeddings:")
+    own_emb, own_lbl, own_src = [], [], []
     for idx, label in enumerate(LABELS):
         files = sorted((DATASET / label).glob("*.wav"))
         if not files:
@@ -165,31 +177,86 @@ def main() -> None:
         emb, lbl, src = extract_embeddings(yamnet, files, idx, label)
         if len(emb) == 0:
             continue
-        all_emb.append(emb)
-        all_lbl.append(lbl)
-        all_src.extend(src)
+        own_emb.append(emb)
+        own_lbl.append(lbl)
+        own_src.extend(src)
 
-    if not all_emb:
-        raise SystemExit("No data found.")
+    if own_emb:
+        print("\nSplitting own recordings by source:")
+        X_own_tr, y_own_tr, X_own_val, y_own_val = split_by_source(
+            np.vstack(own_emb), np.concatenate(own_lbl), own_src,
+            VAL_SPLIT, RANDOM_SEED,
+        )
+    else:
+        X_own_tr = X_own_val = np.empty((0, 1024), dtype=np.float32)
+        y_own_tr = y_own_val = np.empty(0, dtype=np.int64)
 
-    embeddings = np.vstack(all_emb)
-    labels = np.concatenate(all_lbl)
+    # ── ESC-50 (split by fold 5) ─────────────────────────────────────────────
+    esc_tr_emb: list[np.ndarray] = []
+    esc_tr_lbl: list[np.ndarray] = []
+    esc_val_emb: list[np.ndarray] = []
+    esc_val_lbl: list[np.ndarray] = []
+    esc50_csv = ESC50_DIR / "meta" / "esc50.csv"
+    if esc50_csv.exists():
+        print("\nExtracting ESC-50 embeddings:")
+        audio_dir = ESC50_DIR / "audio"
+        esc_train_by_label: dict[int, list[Path]] = defaultdict(list)
+        esc_val_by_label:   dict[int, list[Path]] = defaultdict(list)
+        with esc50_csv.open(newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                cat = row["category"]
+                if cat not in ESC50_LABEL_MAP:
+                    continue
+                path = audio_dir / row["filename"]
+                if not path.exists():
+                    continue
+                lbl_idx = LABELS.index(ESC50_LABEL_MAP[cat])
+                if int(row["fold"]) == ESC50_VAL_FOLD:
+                    esc_val_by_label[lbl_idx].append(path)
+                else:
+                    esc_train_by_label[lbl_idx].append(path)
+
+        for lbl_idx, files in sorted(esc_train_by_label.items()):
+            emb, lbl, _ = extract_embeddings(
+                yamnet, files, lbl_idx, f"esc50-train/{LABELS[lbl_idx]}"
+            )
+            if len(emb):
+                esc_tr_emb.append(emb)
+                esc_tr_lbl.append(lbl)
+
+        for lbl_idx, files in sorted(esc_val_by_label.items()):
+            emb, lbl, _ = extract_embeddings(
+                yamnet, files, lbl_idx, f"esc50-val/{LABELS[lbl_idx]}"
+            )
+            if len(emb):
+                esc_val_emb.append(emb)
+                esc_val_lbl.append(lbl)
+    else:
+        print("\nESC-50 not found — training on own recordings only.")
+
+    # ── объединяем train и val ───────────────────────────────────────────────
+    X_train = np.vstack([X_own_tr, *esc_tr_emb])
+    y_train = np.concatenate([y_own_tr, *esc_tr_lbl])
+    X_val   = np.vstack([X_own_val, *esc_val_emb])
+    y_val   = np.concatenate([y_own_val, *esc_val_lbl])
+
+    if len(X_train) == 0:
+        raise SystemExit("No training data found.")
+
     num_classes = len(LABELS)
 
     # class distribution
-    print("\nClass distribution:")
+    print("\nClass distribution (train):")
     for i, name in enumerate(LABELS):
-        n = int((labels == i).sum())
+        n = int((y_train == i).sum())
+        print(f"  {name}: {n} windows")
+    print("\nClass distribution (val):")
+    for i, name in enumerate(LABELS):
+        n = int((y_val == i).sum())
         print(f"  {name}: {n} windows")
 
-    # train/val split
-    print("\nSplitting by source recording:")
-    X_train, y_train, X_val, y_val = split_by_source(
-        embeddings, labels, all_src, VAL_SPLIT, RANDOM_SEED
-    )
-
-    # class weights to handle imbalance
-    class_counts = np.bincount(y_train, minlength=num_classes)
+    # class weights
+    class_counts = np.bincount(y_train.astype(int), minlength=num_classes)
     class_weights = {
         i: len(y_train) / (num_classes * max(c, 1))
         for i, c in enumerate(class_counts)
