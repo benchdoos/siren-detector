@@ -37,6 +37,7 @@ import tensorflow_hub as hub
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATASET = REPO_ROOT / "dataset"
 RESULTS = Path(__file__).resolve().parent / "results"
+EMB_CACHE = Path(__file__).resolve().parent / "emb_cache"
 
 MODEL_URL = "https://tfhub.dev/google/yamnet/1"
 SAMPLE_RATE = 16_000
@@ -82,6 +83,19 @@ def source_name(filename: str) -> str:
 
 # ── embedding extraction ────────────────────────────────────────────────────────
 
+def _cached_embeddings(yamnet, path: Path) -> np.ndarray:
+    """Extract YAMNet embeddings, using a disk cache keyed by file mtime."""
+    cache_file = EMB_CACHE / f"{path.stem}_{int(path.stat().st_mtime)}.npy"
+    if cache_file.exists():
+        return np.load(cache_file)
+    EMB_CACHE.mkdir(parents=True, exist_ok=True)
+    audio = load_mono_16k(path, max_seconds=MAX_SECONDS_PER_FILE)
+    _, embeddings, _ = yamnet(audio)
+    emb = embeddings.numpy()
+    np.save(cache_file, emb)
+    return emb
+
+
 def extract_embeddings(
     yamnet,
     files: list[Path],
@@ -92,9 +106,7 @@ def extract_embeddings(
     all_emb, all_lbl, all_src = [], [], []
 
     for path in files:
-        audio = load_mono_16k(path, max_seconds=MAX_SECONDS_PER_FILE)
-        _, embeddings, _ = yamnet(audio)
-        emb = embeddings.numpy()                        # (n_windows, 1024)
+        emb = _cached_embeddings(yamnet, path)          # (n_windows, 1024)
 
         if len(emb) > MAX_WINDOWS_PER_FILE:
             idx = np.random.choice(len(emb), MAX_WINDOWS_PER_FILE, replace=False)

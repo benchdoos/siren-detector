@@ -27,3 +27,4 @@ __pycache__/
 
 # Freesound audio (downloaded locally)
 /dataset/external/freesound/audio/
+ml/emb_cache/

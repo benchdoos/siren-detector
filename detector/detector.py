@@ -135,6 +135,7 @@ class TemporalSmoother:
 _ws_clients: set[WebSocket] = set()
 _loop: asyncio.AbstractEventLoop | None = None
 _event_history: collections.deque = collections.deque(maxlen=100)
+_last_score: dict = {"type": "score", "score": 0.0, "state": "idle"}
 
 
 async def _broadcast(msg: dict) -> None:
@@ -148,8 +149,11 @@ async def _broadcast(msg: dict) -> None:
 
 
 def broadcast(msg: dict) -> None:
+    global _last_score
     if msg.get("type") == "event":
         _event_history.append(msg)
+    elif msg.get("type") == "score":
+        _last_score = msg
     if _loop and not _loop.is_closed():
         asyncio.run_coroutine_threadsafe(_broadcast(msg), _loop)
 
@@ -201,6 +205,7 @@ async def feedback(body: dict):
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
+    await ws.send_json(_last_score)
     for ev in list(_event_history):
         ev_out = dict(ev)
         filename = (ev.get("clip_url") or "").split("/")[-1]
@@ -303,10 +308,15 @@ def inference_loop(args: argparse.Namespace) -> None:
 
     print("Ready.", flush=True)
 
+    _last_heartbeat = 0.0
     while True:
         waveform = inference_buf.consume(INFERENCE_HOP_SAMPLES)
         if waveform is None:
             time.sleep(0.05)
+            now = time.monotonic()
+            if now - _last_heartbeat >= 1.0:
+                broadcast({"type": "score", "score": 0.0, "state": smoother.state})
+                _last_heartbeat = now
             continue
 
         waveform = np.clip(waveform, -1.0, 1.0)
@@ -324,6 +334,7 @@ def inference_loop(args: argparse.Namespace) -> None:
 
         # push score to UI every cycle
         broadcast({"type": "score", "score": round(max_score, 3), "state": smoother.state})
+        _last_heartbeat = time.monotonic()
 
         if new_state in ("possible", "confirmed"):
             clip_url = None
