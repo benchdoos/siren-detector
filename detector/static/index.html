@@ -11,8 +11,19 @@
   header h1 { font-size: 20px; font-weight: 600; }
   #status { font-size: 13px; padding: 3px 8px; border-radius: 4px; background: #333; color: #888; }
   #status.connected { background: #1a3a1a; color: #4caf50; }
-  .top-info { font-size: 13px; color: #666; margin-left: auto; font-variant-numeric: tabular-nums; }
+  .top-info { font-size: 13px; color: #666; margin-left: auto; font-variant-numeric: tabular-nums; cursor: pointer; position: relative; user-select: none; }
   .top-info .top-label { color: #888; }
+  .top-info:hover { color: #aaa; }
+
+  .top-dropdown { display: none; position: absolute; right: 0; top: calc(100% + 8px); background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 14px 16px; min-width: 280px; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,.5); font-size: 13px; cursor: default; }
+  .top-dropdown.open { display: block; }
+  .top-dropdown h3 { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; font-weight: 600; }
+  .top-dropdown h3:not(:first-child) { margin-top: 12px; border-top: 1px solid #222; padding-top: 10px; }
+  .top-dropdown .row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .top-dropdown .row-bar { flex: 1; height: 14px; background: #222; border-radius: 3px; overflow: hidden; }
+  .top-dropdown .row-fill { height: 100%; border-radius: 3px; background: #4caf50; transition: width .3s; }
+  .top-dropdown .row-name { width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ccc; }
+  .top-dropdown .row-pct { width: 36px; text-align: right; color: #888; font-variant-numeric: tabular-nums; }
 
   .score-panel { padding: 20px 24px; border-bottom: 1px solid #222; }
   .score-label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
@@ -70,7 +81,15 @@
 <header>
   <h1>🚨 Siren Detector</h1>
   <span id="status">disconnected</span>
-  <span class="top-info" id="top-info"></span>
+  <span class="top-info" id="top-info" onclick="toggleDropdown(event)">
+    <span id="top-text"></span>
+    <div class="top-dropdown" id="top-dropdown">
+      <h3>YAMNet</h3>
+      <div id="dd-yamnet"></div>
+      <h3>MLP</h3>
+      <div id="dd-mlp"></div>
+    </div>
+  </span>
 </header>
 
 <div class="score-panel">
@@ -149,6 +168,20 @@ function updateDetector(name, score, state) {
   bar.classList.toggle('pulsing', state === 'possible' || state === 'confirmed');
 }
 
+function renderTop3(container, items) {
+  container.innerHTML = items.map(it => {
+    const pct = Math.round(it.score * 100);
+    return `<div class="row"><span class="row-name">${it.name}</span><div class="row-bar"><div class="row-fill" style="width:${pct}%"></div></div><span class="row-pct">${pct}%</span></div>`;
+  }).join('');
+}
+
+function toggleDropdown(e) {
+  const dd = document.getElementById('top-dropdown');
+  dd.classList.toggle('open');
+  e.stopPropagation();
+}
+document.addEventListener('click', () => document.getElementById('top-dropdown').classList.remove('open'));
+
 function updateScores(msg) {
   for (const name of DETECTOR_NAMES) {
     updateDetector(name, msg[name + '_score'] || 0, msg[name + '_state'] || 'idle');
@@ -157,7 +190,10 @@ function updateScores(msg) {
   if (msg.top)            parts.push(`<span class="top-label">top:</span> ${msg.top}`);
   if (msg.yamnet != null) parts.push(`<span class="top-label">yamnet:</span> ${(msg.yamnet * 100).toFixed(0)}%`);
   if (msg.mlp != null)    parts.push(`<span class="top-label">mlp:</span> ${(msg.mlp * 100).toFixed(0)}%`);
-  document.getElementById('top-info').innerHTML = parts.join(' &nbsp;·&nbsp; ');
+  document.getElementById('top-text').innerHTML = parts.join(' &nbsp;·&nbsp; ');
+
+  if (msg.yamnet_top3) renderTop3(document.getElementById('dd-yamnet'), msg.yamnet_top3);
+  if (msg.mlp_top3) renderTop3(document.getElementById('dd-mlp'), msg.mlp_top3);
 }
 
 function addEvent(ev) {

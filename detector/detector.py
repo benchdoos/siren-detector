@@ -457,6 +457,24 @@ def inference_loop(args: argparse.Namespace) -> None:
             score_msg[f"{name}_state"] = smoothers[name].state
         score_msg["yamnet"] = round(yamnet_scores.get("siren", 0.0), 3)
         score_msg["mlp"] = round(mlp_score, 3) if mlp_score is not None else None
+
+        # top-3 YAMNet classes
+        mean_scores = scores_np.mean(axis=0)
+        top3_idx = mean_scores.argsort()[::-1][:3]
+        score_msg["yamnet_top3"] = [
+            {"name": class_names[i], "score": round(float(mean_scores[i]), 3)}
+            for i in top3_idx
+        ]
+
+        # top-3 MLP classes
+        if clf is not None:
+            mean_probs = probs.mean(axis=0) if mlp_score is not None else clf.predict(embeddings.numpy()).mean(axis=0)
+            mlp_top3_idx = mean_probs.argsort()[::-1][:3]
+            score_msg["mlp_top3"] = [
+                {"name": clf.labels[i], "score": round(float(mean_probs[i]), 3)}
+                for i in mlp_top3_idx
+            ]
+
         broadcast(score_msg)
         _last_heartbeat = time.monotonic()
 
