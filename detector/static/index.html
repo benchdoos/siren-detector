@@ -6,35 +6,36 @@
 <title>Siren Detector</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: system-ui, sans-serif; background: #0f0f0f; color: #e0e0e0; }
-  header { padding: 16px 24px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 16px; }
-  header h1 { font-size: 18px; font-weight: 600; }
-  #status { font-size: 12px; padding: 3px 8px; border-radius: 4px; background: #333; color: #888; }
+  body { font-family: system-ui, sans-serif; background: #0f0f0f; color: #e0e0e0; font-size: 15px; }
+  header { padding: 16px 24px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 20px; font-weight: 600; }
+  #status { font-size: 13px; padding: 3px 8px; border-radius: 4px; background: #333; color: #888; }
   #status.connected { background: #1a3a1a; color: #4caf50; }
+  .top-info { font-size: 13px; color: #666; margin-left: auto; font-variant-numeric: tabular-nums; }
+  .top-info .top-label { color: #888; }
 
   .score-panel { padding: 20px 24px; border-bottom: 1px solid #222; }
-  .score-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
-  .score-bar-wrap { background: #1a1a1a; border-radius: 6px; height: 28px; overflow: hidden; position: relative; }
+  .score-label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+  .score-bar-wrap { background: #1a1a1a; border-radius: 6px; height: 32px; overflow: hidden; position: relative; }
   .score-bar { height: 100%; width: 0%; background: #4caf50; transition: width .3s, background .3s; border-radius: 6px; }
   @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.5 } }
   .score-bar.pulsing { animation: pulse .8s ease-in-out infinite; }
-  .score-value { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; font-weight: 600; }
-  .state-badge { display: inline-block; margin-top: 8px; font-size: 12px; padding: 2px 10px; border-radius: 4px; background: #222; color: #888; }
+  .score-value { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 14px; font-weight: 600; }
+  .state-badge { display: inline-block; margin-top: 8px; font-size: 13px; padding: 2px 10px; border-radius: 4px; background: #222; color: #888; }
   .state-badge.possible  { background: #3a2a00; color: #ffa726; }
   .state-badge.confirmed { background: #3a0000; color: #ef5350; }
-  .score-breakdown { font-size: 11px; color: #555; margin-top: 6px; min-height: 1em; }
 
-  .events-header { padding: 12px 24px 8px; font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: .08em; display: flex; justify-content: space-between; align-items: center; }
-  .events-header button { font-size: 11px; background: none; border: 1px solid #333; color: #555; padding: 2px 8px; border-radius: 4px; cursor: pointer; }
+  .events-header { padding: 12px 24px 8px; font-size: 13px; color: #555; text-transform: uppercase; letter-spacing: .08em; display: flex; justify-content: space-between; align-items: center; }
+  .events-header button { font-size: 13px; background: none; border: 1px solid #333; color: #555; padding: 2px 8px; border-radius: 4px; cursor: pointer; }
   .events-header button:hover { color: #aaa; border-color: #555; }
   .events-count { font-variant-numeric: tabular-nums; color: #666; }
-  .batch-bar { padding: 0 24px 10px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; display: none; }
+  .batch-bar { padding: 6px 24px 10px; display: none; gap: 8px; align-items: center; flex-wrap: wrap; background: #181818; border: 1px solid #2a4a2a; border-radius: 6px; margin: 0 24px 10px; }
   .batch-bar.visible { display: flex; }
-  .batch-bar span { font-size: 11px; color: #888; }
-  .batch-bar .lbtn { font-size: 11px; }
-  .event-card .ev-check { margin-right: 8px; accent-color: #4caf50; cursor: pointer; }
+  .batch-bar span { font-size: 13px; color: #4caf50; font-weight: 600; }
+  .batch-bar .lbtn { font-size: 13px; }
+  .event-card .ev-check { margin-right: 8px; accent-color: #4caf50; cursor: pointer; width: 16px; height: 16px; }
   .filter-bar { padding: 0 24px 10px; display: flex; gap: 6px; flex-wrap: wrap; }
-  .fbtn { font-size: 11px; padding: 3px 10px; border-radius: 4px; border: 1px solid #333; background: none; color: #666; cursor: pointer; }
+  .fbtn { font-size: 13px; padding: 4px 12px; border-radius: 4px; border: 1px solid #333; background: none; color: #666; cursor: pointer; }
   .fbtn:hover { color: #aaa; border-color: #555; }
   .fbtn.active { background: #222; border-color: #888; color: #e0e0e0; }
 
@@ -43,19 +44,21 @@
   .event-card.confirmed { border-color: #5a1a1a; }
   .event-card.possible  { border-color: #3a2a00; }
   .event-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-  .badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
-  .badge.confirmed { background: #5a1a1a; color: #ef5350; }
+  .badge { font-size: 13px; padding: 3px 10px; border-radius: 4px; font-weight: 600; }
+  .badge.confirmed, .badge.siren { background: #5a1a1a; color: #ef5350; }
+  .badge.explosion  { background: #3a1a00; color: #ff7043; }
+  .badge.motorcycle { background: #2a2a00; color: #ffd54f; }
   .badge.possible  { background: #3a2a00; color: #ffa726; }
-  .event-time { font-size: 12px; color: #666; }
-  .event-conf { font-size: 12px; color: #888; }
-  .event-engine { font-size: 11px; color: #444; }
-  .event-breakdown { font-size: 11px; color: #555; margin-bottom: 8px; }
-  audio { width: 100%; height: 32px; filter: invert(1) hue-rotate(180deg) brightness(0.8); }
-  .no-clip { font-size: 12px; color: #444; font-style: italic; }
-  .empty { text-align: center; padding: 40px; color: #444; font-size: 14px; }
-  .label-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
-  .label-row span { font-size: 11px; color: #555; }
-  .lbtn { font-size: 11px; padding: 3px 10px; border-radius: 4px; border: 1px solid #333; background: none; color: #888; cursor: pointer; }
+  .event-time { font-size: 14px; color: #666; }
+  .event-conf { font-size: 14px; color: #888; }
+  .event-engine { font-size: 13px; color: #444; }
+  .event-breakdown { font-size: 13px; color: #555; margin-bottom: 8px; }
+  audio { width: 100%; height: 36px; filter: invert(1) hue-rotate(180deg) brightness(0.8); }
+  .no-clip { font-size: 14px; color: #444; font-style: italic; }
+  .empty { text-align: center; padding: 40px; color: #444; font-size: 16px; }
+  .label-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+  .label-row span { font-size: 13px; color: #555; }
+  .lbtn { font-size: 13px; padding: 4px 12px; border-radius: 4px; border: 1px solid #333; background: none; color: #888; cursor: pointer; }
   .lbtn:hover { border-color: #666; color: #ccc; }
   .lbtn.active { background: #1a3a1a; border-color: #4caf50; color: #4caf50; cursor: default; }
   .lbtn.siren { border-color: #5a1a1a; color: #ef5350; }
@@ -67,16 +70,34 @@
 <header>
   <h1>🚨 Siren Detector</h1>
   <span id="status">disconnected</span>
+  <span class="top-info" id="top-info"></span>
 </header>
 
 <div class="score-panel">
-  <div class="score-label">Siren probability</div>
-  <div class="score-bar-wrap">
-    <div class="score-bar" id="score-bar"></div>
-    <span class="score-value" id="score-value">—</span>
+  <div class="detector-row" data-detector="siren">
+    <div class="score-label">Siren</div>
+    <div class="score-bar-wrap">
+      <div class="score-bar" id="bar-siren"></div>
+      <span class="score-value" id="val-siren">—</span>
+    </div>
+    <span class="state-badge" id="badge-siren" style="margin-top:6px">idle</span>
   </div>
-  <span class="state-badge" id="state-badge">idle</span>
-  <div class="score-breakdown" id="score-breakdown"></div>
+  <div class="detector-row" data-detector="explosion" style="margin-top:12px">
+    <div class="score-label">Explosion</div>
+    <div class="score-bar-wrap">
+      <div class="score-bar" id="bar-explosion"></div>
+      <span class="score-value" id="val-explosion">—</span>
+    </div>
+    <span class="state-badge" id="badge-explosion" style="margin-top:6px">idle</span>
+  </div>
+  <div class="detector-row" data-detector="motorcycle" style="margin-top:12px">
+    <div class="score-label">Motorcycle</div>
+    <div class="score-bar-wrap">
+      <div class="score-bar" id="bar-motorcycle"></div>
+      <span class="score-value" id="val-motorcycle">—</span>
+    </div>
+    <span class="state-badge" id="badge-motorcycle" style="margin-top:6px">idle</span>
+  </div>
 </div>
 
 <div class="events-header">
@@ -91,41 +112,52 @@
   <button class="lbtn" onclick="batchLabel('siren')">siren</button>
   <button class="lbtn" onclick="batchLabel('background')">background</button>
   <button class="lbtn" onclick="batchLabel('motorcycle')">motorcycle</button>
+  <button class="lbtn" onclick="batchLabel('explosion')">explosion</button>
   <button class="lbtn" onclick="batchLabel('unknown')">unknown</button>
 </div>
 <div class="filter-bar">
   <button class="fbtn active" data-filter="siren" onclick="setFilter(this)">siren</button>
   <button class="fbtn" data-filter="background" onclick="setFilter(this)">background</button>
   <button class="fbtn" data-filter="motorcycle" onclick="setFilter(this)">motorcycle</button>
+  <button class="fbtn" data-filter="explosion" onclick="setFilter(this)">explosion</button>
   <button class="fbtn" data-filter="unknown" onclick="setFilter(this)">unknown</button>
   <button class="fbtn" data-filter="all" onclick="setFilter(this)">all</button>
 </div>
 <div id="events"><div class="empty" id="empty">No events yet</div></div>
 
 <script>
-const scoreBar   = document.getElementById('score-bar');
-const scoreValue = document.getElementById('score-value');
-const stateBadge = document.getElementById('state-badge');
 const statusEl   = document.getElementById('status');
 const eventsEl   = document.getElementById('events');
 let   emptyEl    = document.getElementById('empty');
 let   currentAudio = null;
 const seenEvents = new Set();
+const DETECTOR_NAMES = ['siren', 'explosion', 'motorcycle'];
+const DETECTOR_THRESHOLDS = { siren: 0.10, explosion: 0.15, motorcycle: 0.15 };
 
-function setScore(score, state, yamnet, mlp, top) {
+function updateDetector(name, score, state) {
+  const bar   = document.getElementById('bar-' + name);
+  const val   = document.getElementById('val-' + name);
+  const badge = document.getElementById('badge-' + name);
+  const thr = DETECTOR_THRESHOLDS[name] || 0.15;
   const pct = Math.min(score * 100, 100);
-  const color = score >= 0.3 ? '#ef5350' : score >= 0.10 ? '#ffa726' : '#4caf50';
-  scoreBar.style.width      = pct + '%';
-  scoreBar.style.background = color;
-  scoreValue.textContent    = (score * 100).toFixed(1) + '%';
-  stateBadge.textContent    = state;
-  stateBadge.className      = 'state-badge ' + state;
-  scoreBar.classList.toggle('pulsing', state === 'possible' || state === 'confirmed');
+  const color = score >= 0.3 ? '#ef5350' : score >= thr ? '#ffa726' : '#4caf50';
+  bar.style.width      = pct + '%';
+  bar.style.background = color;
+  val.textContent      = (score * 100).toFixed(1) + '%';
+  badge.textContent    = state;
+  badge.className      = 'state-badge ' + state;
+  bar.classList.toggle('pulsing', state === 'possible' || state === 'confirmed');
+}
+
+function updateScores(msg) {
+  for (const name of DETECTOR_NAMES) {
+    updateDetector(name, msg[name + '_score'] || 0, msg[name + '_state'] || 'idle');
+  }
   const parts = [];
-  if (top)         parts.push(`top: ${top}`);
-  if (yamnet != null) parts.push(`yamnet: ${(yamnet * 100).toFixed(0)}%`);
-  if (mlp != null)    parts.push(`mlp: ${(mlp * 100).toFixed(0)}%`);
-  document.getElementById('score-breakdown').textContent = parts.join('  ·  ');
+  if (msg.top)            parts.push(`<span class="top-label">top:</span> ${msg.top}`);
+  if (msg.yamnet != null) parts.push(`<span class="top-label">yamnet:</span> ${(msg.yamnet * 100).toFixed(0)}%`);
+  if (msg.mlp != null)    parts.push(`<span class="top-label">mlp:</span> ${(msg.mlp * 100).toFixed(0)}%`);
+  document.getElementById('top-info').innerHTML = parts.join(' &nbsp;·&nbsp; ');
 }
 
 function addEvent(ev) {
@@ -149,7 +181,7 @@ function addEvent(ev) {
   card.innerHTML = `
     <div class="event-meta">
       <input type="checkbox" class="ev-check" onchange="updateSelection()">
-      <span class="badge confirmed">${ev.event.toUpperCase()}</span>
+      <span class="badge ${ev.event}">${ev.event.toUpperCase()}</span>
       <span class="event-time">${ts}</span>
       <span class="event-conf">${(ev.confidence * 100).toFixed(1)}%</span>
       <span class="event-engine">${ev.engine}</span>
@@ -158,7 +190,7 @@ function addEvent(ev) {
     <audio controls src="${ev.clip_url}"></audio>
     <div class="label-row">
       <span>Label:</span>
-      ${['siren','background','motorcycle','unknown'].map(l =>
+      ${['siren','background','motorcycle','explosion','unknown'].map(l =>
         `<button class="lbtn" data-label="${l}" onclick="sendLabel(this,'${filename}','${l}')">${l}</button>`
       ).join('')}
     </div>
@@ -299,7 +331,7 @@ function connect() {
   ws.onclose = () => { statusEl.textContent = 'reconnecting…'; statusEl.className = ''; setTimeout(connect, 2000); };
   ws.onmessage = ({ data }) => {
     const msg = JSON.parse(data);
-    if (msg.type === 'score') setScore(msg.score, msg.state, msg.yamnet, msg.mlp, msg.top);
+    if (msg.type === 'score') updateScores(msg);
     if (msg.type === 'event') addEvent(msg);
   };
 }

@@ -38,11 +38,21 @@ MODEL_URL = "https://tfhub.dev/google/yamnet/1"
 ANALYSIS_SECONDS = 2.0
 INFERENCE_HOP_SAMPLES = SAMPLE_RATE // 2
 
-SIREN_THRESHOLD = 0.10
 SMOOTHING_WINDOW_SECONDS = 30
 POSSIBLE_TRIGGERS = 4
 CONFIRMED_TRIGGERS = 8
 COOLDOWN_SECONDS = 60
+
+# Each detector: event name → (YAMNet class names, threshold, clip prefix)
+DETECTORS = {
+    "siren":      (("Siren",), 0.10, ""),
+    "explosion":  (("Explosion", "Burst, pop", "Gunshot, gunfire"), 0.15, "exp-"),
+    "motorcycle": (("Motorcycle",), 0.15, "moto-"),
+}
+
+# When MLP is used for siren, require YAMNet to also show at least this much
+# to filter out false positives (e.g. Speech classified as siren by MLP)
+YAMNET_MIN_GATE = 0.01
 
 CLIP_SECONDS = 30       # audio saved before confirmed event
 CLIP_DIR = Path("/clips")
@@ -135,7 +145,7 @@ class TemporalSmoother:
 _client_queues: dict[WebSocket, asyncio.Queue] = {}
 _loop: asyncio.AbstractEventLoop | None = None
 _event_history: collections.deque = collections.deque(maxlen=100)
-_last_score: dict = {"type": "score", "score": 0.0, "state": "idle"}
+_last_score: dict = {"type": "score", "top": ""}
 
 
 def _enqueue_all(msg: dict) -> None:
@@ -197,13 +207,59 @@ async def feedback(body: dict):
     return {"ok": True}
 
 
+@app.on_event("startup")
+async def _restore_clips():
+    """Scan /clips on startup to restore event history from surviving WAV files."""
+    if not CLIP_DIR.exists():
+        return
+    wavs = sorted(CLIP_DIR.glob("*.wav"))
+    for path in wavs:
+        name = path.name
+        # detect event type from prefix
+        if name.startswith("exp-"):
+            event_type = "explosion"
+            date_part = name[4:].replace(".wav", "")
+        elif name.startswith("moto-"):
+            event_type = "motorcycle"
+            date_part = name[5:].replace(".wav", "")
+        else:
+            event_type = "siren"
+            date_part = name.replace(".wav", "")
+        # parse YYYYMMDD-HHMMSS → ISO timestamp
+        try:
+            ts = datetime.strptime(date_part, "%Y%m%d-%H%M%S").replace(
+                tzinfo=timezone.utc
+            ).isoformat(timespec="seconds")
+        except ValueError:
+            ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        # check if feedback label exists in dataset
+        for label in VALID_LABELS:
+            if (DATASET_DIR / label / name).exists():
+                _feedback[name] = label
+                break
+        ev = {
+            "type": "event", "event": event_type, "state": "confirmed",
+            "confidence": 0.0, "timestamp": ts,
+            "source": "restored", "engine": "unknown", "clip_url": f"/clips/{name}",
+            "yamnet": 0.0, "mlp": None, "yamnet_top": "",
+        }
+        _event_history.append(ev)
+    if wavs:
+        print(f"Restored {len(wavs)} clips from /clips/", flush=True)
+
+
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
     await ws.send_json(_last_score)
     for ev in list(_event_history):
+        clip_url = ev.get("clip_url")
+        if not clip_url:
+            continue
+        filename = clip_url.split("/")[-1]
+        if not (CLIP_DIR / filename).exists():
+            continue
         ev_out = dict(ev)
-        filename = (ev.get("clip_url") or "").split("/")[-1]
         if filename in _feedback:
             ev_out["label"] = _feedback[filename]
         await ws.send_json(ev_out)
@@ -288,7 +344,12 @@ def inference_loop(args: argparse.Namespace) -> None:
 
     with open(yamnet.class_map_path().numpy().decode(), newline="", encoding="utf-8") as f:
         class_names = [row["display_name"] for row in csv.DictReader(f)]
-    yamnet_siren_index = next(i for i, n in enumerate(class_names) if n == "Siren")
+    # resolve YAMNet indices for each detector
+    detector_indices: dict[str, list[int]] = {}
+    for name, (yamnet_classes, _, _) in DETECTORS.items():
+        indices = [i for i, n in enumerate(class_names) if n in yamnet_classes]
+        detector_indices[name] = indices
+        print(f"Detector '{name}' YAMNet classes: {[class_names[i] for i in indices]}", flush=True)
 
     clf = None
     engine = "yamnet"
@@ -304,14 +365,16 @@ def inference_loop(args: argparse.Namespace) -> None:
 
     inference_buf = AudioRingBuffer(capacity=int(ANALYSIS_SECONDS * SAMPLE_RATE))
     clip_buf = ClipBuffer(seconds=CLIP_SECONDS)
-    smoother = TemporalSmoother(
-        window_seconds=SMOOTHING_WINDOW_SECONDS,
-        hop_seconds=0.5,
-        threshold=SIREN_THRESHOLD,
-        possible=POSSIBLE_TRIGGERS,
-        confirmed=CONFIRMED_TRIGGERS,
-        cooldown_seconds=COOLDOWN_SECONDS,
-    )
+    smoothers: dict[str, TemporalSmoother] = {}
+    for name, (_, threshold, _) in DETECTORS.items():
+        smoothers[name] = TemporalSmoother(
+            window_seconds=SMOOTHING_WINDOW_SECONDS,
+            hop_seconds=0.5,
+            threshold=threshold,
+            possible=POSSIBLE_TRIGGERS,
+            confirmed=CONFIRMED_TRIGGERS,
+            cooldown_seconds=COOLDOWN_SECONDS,
+        )
 
     stop = threading.Event()
     threading.Thread(
@@ -323,85 +386,106 @@ def inference_loop(args: argparse.Namespace) -> None:
     print("Ready.", flush=True)
 
     _last_heartbeat = 0.0
-    peak_score = 0.0
-    peak_yamnet = 0.0
-    peak_mlp = None
-    peak_top = ""
+    peaks: dict[str, dict] = {name: {"score": 0.0, "yamnet": 0.0, "mlp": None, "top": ""} for name in DETECTORS}
     while True:
         waveform = inference_buf.consume(INFERENCE_HOP_SAMPLES)
         if waveform is None:
             time.sleep(0.05)
             now = time.monotonic()
             if now - _last_heartbeat >= 1.0:
-                broadcast({"type": "score", "score": 0.0, "state": smoother.state})
+                heartbeat: dict = {"type": "score", "top": ""}
+                for name in DETECTORS:
+                    heartbeat[f"{name}_score"] = 0.0
+                    heartbeat[f"{name}_state"] = smoothers[name].state
+                broadcast(heartbeat)
                 _last_heartbeat = now
             continue
 
         waveform = np.clip(waveform, -1.0, 1.0)
         scores, embeddings, _ = yamnet(waveform)
         scores_np = scores.numpy()  # (n_windows, 521)
-
-        yamnet_score = float(scores_np[:, yamnet_siren_index].max())
         top_idx = int(scores_np.mean(axis=0).argmax())
         yamnet_top = class_names[top_idx]
 
-        if clf is not None:
+        # compute raw YAMNet score for each detector
+        yamnet_scores: dict[str, float] = {}
+        for name, indices in detector_indices.items():
+            yamnet_scores[name] = float(scores_np[:, indices].max()) if indices else 0.0
+
+        # MLP overrides siren score if available
+        mlp_score = None
+        if clf is not None and "siren" in clf.labels:
             probs = clf.predict(embeddings.numpy())
             siren_idx = clf.labels.index("siren")
             mlp_score = float(probs[:, siren_idx].max())
-            max_score = mlp_score
-        else:
-            mlp_score = None
-            max_score = yamnet_score
 
-        new_state = smoother.push(max_score)
+        # effective score: MLP for siren (if available), YAMNet for the rest
+        # gate: if YAMNet sees no siren at all, don't trust MLP alone
+        effective: dict[str, float] = {}
+        for name in DETECTORS:
+            if name == "siren" and mlp_score is not None:
+                if yamnet_scores["siren"] >= YAMNET_MIN_GATE:
+                    effective[name] = mlp_score
+                else:
+                    effective[name] = 0.0
+            else:
+                effective[name] = yamnet_scores[name]
+
+        # push through smoothers
+        state_changes: dict[str, str | None] = {}
+        for name, smoother in smoothers.items():
+            state_changes[name] = smoother.push(effective[name])
+
         ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-        # track peak values during detection window
-        if smoother.state == "idle":
-            peak_score = 0.0
-        elif smoother.state in ("possible", "confirmed"):
-            if max_score > peak_score:
-                peak_score = max_score
-                peak_yamnet = yamnet_score
-                peak_mlp = mlp_score
-                peak_top = yamnet_top
+        # track peaks per detector
+        for name in DETECTORS:
+            if smoothers[name].state == "idle":
+                peaks[name] = {"score": 0.0, "yamnet": 0.0, "mlp": None, "top": ""}
+            elif effective[name] > peaks[name]["score"]:
+                peaks[name] = {
+                    "score": effective[name],
+                    "yamnet": yamnet_scores[name],
+                    "mlp": mlp_score if name == "siren" else None,
+                    "top": yamnet_top,
+                }
 
-        # push score to UI every cycle
-        broadcast({
-            "type": "score", "score": round(max_score, 3), "state": smoother.state,
-            "yamnet": round(yamnet_score, 3),
-            "mlp": round(mlp_score, 3) if mlp_score is not None else None,
-            "top": yamnet_top,
-        })
+        # push scores to UI
+        score_msg: dict = {"type": "score", "top": yamnet_top}
+        for name in DETECTORS:
+            score_msg[f"{name}_score"] = round(effective[name], 3)
+            score_msg[f"{name}_state"] = smoothers[name].state
+        score_msg["yamnet"] = round(yamnet_scores.get("siren", 0.0), 3)
+        score_msg["mlp"] = round(mlp_score, 3) if mlp_score is not None else None
+        broadcast(score_msg)
         _last_heartbeat = time.monotonic()
 
-        if new_state in ("possible", "confirmed"):
+        # emit events for each detector
+        for name, (_, _, prefix) in DETECTORS.items():
+            new_state = state_changes[name]
+            if new_state not in ("possible", "confirmed"):
+                continue
             clip_url = None
             if new_state == "confirmed":
-                clip_name = f"{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.wav"
+                clip_name = f"{prefix}{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.wav"
                 clip_buf.save(CLIP_DIR / clip_name)
                 clip_url = f"/clips/{clip_name}"
-                print(f"[{ts}] Clip saved: {clip_url}", flush=True)
+                print(f"[{ts}] {name} clip saved: {clip_url}", flush=True)
 
+            pk = peaks[name]
+            det_engine = engine if (name == "siren" and clf is not None) else "yamnet"
             event = {
-                "type": "event",
-                "event": "siren",
-                "state": new_state,
-                "confidence": round(peak_score, 3),
-                "timestamp": ts,
-                "source": args.source,
-                "engine": engine,
-                "clip_url": clip_url,
-                "yamnet": round(peak_yamnet, 3),
-                "mlp": round(peak_mlp, 3) if peak_mlp is not None else None,
-                "yamnet_top": peak_top,
+                "type": "event", "event": name, "state": new_state,
+                "confidence": round(pk["score"], 3), "timestamp": ts,
+                "source": args.source, "engine": det_engine, "clip_url": clip_url,
+                "yamnet": round(pk["yamnet"], 3),
+                "mlp": round(pk["mlp"], 3) if pk["mlp"] is not None else None,
+                "yamnet_top": pk["top"],
             }
             broadcast(event)
             print(f"EVENT {json.dumps(event)}", flush=True)
-
             if new_state == "confirmed":
-                peak_score = 0.0
+                peaks[name] = {"score": 0.0, "yamnet": 0.0, "mlp": None, "top": ""}
 
 
 # ── entry point ────────────────────────────────────────────────────────────────
