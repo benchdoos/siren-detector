@@ -132,20 +132,15 @@ class TemporalSmoother:
 
 # ── WebSocket broadcast ────────────────────────────────────────────────────────
 
-_ws_clients: set[WebSocket] = set()
+_client_queues: dict[WebSocket, asyncio.Queue] = {}
 _loop: asyncio.AbstractEventLoop | None = None
 _event_history: collections.deque = collections.deque(maxlen=100)
 _last_score: dict = {"type": "score", "score": 0.0, "state": "idle"}
 
 
-async def _broadcast(msg: dict) -> None:
-    dead = set()
-    for ws in list(_ws_clients):
-        try:
-            await ws.send_json(msg)
-        except Exception:
-            dead.add(ws)
-    _ws_clients -= dead
+def _enqueue_all(msg: dict) -> None:
+    for q in _client_queues.values():
+        q.put_nowait(msg)
 
 
 def broadcast(msg: dict) -> None:
@@ -155,7 +150,7 @@ def broadcast(msg: dict) -> None:
     elif msg.get("type") == "score":
         _last_score = msg
     if _loop and not _loop.is_closed():
-        asyncio.run_coroutine_threadsafe(_broadcast(msg), _loop)
+        _loop.call_soon_threadsafe(_enqueue_all, msg)
 
 
 # ── FastAPI app ────────────────────────────────────────────────────────────────
@@ -212,16 +207,34 @@ async def ws_endpoint(ws: WebSocket):
         if filename in _feedback:
             ev_out["label"] = _feedback[filename]
         await ws.send_json(ev_out)
-    _ws_clients.add(ws)
-    try:
+
+    queue: asyncio.Queue = asyncio.Queue()
+    _client_queues[ws] = queue
+
+    async def sender():
+        while True:
+            msg = await queue.get()
+            await ws.send_json(msg)
+
+    async def receiver():
         while True:
             msg = await ws.receive()
             if msg["type"] == "websocket.disconnect":
-                break
+                return
+
+    try:
+        sender_task = asyncio.create_task(sender())
+        receiver_task = asyncio.create_task(receiver())
+        done, pending = await asyncio.wait(
+            [sender_task, receiver_task],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for task in pending:
+            task.cancel()
     except Exception:
         pass
     finally:
-        _ws_clients.discard(ws)
+        _client_queues.pop(ws, None)
 
 
 # ── UDP receiver ───────────────────────────────────────────────────────────────
@@ -273,6 +286,10 @@ def inference_loop(args: argparse.Namespace) -> None:
     print(f"Loading YAMNet from {MODEL_URL} ...", flush=True)
     yamnet = hub.load(MODEL_URL)
 
+    with open(yamnet.class_map_path().numpy().decode(), newline="", encoding="utf-8") as f:
+        class_names = [row["display_name"] for row in csv.DictReader(f)]
+    yamnet_siren_index = next(i for i, n in enumerate(class_names) if n == "Siren")
+
     clf = None
     engine = "yamnet"
     weights_path = Path(args.classifier_weights)
@@ -283,9 +300,6 @@ def inference_loop(args: argparse.Namespace) -> None:
         engine = "yamnet+mlp"
         print(f"Classifier loaded: {clf.labels}", flush=True)
     else:
-        with open(yamnet.class_map_path().numpy().decode(), newline="", encoding="utf-8") as f:
-            class_names = [row["display_name"] for row in csv.DictReader(f)]
-        siren_index = next(i for i, n in enumerate(class_names) if n == "Siren")
         print("No classifier weights — using raw YAMNet siren score.", flush=True)
 
     inference_buf = AudioRingBuffer(capacity=int(ANALYSIS_SECONDS * SAMPLE_RATE))
@@ -309,6 +323,10 @@ def inference_loop(args: argparse.Namespace) -> None:
     print("Ready.", flush=True)
 
     _last_heartbeat = 0.0
+    peak_score = 0.0
+    peak_yamnet = 0.0
+    peak_mlp = None
+    peak_top = ""
     while True:
         waveform = inference_buf.consume(INFERENCE_HOP_SAMPLES)
         if waveform is None:
@@ -321,19 +339,41 @@ def inference_loop(args: argparse.Namespace) -> None:
 
         waveform = np.clip(waveform, -1.0, 1.0)
         scores, embeddings, _ = yamnet(waveform)
+        scores_np = scores.numpy()  # (n_windows, 521)
+
+        yamnet_score = float(scores_np[:, yamnet_siren_index].max())
+        top_idx = int(scores_np.mean(axis=0).argmax())
+        yamnet_top = class_names[top_idx]
 
         if clf is not None:
             probs = clf.predict(embeddings.numpy())
             siren_idx = clf.labels.index("siren")
-            max_score = float(probs[:, siren_idx].max())
+            mlp_score = float(probs[:, siren_idx].max())
+            max_score = mlp_score
         else:
-            max_score = float(scores.numpy()[:, siren_index].max())
+            mlp_score = None
+            max_score = yamnet_score
 
         new_state = smoother.push(max_score)
         ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
+        # track peak values during detection window
+        if smoother.state == "idle":
+            peak_score = 0.0
+        elif smoother.state in ("possible", "confirmed"):
+            if max_score > peak_score:
+                peak_score = max_score
+                peak_yamnet = yamnet_score
+                peak_mlp = mlp_score
+                peak_top = yamnet_top
+
         # push score to UI every cycle
-        broadcast({"type": "score", "score": round(max_score, 3), "state": smoother.state})
+        broadcast({
+            "type": "score", "score": round(max_score, 3), "state": smoother.state,
+            "yamnet": round(yamnet_score, 3),
+            "mlp": round(mlp_score, 3) if mlp_score is not None else None,
+            "top": yamnet_top,
+        })
         _last_heartbeat = time.monotonic()
 
         if new_state in ("possible", "confirmed"):
@@ -348,14 +388,20 @@ def inference_loop(args: argparse.Namespace) -> None:
                 "type": "event",
                 "event": "siren",
                 "state": new_state,
-                "confidence": round(max_score, 3),
+                "confidence": round(peak_score, 3),
                 "timestamp": ts,
                 "source": args.source,
                 "engine": engine,
                 "clip_url": clip_url,
+                "yamnet": round(peak_yamnet, 3),
+                "mlp": round(peak_mlp, 3) if peak_mlp is not None else None,
+                "yamnet_top": peak_top,
             }
             broadcast(event)
             print(f"EVENT {json.dumps(event)}", flush=True)
+
+            if new_state == "confirmed":
+                peak_score = 0.0
 
 
 # ── entry point ────────────────────────────────────────────────────────────────

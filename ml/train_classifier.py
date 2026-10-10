@@ -49,15 +49,19 @@ RANDOM_SEED = 42
 MAX_SECONDS_PER_FILE = MAX_WINDOWS_PER_FILE * 0.5 + 5.0
 
 ESC50_DIR = DATASET / "external" / "esc50"
+ESC50_CURATED_DIR = DATASET / "external" / "esc50_curated"
 ESC50_VAL_FOLD = 5
 ESC50_LABEL_MAP: dict[str, str] = {
-    "siren":           "siren",
+    # siren removed — use curated subset instead (ESC50_CURATED_DIR)
     "rain":            "background",
     "wind":            "background",
     "washing_machine": "background",
     "keyboard_typing": "background",
+    "clock_alarm":     "background",
     "engine":          "background",
-    # fireworks — пропускаем (амбивалентен)
+    "fireworks":       "background",
+    "thunderstorm":    "background",
+    "helicopter":      "background",
 }  # ~155s
 
 
@@ -134,20 +138,30 @@ def split_by_source(
     val_frac: float,
     seed: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    rng = random.Random(seed)
+    """Train/val split per class to ensure balanced val ratio across classes.
+
+    Splitting globally causes lopsided splits when one class has few sources
+    with many windows each (e.g. 2 long siren recordings dominate val).
+    """
     sources_arr = np.array(sources)
-    unique_sources = list(set(sources))
-    rng.shuffle(unique_sources)
+    train_mask = np.zeros(len(labels), dtype=bool)
+    val_mask = np.zeros(len(labels), dtype=bool)
 
-    n_val = max(1, int(len(unique_sources) * val_frac))
-    val_sources = set(unique_sources[:n_val])
+    for lbl in sorted(set(labels.tolist())):
+        lbl_idx = np.where(labels == lbl)[0]
+        lbl_sources = list(set(sources_arr[lbl_idx].tolist()))
+        rng = random.Random(seed + int(lbl))
+        rng.shuffle(lbl_sources)
+        n_val = max(1, int(len(lbl_sources) * val_frac))
+        val_srcs = set(lbl_sources[:n_val])
+        for i in lbl_idx:
+            if sources_arr[i] in val_srcs:
+                val_mask[i] = True
+            else:
+                train_mask[i] = True
 
-    val_mask = np.array([s in val_sources for s in sources])
-    train_mask = ~val_mask
-
-    print(f"\n  Sources: {len(unique_sources)} total, "
-          f"{len(unique_sources) - n_val} train, {n_val} val")
-    print(f"  Windows: {train_mask.sum()} train, {val_mask.sum()} val")
+    print(f"\n  Sources: {len(set(sources))} total")
+    print(f"  Windows: {int(train_mask.sum())} train, {int(val_mask.sum())} val")
 
     return (
         embeddings[train_mask], labels[train_mask],
@@ -192,6 +206,20 @@ def main() -> None:
         own_emb.append(emb)
         own_lbl.append(lbl)
         own_src.extend(src)
+
+    # ── Curated ESC-50 subsets (hand-picked, per label) ─────────────────────
+    if ESC50_CURATED_DIR.exists():
+        print("\nExtracting curated ESC-50 embeddings:")
+        for label in LABELS:
+            curated_files = sorted((ESC50_CURATED_DIR / label).glob("*.wav"))
+            if not curated_files:
+                continue
+            idx = LABELS.index(label)
+            emb, lbl, src = extract_embeddings(yamnet, curated_files, idx, f"curated/{label}")
+            if len(emb):
+                own_emb.append(emb)
+                own_lbl.append(lbl)
+                own_src.extend(src)
 
     if own_emb:
         print("\nSplitting own recordings by source:")
@@ -335,15 +363,13 @@ def main() -> None:
     labels_path.write_text(json.dumps(LABELS), encoding="utf-8")
     print(f"Saved: {labels_path}")
 
-    # export TFLite (via SavedModel to avoid TF 2.16 from_keras_model bug)
-    saved_model_path = RESULTS / "classifier_saved_model"
-    tf.saved_model.save(model, str(saved_model_path))
-    converter = tf.lite.TFLiteConverter.from_saved_model(str(saved_model_path))
-    converter.optimizations = [tf.lite.Optimize.DEFAULT]
-    tflite_model = converter.convert()
-    tflite_path = RESULTS / "classifier.tflite"
-    tflite_path.write_bytes(tflite_model)
-    print(f"Saved: {tflite_path}")
+    # TFLite export skipped — broken in TF 2.16 (MLIR bug)
+    # Export weights as numpy .npz for portable inference
+    weights = model.get_weights()  # [W1, b1, W2, b2, W3, b3]
+    npz_path = RESULTS / "classifier_weights.npz"
+    np.savez(npz_path, W1=weights[0], b1=weights[1],
+             W2=weights[2], b2=weights[3], W3=weights[4], b3=weights[5])
+    print(f"Saved: {npz_path}  ({npz_path.stat().st_size // 1024} KB)")
 
 
 if __name__ == "__main__":
