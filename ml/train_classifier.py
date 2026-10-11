@@ -50,6 +50,7 @@ MAX_SECONDS_PER_FILE = MAX_WINDOWS_PER_FILE * 0.5 + 5.0
 
 ESC50_DIR = DATASET / "external" / "esc50"
 ESC50_CURATED_DIR = DATASET / "external" / "esc50_curated"
+FREESOUND_DIR = DATASET / "external" / "freesound"
 ESC50_VAL_FOLD = 5
 ESC50_LABEL_MAP: dict[str, str] = {
     # siren removed — use curated subset instead (ESC50_CURATED_DIR)
@@ -216,6 +217,22 @@ def main() -> None:
                 continue
             idx = LABELS.index(label)
             emb, lbl, src = extract_embeddings(yamnet, curated_files, idx, f"curated/{label}")
+            if len(emb):
+                own_emb.append(emb)
+                own_lbl.append(lbl)
+                own_src.extend(src)
+
+    # ── Freesound downloads (all treated as siren) ────────────────────────────
+    freesound_audio = FREESOUND_DIR / "audio"
+    if freesound_audio.exists():
+        fs_files = sorted(
+            p for p in freesound_audio.iterdir()
+            if p.suffix.lower() in (".wav", ".mp3", ".ogg", ".flac")
+        )
+        if fs_files:
+            print(f"\nExtracting Freesound siren embeddings ({len(fs_files)} files):")
+            siren_idx = LABELS.index("siren")
+            emb, lbl, src = extract_embeddings(yamnet, fs_files, siren_idx, "freesound/siren")
             if len(emb):
                 own_emb.append(emb)
                 own_lbl.append(lbl)
