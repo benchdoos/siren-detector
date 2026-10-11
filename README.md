@@ -422,8 +422,9 @@ CSV связывает их с классом, fold и источником. С�
 | ESC-50 class | Использование при проверке | Наша целевая метка |
 |---|---|---|
 | `siren` | сирена | `siren` |
-| `rain`, `wind`, `washing_machine`, `keyboard_typing`, `engine` | разнообразный фон | `background` |
-| `fireworks` | только похожий импульсный звук, не подтверждённый взрыв | `unknown` |
+| `rain`, `wind`, `washing_machine`, `keyboard_typing` | разнообразный фон | `background` |
+| `engine` | двигатель → мопед/мотоцикл | `motorcycle` |
+| `fireworks`, `thunderstorm`, `helicopter` и др. | фоновые звуки | `background` |
 
 Не копируй внешние клипы в папки `dataset/siren/` или `dataset/background/`:
 это скроет происхождение и может привести к утечке одинаковых исходных записей
@@ -432,6 +433,23 @@ CSV связывает их с классом, fold и источником. С�
 микрофоне INMP441. Для реального качества обязательно нужны собственные записи
 с устройства. У ESC-50 возможны особенности исходной обработки, влияющие на
 обучение и метрики.
+
+### Добавление данных из Freesound и других источников
+
+Для классов, которых нет в ESC-50 (например, `explosion`), можно скачать клипы
+с [Freesound.org](https://freesound.org/) или других открытых источников.
+
+Скачанные файлы кладутся в `dataset/inbox/downloads/`, затем конвертируются
+скриптом `convert_downloads.py`:
+
+```bash
+python3 dataset/convert_downloads.py explosion
+python3 dataset/convert_downloads.py motorcycle
+```
+
+Скрипт автоматически конвертирует в 16 kHz / mono / 16-bit WAV, нарезает на
+5-секундные чанки и раскладывает в `dataset/<label>/`. Обработанные оригиналы
+перемещаются в `dataset/inbox/downloads/done/`.
 
 Лицензия и карточка набора:
 [ESC-50 README и лицензия](https://github.com/karolpiczak/ESC-50).
@@ -920,7 +938,7 @@ Hub (fan-out relay, RPi :9000)
 
 **Detector** (`http://192.168.1.100:8080`):
 - YAMNet (frozen, TF Hub) извлекает 1024-dim embeddings каждые 0.5 с
-- MLP-классификатор (`siren` / `background`) поверх embeddings
+- MLP-классификатор (`siren` / `background` / `explosion` / `motorcycle`) поверх embeddings
 - Temporal smoother: 4 триггера → possible, 8 → confirmed (окно 30 с, cooldown 60 с)
 - На confirmed: сохраняется 30-секундный WAV-клип в `/clips/`
 - WebSocket бродкаст: score каждые 0.5 с + события
