@@ -39,6 +39,7 @@ DATASET = REPO_ROOT / "dataset"
 RESULTS = Path(__file__).resolve().parent / "results"
 EMB_CACHE = Path(__file__).resolve().parent / "emb_cache"
 SAVED_EMB = RESULTS / "saved_embeddings.npz"
+VAL_SOURCES_FILE = RESULTS / "val_sources.json"
 
 MODEL_URL = "https://tfhub.dev/google/yamnet/1"
 SAMPLE_RATE = 16_000
@@ -133,6 +134,20 @@ def extract_embeddings(
 
 # ── train / val split by source ────────────────────────────────────────────────
 
+def _load_val_sources() -> dict[str, list[str]] | None:
+    """Load fixed val sources from file. Returns {label: [source, ...]} or None."""
+    if VAL_SOURCES_FILE.exists():
+        return json.loads(VAL_SOURCES_FILE.read_text(encoding="utf-8"))
+    return None
+
+
+def _save_val_sources(val_sources: dict[str, list[str]]) -> None:
+    VAL_SOURCES_FILE.write_text(
+        json.dumps(val_sources, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(f"  Saved val sources: {VAL_SOURCES_FILE}")
+
+
 def split_by_source(
     embeddings: np.ndarray,
     labels: np.ndarray,
@@ -140,27 +155,44 @@ def split_by_source(
     val_frac: float,
     seed: int,
 ) -> tuple[np.ndarray, np.ndarray, list[str], np.ndarray, np.ndarray, list[str]]:
-    """Train/val split per class to ensure balanced val ratio across classes.
+    """Train/val split per class with fixed val sources.
 
-    Splitting globally causes lopsided splits when one class has few sources
-    with many windows each (e.g. 2 long siren recordings dominate val).
+    On first run: picks val sources randomly (val_frac per class), saves to
+    val_sources.json. On subsequent runs: reuses saved val sources, new data
+    goes to train by default.
     """
+    fixed = _load_val_sources()
     sources_arr = np.array(sources)
     train_mask = np.zeros(len(labels), dtype=bool)
     val_mask = np.zeros(len(labels), dtype=bool)
+    new_val_sources: dict[str, list[str]] = {}
 
     for lbl in sorted(set(labels.tolist())):
+        lbl_name = LABELS[int(lbl)]
         lbl_idx = np.where(labels == lbl)[0]
-        lbl_sources = list(set(sources_arr[lbl_idx].tolist()))
-        rng = random.Random(seed + int(lbl))
-        rng.shuffle(lbl_sources)
-        n_val = max(1, int(len(lbl_sources) * val_frac))
-        val_srcs = set(lbl_sources[:n_val])
+        lbl_sources = sorted(set(sources_arr[lbl_idx].tolist()))
+
+        if fixed and lbl_name in fixed:
+            val_srcs = set(fixed[lbl_name]) & set(lbl_sources)
+        else:
+            rng = random.Random(seed + int(lbl))
+            rng.shuffle(lbl_sources)
+            n_val = max(1, int(len(lbl_sources) * val_frac))
+            val_srcs = set(lbl_sources[:n_val])
+
+        new_val_sources[lbl_name] = sorted(val_srcs)
+
         for i in lbl_idx:
             if sources_arr[i] in val_srcs:
                 val_mask[i] = True
             else:
                 train_mask[i] = True
+
+    if not fixed:
+        _save_val_sources(new_val_sources)
+        print("  (first run — val sources fixed for future runs)")
+    else:
+        _save_val_sources(new_val_sources)
 
     print(f"\n  Sources: {len(set(sources))} total")
     print(f"  Windows: {int(train_mask.sum())} train, {int(val_mask.sum())} val")
