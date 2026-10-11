@@ -38,6 +38,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DATASET = REPO_ROOT / "dataset"
 RESULTS = Path(__file__).resolve().parent / "results"
 EMB_CACHE = Path(__file__).resolve().parent / "emb_cache"
+SAVED_EMB = RESULTS / "saved_embeddings.npz"
 
 MODEL_URL = "https://tfhub.dev/google/yamnet/1"
 SAMPLE_RATE = 16_000
@@ -138,7 +139,7 @@ def split_by_source(
     sources: list[str],
     val_frac: float,
     seed: int,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, list[str], np.ndarray, np.ndarray, list[str]]:
     """Train/val split per class to ensure balanced val ratio across classes.
 
     Splitting globally causes lopsided splits when one class has few sources
@@ -164,9 +165,12 @@ def split_by_source(
     print(f"\n  Sources: {len(set(sources))} total")
     print(f"  Windows: {int(train_mask.sum())} train, {int(val_mask.sum())} val")
 
+    train_src = [s for s, m in zip(sources, train_mask) if m]
+    val_src = [s for s, m in zip(sources, val_mask) if m]
+
     return (
-        embeddings[train_mask], labels[train_mask],
-        embeddings[val_mask],   labels[val_mask],
+        embeddings[train_mask], labels[train_mask], train_src,
+        embeddings[val_mask],   labels[val_mask], val_src,
     )
 
 
@@ -240,19 +244,22 @@ def main() -> None:
 
     if own_emb:
         print("\nSplitting own recordings by source:")
-        X_own_tr, y_own_tr, X_own_val, y_own_val = split_by_source(
+        X_own_tr, y_own_tr, own_tr_src, X_own_val, y_own_val, own_val_src = split_by_source(
             np.vstack(own_emb), np.concatenate(own_lbl), own_src,
             VAL_SPLIT, RANDOM_SEED,
         )
     else:
         X_own_tr = X_own_val = np.empty((0, 1024), dtype=np.float32)
         y_own_tr = y_own_val = np.empty(0, dtype=np.int64)
+        own_tr_src, own_val_src = [], []
 
     # ── ESC-50 (split by fold 5) ─────────────────────────────────────────────
     esc_tr_emb: list[np.ndarray] = []
     esc_tr_lbl: list[np.ndarray] = []
+    esc_tr_src: list[str] = []
     esc_val_emb: list[np.ndarray] = []
     esc_val_lbl: list[np.ndarray] = []
+    esc_val_src: list[str] = []
     esc50_csv = ESC50_DIR / "meta" / "esc50.csv"
     if esc50_csv.exists():
         print("\nExtracting ESC-50 embeddings:")
@@ -274,28 +281,69 @@ def main() -> None:
                     esc_train_by_label[lbl_idx].append(path)
 
         for lbl_idx, files in sorted(esc_train_by_label.items()):
-            emb, lbl, _ = extract_embeddings(
+            emb, lbl, src = extract_embeddings(
                 yamnet, files, lbl_idx, f"esc50-train/{LABELS[lbl_idx]}"
             )
             if len(emb):
                 esc_tr_emb.append(emb)
                 esc_tr_lbl.append(lbl)
+                esc_tr_src.extend(src)
 
         for lbl_idx, files in sorted(esc_val_by_label.items()):
-            emb, lbl, _ = extract_embeddings(
+            emb, lbl, src = extract_embeddings(
                 yamnet, files, lbl_idx, f"esc50-val/{LABELS[lbl_idx]}"
             )
             if len(emb):
                 esc_val_emb.append(emb)
                 esc_val_lbl.append(lbl)
+                esc_val_src.extend(src)
     else:
         print("\nESC-50 not found — training on own recordings only.")
 
+    # ── загрузка ранее сохранённых эмбеддингов + merge с новыми ────────────────
+    fresh_sources = set(own_tr_src) | set(own_val_src) | set(esc_tr_src) | set(esc_val_src)
+
+    prev_tr_emb: list[np.ndarray] = []
+    prev_tr_lbl: list[np.ndarray] = []
+    prev_tr_src: list[str] = []
+    prev_val_emb: list[np.ndarray] = []
+    prev_val_lbl: list[np.ndarray] = []
+    prev_val_src: list[str] = []
+
+    if SAVED_EMB.exists():
+        saved = np.load(SAVED_EMB, allow_pickle=True)
+        saved_labels = json.loads(saved["labels"].item())
+        if saved_labels == LABELS:
+            s_tr_src = list(saved["sources_train"])
+            s_val_src = list(saved["sources_val"])
+            s_Xtr, s_ytr = saved["X_train"], saved["y_train"]
+            s_Xval, s_yval = saved["X_val"], saved["y_val"]
+            # keep only windows whose source is NOT in fresh data (avoid duplicates)
+            tr_keep = [i for i, s in enumerate(s_tr_src) if s not in fresh_sources]
+            val_keep = [i for i, s in enumerate(s_val_src) if s not in fresh_sources]
+            if tr_keep:
+                prev_tr_emb.append(s_Xtr[tr_keep])
+                prev_tr_lbl.append(s_ytr[tr_keep])
+                prev_tr_src.extend(s_tr_src[i] for i in tr_keep)
+            if val_keep:
+                prev_val_emb.append(s_Xval[val_keep])
+                prev_val_lbl.append(s_yval[val_keep])
+                prev_val_src.extend(s_val_src[i] for i in val_keep)
+            n_reused = len(tr_keep) + len(val_keep)
+            n_total = len(s_tr_src) + len(s_val_src)
+            print(f"\nSaved embeddings: reused {n_reused}/{n_total} windows "
+                  f"(skipped {n_total - n_reused} — fresh data available)")
+        else:
+            print(f"\nSaved embeddings have different labels {saved_labels} vs {LABELS} — skipping")
+
     # ── объединяем train и val ───────────────────────────────────────────────
-    X_train = np.vstack([X_own_tr, *esc_tr_emb])
-    y_train = np.concatenate([y_own_tr, *esc_tr_lbl])
-    X_val   = np.vstack([X_own_val, *esc_val_emb])
-    y_val   = np.concatenate([y_own_val, *esc_val_lbl])
+    all_tr_src = prev_tr_src + own_tr_src + esc_tr_src
+    all_val_src = prev_val_src + own_val_src + esc_val_src
+
+    X_train = np.vstack([*prev_tr_emb, X_own_tr, *esc_tr_emb])
+    y_train = np.concatenate([*prev_tr_lbl, y_own_tr, *esc_tr_lbl])
+    X_val   = np.vstack([*prev_val_emb, X_own_val, *esc_val_emb])
+    y_val   = np.concatenate([*prev_val_lbl, y_own_val, *esc_val_lbl])
 
     if len(X_train) == 0:
         raise SystemExit("No training data found.")
@@ -370,6 +418,17 @@ def main() -> None:
     for i, name in enumerate(LABELS):
         row = f"  {name[:8]:8s}" + "".join(f"{cm[i,j]:>10d}" for j in range(num_classes))
         print(row)
+
+    # save embeddings for future incremental retraining
+    np.savez_compressed(
+        SAVED_EMB,
+        X_train=X_train, y_train=y_train,
+        X_val=X_val, y_val=y_val,
+        sources_train=np.array(all_tr_src, dtype=object),
+        sources_val=np.array(all_val_src, dtype=object),
+        labels=json.dumps(LABELS),
+    )
+    print(f"Saved embeddings: {SAVED_EMB}  ({SAVED_EMB.stat().st_size // 1024 // 1024} MB)")
 
     # save
     keras_path = RESULTS / "classifier.keras"

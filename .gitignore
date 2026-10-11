@@ -4,7 +4,8 @@
 /.esphome/
 /secrets.yaml
 /ml/.venv/
-/ml/results/
+/ml/results/*
+!/ml/results/saved_embeddings.npz
 **/.DS_Store
 __pycache__/
 *.py[cod]
