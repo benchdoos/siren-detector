@@ -135,12 +135,12 @@
   <button class="lbtn" onclick="batchLabel('unknown')">unknown</button>
 </div>
 <div class="filter-bar">
-  <button class="fbtn active" data-filter="siren" onclick="setFilter(this)">siren</button>
+  <button class="fbtn active" data-filter="all" onclick="setFilter(this)">all</button>
+  <button class="fbtn" data-filter="siren" onclick="setFilter(this)">siren</button>
   <button class="fbtn" data-filter="background" onclick="setFilter(this)">background</button>
   <button class="fbtn" data-filter="motorcycle" onclick="setFilter(this)">motorcycle</button>
   <button class="fbtn" data-filter="explosion" onclick="setFilter(this)">explosion</button>
   <button class="fbtn" data-filter="unknown" onclick="setFilter(this)">unknown</button>
-  <button class="fbtn" data-filter="all" onclick="setFilter(this)">all</button>
 </div>
 <div id="events"><div class="empty" id="empty">No events yet</div></div>
 
@@ -254,7 +254,7 @@ const LABEL_COLORS = {
   unknown:    { border: '#2a2a2a', bg: '#1a1a1a', text: '#888'    },
 };
 
-let activeFilter = 'siren';
+let activeFilter = 'all';
 
 function setFilter(btn) {
   document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
