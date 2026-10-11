@@ -41,7 +41,7 @@ EMB_CACHE = Path(__file__).resolve().parent / "emb_cache"
 
 MODEL_URL = "https://tfhub.dev/google/yamnet/1"
 SAMPLE_RATE = 16_000
-LABELS = ["siren", "background"]   # unknown/explosion/motorcycle have too few samples
+LABELS = ["siren", "background", "explosion", "motorcycle"]
 VAL_SPLIT = 0.2
 MAX_WINDOWS_PER_FILE = 300          # cap long files so one recording doesn't dominate
 RANDOM_SEED = 42
@@ -58,7 +58,7 @@ ESC50_LABEL_MAP: dict[str, str] = {
     "washing_machine": "background",
     "keyboard_typing": "background",
     "clock_alarm":     "background",
-    "engine":          "background",
+    "engine":          "motorcycle",
     "fireworks":       "background",
     "thunderstorm":    "background",
     "helicopter":      "background",
