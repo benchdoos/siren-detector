@@ -690,9 +690,10 @@ def inference_loop(args: argparse.Namespace) -> None:
         mlp_top1 = None
         if clf is not None and "siren" in clf.labels:
             probs = clf.predict(embeddings.numpy())
+            mean_probs = probs.mean(axis=0)
             siren_idx = clf.labels.index("siren")
-            mlp_score = float(probs[:, siren_idx].max())
-            mlp_top1 = clf.labels[int(probs.mean(axis=0).argmax())]
+            mlp_score = float(mean_probs[siren_idx])
+            mlp_top1 = clf.labels[int(mean_probs.argmax())]
 
         # effective score: MLP for siren (if available), YAMNet for the rest
         # gate: if YAMNet sees no siren at all, don't trust MLP alone
