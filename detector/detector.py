@@ -188,6 +188,14 @@ VALID_LABELS = {"siren", "background", "motorcycle", "explosion", "unknown"}
 _feedback: dict[str, str] = {}  # filename → label
 
 
+@app.get("/api/metrics")
+async def get_metrics():
+    metrics_path = Path("/models/val_metrics.json")
+    if not metrics_path.exists():
+        return {"error": "no metrics available"}
+    return json.loads(metrics_path.read_text(encoding="utf-8"))
+
+
 @app.post("/feedback")
 async def feedback(body: dict):
     from fastapi import HTTPException

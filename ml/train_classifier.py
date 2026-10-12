@@ -433,18 +433,30 @@ def main() -> None:
     # evaluate
     print("\nEvaluation on val set:")
     y_pred = np.argmax(model.predict(X_val, verbose=0), axis=1)
+    val_metrics = []
     for i, name in enumerate(LABELS):
         mask = y_val == i
         if mask.sum() == 0:
             continue
-        acc = (y_pred[mask] == i).mean()
+        acc = float((y_pred[mask] == i).mean())
+        val_metrics.append({"label": name, "windows": int(mask.sum()), "accuracy": round(acc, 3)})
         print(f"  {name:12s}  {mask.sum():5d} windows  acc={acc:.3f}")
 
     # confusion matrix
-    print("\nConfusion matrix (rows=true, cols=pred):")
     cm = np.zeros((num_classes, num_classes), dtype=int)
     for t, p in zip(y_val, y_pred):
         cm[t, p] += 1
+
+    # save val metrics for web UI
+    from datetime import datetime, timezone
+    metrics_path = RESULTS / "val_metrics.json"
+    metrics_path.write_text(json.dumps({
+        "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "classes": val_metrics,
+        "labels": LABELS,
+        "confusion_matrix": cm.tolist(),
+    }), encoding="utf-8")
+    print(f"Saved: {metrics_path}")
     header = "          " + "".join(f"{l[:8]:>10s}" for l in LABELS)
     print(header)
     for i, name in enumerate(LABELS):

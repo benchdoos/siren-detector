@@ -40,6 +40,7 @@ train:
 ## Deploy trained model weights to RPi and restart detector
 deploy-model:
 	scp ml/results/classifier_weights.npz ml/results/classifier_labels.json \
+		ml/results/val_metrics.json \
 		$(RPI):$(RPI_BASE)/ml/results/
 	ssh $(RPI) "docker restart $(CONTAINER)"
 
