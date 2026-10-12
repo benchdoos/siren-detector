@@ -296,10 +296,15 @@ class TemporalSmoother:
         self._cooldown_until = 0.0
         self._refractory = 0  # consecutive below-threshold windows needed before re-trigger
         self._state = "idle"
+        self._last_trigger_count = 0
 
     @property
     def state(self) -> str:
         return self._state
+
+    @property
+    def trigger_count(self) -> int:
+        return self._last_trigger_count
 
     def push(self, score: float) -> str | None:
         now = time.monotonic()
@@ -320,6 +325,7 @@ class TemporalSmoother:
         prev = self._state
         self._scores.append(score)
         triggers = sum(1 for s in self._scores if s >= self._threshold)
+        self._last_trigger_count = triggers
         if triggers >= self._confirmed:
             self._state = "confirmed"
             self._cooldown_until = now + self._cooldown_seconds
@@ -646,7 +652,8 @@ def inference_loop(args: argparse.Namespace) -> None:
     print("Ready.", flush=True)
 
     _last_heartbeat = 0.0
-    peaks: dict[str, dict] = {name: {"score": 0.0, "yamnet": 0.0, "mlp": None, "top": ""} for name in DETECTORS}
+    _empty_peak = {"score": 0.0, "yamnet": 0.0, "mlp": None, "top": "", "yamnet_top3": [], "mlp_top3": []}
+    peaks: dict[str, dict] = {name: dict(_empty_peak) for name in DETECTORS}
     while True:
         waveform = inference_buf.consume(INFERENCE_HOP_SAMPLES)
         if waveform is None:
@@ -698,16 +705,36 @@ def inference_loop(args: argparse.Namespace) -> None:
 
         ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
+        # top-3 YAMNet classes
+        mean_scores = scores_np.mean(axis=0)
+        top3_idx = mean_scores.argsort()[::-1][:3]
+        cur_yamnet_top3 = [
+            {"name": class_names[i], "score": round(float(mean_scores[i]), 3)}
+            for i in top3_idx
+        ]
+
+        # top-3 MLP classes
+        cur_mlp_top3 = []
+        if clf is not None:
+            mean_probs = probs.mean(axis=0) if mlp_score is not None else clf.predict(embeddings.numpy()).mean(axis=0)
+            mlp_top3_idx = mean_probs.argsort()[::-1][:3]
+            cur_mlp_top3 = [
+                {"name": clf.labels[i], "score": round(float(mean_probs[i]), 3)}
+                for i in mlp_top3_idx
+            ]
+
         # track peaks per detector
         for name in DETECTORS:
             if smoothers[name].state == "idle":
-                peaks[name] = {"score": 0.0, "yamnet": 0.0, "mlp": None, "top": ""}
+                peaks[name] = dict(_empty_peak)
             elif effective[name] > peaks[name]["score"]:
                 peaks[name] = {
                     "score": effective[name],
                     "yamnet": yamnet_scores[name],
                     "mlp": mlp_score if name == "siren" else None,
                     "top": yamnet_top,
+                    "yamnet_top3": cur_yamnet_top3,
+                    "mlp_top3": cur_mlp_top3,
                 }
 
         # push scores to UI
@@ -717,23 +744,9 @@ def inference_loop(args: argparse.Namespace) -> None:
             score_msg[f"{name}_state"] = smoothers[name].state
         score_msg["yamnet"] = round(yamnet_scores.get("siren", 0.0), 3)
         score_msg["mlp"] = round(mlp_score, 3) if mlp_score is not None else None
-
-        # top-3 YAMNet classes
-        mean_scores = scores_np.mean(axis=0)
-        top3_idx = mean_scores.argsort()[::-1][:3]
-        score_msg["yamnet_top3"] = [
-            {"name": class_names[i], "score": round(float(mean_scores[i]), 3)}
-            for i in top3_idx
-        ]
-
-        # top-3 MLP classes
-        if clf is not None:
-            mean_probs = probs.mean(axis=0) if mlp_score is not None else clf.predict(embeddings.numpy()).mean(axis=0)
-            mlp_top3_idx = mean_probs.argsort()[::-1][:3]
-            score_msg["mlp_top3"] = [
-                {"name": clf.labels[i], "score": round(float(mean_probs[i]), 3)}
-                for i in mlp_top3_idx
-            ]
+        score_msg["yamnet_top3"] = cur_yamnet_top3
+        if cur_mlp_top3:
+            score_msg["mlp_top3"] = cur_mlp_top3
 
         broadcast(score_msg)
         _last_heartbeat = time.monotonic()
@@ -752,6 +765,7 @@ def inference_loop(args: argparse.Namespace) -> None:
 
             pk = peaks[name]
             det_engine = engine if (name == "siren" and clf is not None) else "yamnet"
+            thr_key = f"{name}_threshold"
             event = {
                 "type": "event", "event": name, "state": new_state,
                 "confidence": round(pk["score"], 3), "timestamp": ts,
@@ -759,12 +773,17 @@ def inference_loop(args: argparse.Namespace) -> None:
                 "yamnet": round(pk["yamnet"], 3),
                 "mlp": round(pk["mlp"], 3) if pk["mlp"] is not None else None,
                 "yamnet_top": pk["top"],
+                "yamnet_top3": pk.get("yamnet_top3", []),
+                "mlp_top3": pk.get("mlp_top3", []),
+                "threshold": _settings.get(thr_key, 0.15),
+                "triggers": smoothers[name].trigger_count,
+                "triggers_needed": _settings["confirmed_triggers"] if new_state == "confirmed" else _settings["possible_triggers"],
             }
             broadcast(event)
             mqtt_publish_event(name, new_state, pk["score"])
             print(f"EVENT {json.dumps(event)}", flush=True)
             if new_state == "confirmed":
-                peaks[name] = {"score": 0.0, "yamnet": 0.0, "mlp": None, "top": ""}
+                peaks[name] = dict(_empty_peak)
 
 
 # ── entry point ────────────────────────────────────────────────────────────────
