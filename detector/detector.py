@@ -70,6 +70,7 @@ DEFAULT_SETTINGS = {
     "possible_triggers": 4,
     "confirmed_triggers": 8,
     "cooldown_seconds": 60,
+    "refractory_seconds": 15,
     "smoothing_window_seconds": 30,
     "yamnet_min_gate": 0.01,
 }
@@ -107,6 +108,7 @@ def _apply_settings_to_smoothers() -> None:
         smoother._possible = _settings["possible_triggers"]
         smoother._confirmed = _settings["confirmed_triggers"]
         smoother._cooldown_seconds = _settings["cooldown_seconds"]
+        smoother._refractory_seconds = _settings["refractory_seconds"]
         new_maxlen = int(_settings["smoothing_window_seconds"] / 0.5) + 1
         if smoother._scores.maxlen != new_maxlen:
             smoother._scores = collections.deque(smoother._scores, maxlen=new_maxlen)
@@ -286,15 +288,17 @@ class ClipBuffer:
 # ── detection ──────────────────────────────────────────────────────────────────
 
 class TemporalSmoother:
-    def __init__(self, window_seconds, hop_seconds, threshold, possible, confirmed, cooldown_seconds):
+    def __init__(self, window_seconds, hop_seconds, threshold, possible, confirmed,
+                 cooldown_seconds, refractory_seconds):
         maxlen = int(window_seconds / hop_seconds) + 1
         self._scores: collections.deque = collections.deque(maxlen=maxlen)
         self._threshold = threshold
         self._possible = possible
         self._confirmed = confirmed
         self._cooldown_seconds = cooldown_seconds
+        self._refractory_seconds = refractory_seconds
         self._cooldown_until = 0.0
-        self._refractory = 0  # consecutive below-threshold windows needed before re-trigger
+        self._refractory_until = 0.0
         self._state = "idle"
         self._last_trigger_count = 0
 
@@ -312,16 +316,16 @@ class TemporalSmoother:
             return None
         if self._state == "confirmed":
             self._state = "idle"
-            self._refractory = self._scores.maxlen
-            return "idle"
-        # refractory: require full window of quiet before re-triggering
-        if self._refractory > 0:
-            if score < self._threshold:
-                self._refractory -= 1
-            else:
-                self._refractory = self._scores.maxlen
+            self._refractory_until = now + self._refractory_seconds
             self._scores.clear()
-            return None
+            return "idle"
+        # refractory: time-based, but ends early if score drops below threshold
+        if now < self._refractory_until:
+            if score < self._threshold:
+                self._refractory_until = 0.0  # quiet → end early
+            else:
+                self._scores.clear()
+                return None
         prev = self._state
         self._scores.append(score)
         triggers = sum(1 for s in self._scores if s >= self._threshold)
@@ -409,6 +413,7 @@ async def post_settings(body: dict):
         "possible_triggers": (1, 60),
         "confirmed_triggers": (1, 60),
         "cooldown_seconds": (0, 600),
+        "refractory_seconds": (0, 120),
         "smoothing_window_seconds": (5, 120),
         "yamnet_min_gate": (0.0, 1.0),
     }
@@ -639,6 +644,7 @@ def inference_loop(args: argparse.Namespace) -> None:
             possible=_settings["possible_triggers"],
             confirmed=_settings["confirmed_triggers"],
             cooldown_seconds=_settings["cooldown_seconds"],
+            refractory_seconds=_settings["refractory_seconds"],
         )
     _smoothers = smoothers
 
