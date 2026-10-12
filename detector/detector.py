@@ -242,6 +242,7 @@ class TemporalSmoother:
         self._confirmed = confirmed
         self._cooldown_seconds = cooldown_seconds
         self._cooldown_until = 0.0
+        self._refractory = 0  # consecutive below-threshold windows needed before re-trigger
         self._state = "idle"
 
     @property
@@ -254,7 +255,16 @@ class TemporalSmoother:
             return None
         if self._state == "confirmed":
             self._state = "idle"
+            self._refractory = self._scores.maxlen
             return "idle"
+        # refractory: require full window of quiet before re-triggering
+        if self._refractory > 0:
+            if score < self._threshold:
+                self._refractory -= 1
+            else:
+                self._refractory = self._scores.maxlen
+            self._scores.clear()
+            return None
         prev = self._state
         self._scores.append(score)
         triggers = sum(1 for s in self._scores if s >= self._threshold)
