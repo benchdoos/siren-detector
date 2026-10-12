@@ -815,6 +815,8 @@ def inference_loop(args: argparse.Namespace) -> None:
         # emit events for each detector
         for name, (_, _, prefix) in DETECTORS.items():
             new_state = state_changes[name]
+            if new_state == "idle":
+                mqtt_publish_event(name, "idle", 0.0)
             if new_state not in ("possible", "confirmed"):
                 continue
             clip_url = None
