@@ -45,14 +45,48 @@ deploy-model:
 		$(RPI):$(RPI_BASE)/ml/results/
 	ssh $(RPI) "docker restart $(CONTAINER)"
 
-## Full retrain cycle: sync dataset → train → deploy model → restart
-retrain: sync-dataset train deploy-model clean-clips clean-dataset
+## Full retrain cycle: sync dataset → train → deploy model → clean synced files
+retrain:
+	$(MAKE) sync-dataset
+	$(MAKE) _snapshot-synced
+	$(MAKE) train
+	$(MAKE) deploy-model
+	$(MAKE) _clean-synced
 
-## Clean saved clips on RPi
+## Snapshot synced filenames for safe cleanup (only delete what we actually trained on)
+_snapshot-synced:
+	@for label in siren background motorcycle explosion unknown; do \
+		if [ -d "dataset/$$label" ]; then \
+			ls "dataset/$$label/" 2>/dev/null | sort > "/tmp/retrain-$$label.list"; \
+		else \
+			> "/tmp/retrain-$$label.list"; \
+		fi; \
+	done
+	@ssh $(RPI) "docker exec $(CONTAINER) find /clips -name '*.wav' -printf '%f\n'" | sort > /tmp/retrain-clips.list
+	@echo "Snapshot: $$(cat /tmp/retrain-*.list | wc -l | tr -d ' ') files recorded for cleanup"
+
+## Clean only files that were synced/trained on (safe against new arrivals)
+_clean-synced:
+	@for label in siren background motorcycle explosion unknown; do \
+		if [ -s "/tmp/retrain-$$label.list" ]; then \
+			cat "/tmp/retrain-$$label.list" | while read f; do \
+				ssh $(RPI) "rm -f $(RPI_BASE)/dataset/$$label/$$f"; \
+			done; \
+		fi; \
+	done
+	@if [ -s "/tmp/retrain-clips.list" ]; then \
+		cat /tmp/retrain-clips.list | while read f; do \
+			ssh $(RPI) "docker exec $(CONTAINER) rm -f /clips/$$f"; \
+		done; \
+	fi
+	@rm -f /tmp/retrain-*.list
+	@echo "Cleaned synced files from RPi"
+
+## Clean saved clips on RPi (all)
 clean-clips:
 	ssh $(RPI) "docker exec $(CONTAINER) find /clips -name '*.wav' -delete"
 
-## Clean dataset on RPi (sync first!)
+## Clean dataset on RPi (all — sync first!)
 clean-dataset:
 	ssh $(RPI) "rm -rf $(RPI_BASE)/dataset/siren/* $(RPI_BASE)/dataset/background/* $(RPI_BASE)/dataset/motorcycle/* $(RPI_BASE)/dataset/explosion/* $(RPI_BASE)/dataset/unknown/*"
 
@@ -103,5 +137,6 @@ help:
 
 .PHONY: deploy deploy-ui deploy-compose restart logs \
         sync-dataset train deploy-model retrain \
+        _snapshot-synced _clean-synced \
         clean-clips clean-dataset clean-docker \
         fetch-esc50 open unlock help
