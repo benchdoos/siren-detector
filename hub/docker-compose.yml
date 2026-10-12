@@ -46,6 +46,7 @@ services:
       - MQTT_PORT=${MQTT_PORT:-1883}
       - MQTT_USER=${MQTT_USER:-}
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-}
     volumes:
       - tfhub_cache:/tfhub_cache
       - ../ml/results:/models:ro

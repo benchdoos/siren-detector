@@ -133,6 +133,23 @@
   .s-tooltip hr { border: none; border-top: 1px solid #333; margin: 6px 0; }
   .s-tooltip .s-tip-range { color: #888; }
   .s-tooltip .s-tip-default { color: #4caf50; }
+
+  .admin-btn { font-size: 13px; padding: 3px 10px; border-radius: 4px; border: 1px solid #333; background: none; color: #888; cursor: pointer; }
+  .admin-btn:hover { color: #ccc; border-color: #555; }
+  .admin-btn.authed { border-color: #4caf50; color: #4caf50; }
+  .admin-only { display: none !important; }
+  .admin-only.visible { display: flex !important; }
+  .admin-only-inline { display: none !important; }
+  .admin-only-inline.visible { display: inline-block !important; }
+  .admin-only-btn { display: none !important; }
+  .admin-only-btn.visible { display: inline-block !important; }
+
+  .login-row { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+  .login-row input { flex: 1; background: #222; border: 1px solid #444; color: #e0e0e0; padding: 6px 10px; border-radius: 4px; font-size: 14px; font-family: monospace; }
+  .login-row input:focus { border-color: #4caf50; outline: none; }
+  .login-row button { background: #1a3a1a; border: 1px solid #4caf50; color: #4caf50; padding: 6px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .login-row button:hover { background: #2a4a2a; }
+  .login-err { color: #ef5350; font-size: 12px; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -141,7 +158,8 @@
   <h1>🚨 Siren Detector</h1>
   <span id="status">disconnected</span>
   <button class="metrics-btn" onclick="showMetrics()">Metrics</button>
-  <button class="metrics-btn" onclick="showSettings()">Settings</button>
+  <button class="metrics-btn admin-only-btn" id="settings-btn" onclick="showSettings()">Settings</button>
+  <button class="admin-btn" id="admin-btn" onclick="toggleAdmin()">Admin</button>
   <span class="top-info" id="top-info" onclick="toggleDropdown(event)">
     <span id="top-text"></span>
     <div class="top-dropdown" id="top-dropdown">
@@ -183,7 +201,7 @@
 <div class="events-header">
   <span>Events <span class="events-count" id="events-count"></span></span>
   <span style="display:flex;gap:6px;align-items:center">
-    <label style="font-size:11px;color:#666;cursor:pointer"><input type="checkbox" id="select-all" onchange="toggleSelectAll(this.checked)"> Select all</label>
+    <label class="admin-only-inline" id="select-all-label" style="font-size:11px;color:#666;cursor:pointer"><input type="checkbox" id="select-all" onchange="toggleSelectAll(this.checked)"> Select all</label>
     <button onclick="clearEvents()">Clear</button>
   </span>
 </div>
@@ -244,6 +262,18 @@
         <span class="s-status" id="s-status"></span>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="login-overlay">
+  <div class="modal" style="max-width:360px">
+    <button class="close-btn" onclick="closeLogin()">&times;</button>
+    <h2>Admin Login</h2>
+    <div class="login-row">
+      <input type="password" id="login-token" placeholder="Token" onkeydown="if(event.key==='Enter')doLogin()">
+      <button onclick="doLogin()">Login</button>
+    </div>
+    <div class="login-err" id="login-err"></div>
   </div>
 </div>
 
@@ -391,7 +421,7 @@ function addEvent(ev) {
 
   card.innerHTML = `
     <div class="event-meta">
-      <input type="checkbox" class="ev-check" onchange="updateSelection()">
+      <input type="checkbox" class="ev-check" onchange="updateSelection()" ${!isAdmin() ? 'style="display:none"' : ''}>
       <span class="badge ${ev.event}">${ev.event.toUpperCase()}</span>
       <span class="event-time">${ts}</span>
       <span class="event-conf">${(ev.confidence * 100).toFixed(1)}%</span>
@@ -401,7 +431,7 @@ function addEvent(ev) {
     ${breakdown ? `<div class="event-breakdown">${breakdown}</div>` : ''}
     <div class="ev-details">${detailsHtml}</div>
     <audio controls src="${ev.clip_url}"></audio>
-    <div class="label-row">
+    <div class="label-row" ${!isAdmin() ? 'style="display:none"' : ''}>
       <span>Label:</span>
       ${VALID_LABELS.map(l =>
         `<button class="lbtn" data-label="${l}" onclick="sendLabel(this,'${filename}','${l}')">${l}</button>`
@@ -480,9 +510,10 @@ async function sendLabel(btn, filename, label) {
   const card = btn.closest('.event-card');
   const res = await fetch('/feedback', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', ...adminHeaders()},
     body: JSON.stringify({filename, label}),
   });
+  if (res.status === 401) { toggleAdmin(); return; }
   if (res.ok) applyCardLabel(card, label);
 }
 
@@ -501,7 +532,7 @@ function updateSelection() {
   const count = checked.length;
   document.getElementById('selected-count').textContent = count;
   const bar = document.getElementById('batch-bar');
-  bar.classList.toggle('visible', count > 0);
+  bar.classList.toggle('visible', count > 0 && isAdmin());
   const selectAll = document.getElementById('select-all');
   selectAll.checked = visible.length > 0 && count === visible.length;
   selectAll.indeterminate = count > 0 && count < visible.length;
@@ -525,9 +556,10 @@ async function batchLabel(label) {
     const filename = card.dataset.filename;
     const res = await fetch('/feedback', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', ...adminHeaders()},
       body: JSON.stringify({filename, label}),
     });
+    if (res.status === 401) { toggleAdmin(); return; }
     if (res.ok) {
       applyCardLabel(card, label);
       card.querySelector('.ev-check').checked = false;
@@ -543,6 +575,69 @@ function clearEvents() {
   updateSelection();
   updateEventsCount();
 }
+
+/* ── Admin auth ──────────────────────────────────── */
+let _adminToken = sessionStorage.getItem('adminToken') || '';
+
+function isAdmin() { return !!_adminToken; }
+
+function adminHeaders() {
+  return _adminToken ? {'Authorization': 'Bearer ' + _adminToken} : {};
+}
+
+function updateAdminUI() {
+  const authed = isAdmin();
+  const btn = document.getElementById('admin-btn');
+  btn.textContent = authed ? 'Admin ✓' : 'Admin';
+  btn.classList.toggle('authed', authed);
+  // show/hide admin-only elements
+  document.querySelectorAll('.admin-only').forEach(el => el.classList.toggle('visible', authed));
+  document.querySelectorAll('.admin-only-inline').forEach(el => el.classList.toggle('visible', authed));
+  document.querySelectorAll('.admin-only-btn').forEach(el => el.classList.toggle('visible', authed));
+  // show/hide label rows and checkboxes in event cards
+  document.querySelectorAll('.label-row').forEach(el => el.style.display = authed ? '' : 'none');
+  document.querySelectorAll('.ev-check').forEach(el => el.style.display = authed ? '' : 'none');
+}
+
+function toggleAdmin() {
+  if (isAdmin()) {
+    _adminToken = '';
+    sessionStorage.removeItem('adminToken');
+    updateAdminUI();
+  } else {
+    document.getElementById('login-overlay').classList.add('open');
+    document.getElementById('login-token').value = '';
+    document.getElementById('login-err').textContent = '';
+    setTimeout(() => document.getElementById('login-token').focus(), 100);
+  }
+}
+
+async function doLogin() {
+  const token = document.getElementById('login-token').value.trim();
+  if (!token) return;
+  try {
+    const res = await fetch('/api/auth/check', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({token}),
+    });
+    if (res.ok) {
+      _adminToken = token;
+      sessionStorage.setItem('adminToken', token);
+      closeLogin();
+      updateAdminUI();
+    } else {
+      document.getElementById('login-err').textContent = 'Invalid token';
+    }
+  } catch(e) {
+    document.getElementById('login-err').textContent = 'Network error';
+  }
+}
+
+function closeLogin() { document.getElementById('login-overlay').classList.remove('open'); }
+document.getElementById('login-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeLogin(); });
+
+updateAdminUI();
 
 function connect() {
   const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -678,9 +773,10 @@ async function saveSettings() {
   try {
     const res = await fetch('/api/settings', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', ...adminHeaders()},
       body: JSON.stringify(body),
     });
+    if (res.status === 401) { closeSettings(); toggleAdmin(); return; }
     if (res.ok) {
       status.textContent = 'Saved';
       status.style.color = '#4caf50';
@@ -708,7 +804,8 @@ async function saveSettings() {
 async function resetSettings() {
   const status = document.getElementById('s-status');
   try {
-    const res = await fetch('/api/settings/reset', { method: 'POST' });
+    const res = await fetch('/api/settings/reset', { method: 'POST', headers: adminHeaders() });
+    if (res.status === 401) { closeSettings(); toggleAdmin(); return; }
     if (res.ok) {
       status.textContent = 'Reset to defaults';
       status.style.color = '#ffa726';
