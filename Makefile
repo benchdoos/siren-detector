@@ -45,42 +45,25 @@ deploy-model:
 		$(RPI):$(RPI_BASE)/ml/results/
 	ssh $(RPI) "docker restart $(CONTAINER)"
 
-## Full retrain cycle: sync dataset → train → deploy model → clean synced files
+## Full retrain cycle: sync dataset → train → clean synced → deploy model (restart)
 retrain:
 	$(MAKE) sync-dataset
-	$(MAKE) _snapshot-synced
 	$(MAKE) train
+	$(MAKE) _clean-trained
 	$(MAKE) deploy-model
-	$(MAKE) _clean-synced
 
-## Snapshot synced filenames for safe cleanup (only delete what we actually trained on)
-_snapshot-synced:
-	@for label in siren background motorcycle explosion unknown; do \
-		if [ -d "dataset/$$label" ]; then \
-			ls "dataset/$$label/" 2>/dev/null | sort > "/tmp/retrain-$$label.list"; \
-		else \
-			> "/tmp/retrain-$$label.list"; \
+## Clean from RPi only files we have locally (= synced + trained on). Safe for new arrivals.
+_clean-trained:
+	@count=0; \
+	for label in siren background motorcycle explosion unknown; do \
+		if ls dataset/$$label/*.wav >/dev/null 2>&1; then \
+			NAMES=$$(cd dataset/$$label && ls *.wav | tr '\n' ' '); \
+			ssh $(RPI) "cd $(RPI_BASE)/dataset/$$label && rm -f $$NAMES" && \
+			count=$$((count + $$(echo $$NAMES | wc -w))); \
 		fi; \
-	done
-	@ssh $(RPI) "docker exec $(CONTAINER) find /clips -name '*.wav' -printf '%f\n'" | sort > /tmp/retrain-clips.list
-	@echo "Snapshot: $$(cat /tmp/retrain-*.list | wc -l | tr -d ' ') files recorded for cleanup"
-
-## Clean only files that were synced/trained on (safe against new arrivals)
-_clean-synced:
-	@for label in siren background motorcycle explosion unknown; do \
-		if [ -s "/tmp/retrain-$$label.list" ]; then \
-			cat "/tmp/retrain-$$label.list" | while read f; do \
-				ssh $(RPI) "rm -f $(RPI_BASE)/dataset/$$label/$$f"; \
-			done; \
-		fi; \
-	done
-	@if [ -s "/tmp/retrain-clips.list" ]; then \
-		cat /tmp/retrain-clips.list | while read f; do \
-			ssh $(RPI) "docker exec $(CONTAINER) rm -f /clips/$$f"; \
-		done; \
-	fi
-	@rm -f /tmp/retrain-*.list
-	@echo "Cleaned synced files from RPi"
+	done; \
+	ssh $(RPI) "docker exec $(CONTAINER) sh -c 'rm -f /clips/*.wav'" && \
+	echo "Cleaned $$count dataset files + all clips from RPi"
 
 ## Clean saved clips on RPi (all)
 clean-clips:
@@ -136,7 +119,6 @@ help:
 	@echo ""
 
 .PHONY: deploy deploy-ui deploy-compose restart logs \
-        sync-dataset train deploy-model retrain \
-        _snapshot-synced _clean-synced \
+        sync-dataset train deploy-model retrain _clean-trained \
         clean-clips clean-dataset clean-docker \
         fetch-esc50 open unlock help
