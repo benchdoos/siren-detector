@@ -5,9 +5,10 @@ WEB_UI      = http://192.168.1.100:8080
 
 # ── Deploy ────────────────────────────────────────────────────────────────────
 
-## Full rebuild: copy detector + rebuild Docker container on RPi
+## Full rebuild: copy detector + compose + rebuild Docker container on RPi
 deploy:
 	scp -r detector/ $(RPI):$(RPI_BASE)/
+	scp hub/docker-compose.yml $(RPI):$(RPI_BASE)/hub/
 	ssh $(RPI) "cd $(RPI_BASE)/hub && docker compose up --build -d detector && docker image prune -f"
 
 ## Deploy only frontend (no rebuild needed)

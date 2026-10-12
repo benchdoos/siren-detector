@@ -42,6 +42,10 @@ services:
         max-file: "3"
     environment:
       - TFHUB_CACHE_DIR=/tfhub_cache
+      - MQTT_HOST=${MQTT_HOST:-127.0.0.1}
+      - MQTT_PORT=${MQTT_PORT:-1883}
+      - MQTT_USER=${MQTT_USER:-}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
     volumes:
       - tfhub_cache:/tfhub_cache
       - ../ml/results:/models:ro

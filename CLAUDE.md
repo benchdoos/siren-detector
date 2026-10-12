@@ -13,8 +13,9 @@ esp32/           # ESPHome YAML config for ESP32-S3 firmware
 recorder/        # Docker-based UDP recorder (runs on Raspberry Pi)
 ml/              # ML baseline scripts (run on Mac)
 hub/             # UDP fan-out relay + detector (Docker Compose, runs on RPi)
-detector/        # FastAPI detection engine: YAMNet + MLP + WebSocket UI
+detector/        # FastAPI detection engine: YAMNet + MLP + WebSocket UI + MQTT
 dataset/         # Labeled WAV recordings (not committed to Git)
+mosquitto/       # Standalone MQTT broker (Docker Compose, runs on RPi)
 label-studio/    # Label Studio annotation stack (Docker Compose, runs on Mac)
 ```
 
