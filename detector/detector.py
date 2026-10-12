@@ -94,6 +94,11 @@ def _mqtt_connect() -> None:
         print(f"MQTT connected to {MQTT_HOST}:{MQTT_PORT}", flush=True)
         c.publish("sound_detector/availability", "online", retain=True)
         _mqtt_publish_discovery(c)
+        # reset all states on connect to avoid stale retained messages
+        for name in DETECTORS:
+            c.publish(f"sound_detector/{name}/state", "OFF", retain=True)
+            c.publish(f"sound_detector/{name}/status", "idle", retain=True)
+            c.publish(f"sound_detector/{name}/confidence", "0", retain=True)
 
     def on_disconnect(c, _ud, _flags, rc, _props=None):
         print(f"MQTT disconnected: rc={rc}", flush=True)
@@ -136,6 +141,21 @@ def _mqtt_publish_discovery(client) -> None:
             retain=True,
         )
 
+        # sensor: detector state (idle/possible/confirmed)
+        state_sensor_config = {
+            "name": f"Sound {name} status",
+            "unique_id": f"sound_detector_{name}_status",
+            "state_topic": f"sound_detector/{name}/status",
+            "icon": "mdi:ear-hearing",
+            "availability": availability,
+            "device": device,
+        }
+        client.publish(
+            f"homeassistant/sensor/sound_detector_{name}_status/config",
+            json.dumps(state_sensor_config),
+            retain=True,
+        )
+
         # sensor: confidence 0..1
         sensor_config = {
             "name": f"Sound {name} confidence",
@@ -158,6 +178,7 @@ def mqtt_publish_event(name: str, state: str, confidence: float) -> None:
     """Publish detector state change to MQTT."""
     if _mqtt_client is None:
         return
+    _mqtt_client.publish(f"sound_detector/{name}/status", state, retain=True)
     if state == "confirmed":
         _mqtt_client.publish(f"sound_detector/{name}/state", "ON", retain=True)
         _mqtt_client.publish(f"sound_detector/{name}/confidence", str(round(confidence, 3)), retain=True)
@@ -233,6 +254,7 @@ class TemporalSmoother:
             return None
         if self._state == "confirmed":
             self._state = "idle"
+            return "idle"
         prev = self._state
         self._scores.append(score)
         triggers = sum(1 for s in self._scores if s >= self._threshold)
