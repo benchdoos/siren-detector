@@ -953,7 +953,47 @@ Hub (fan-out relay, RPi :9000)
 
 ---
 
-# 11. Долгосрочная цель
+# 11. Makefile
+
+Для типовых операций есть `Makefile` — альтернатива ручным командам из разделов выше.
+
+```bash
+make help            # Показать все доступные команды
+```
+
+### Deploy
+
+```bash
+make deploy          # Полная пересборка: скопировать detector/ + rebuild на RPi
+make deploy-ui       # Только фронтенд (без rebuild)
+make deploy-compose  # Отправить docker-compose.yml на RPi
+make restart         # Перезапустить контейнер
+make logs            # Логи контейнера
+```
+
+### ML / Retraining
+
+```bash
+make sync-dataset    # Синхронизировать размеченные WAV с RPi на Mac
+make train           # Обучить MLP-классификатор
+make deploy-model    # Отправить веса на RPi + перезапуск
+make retrain         # Полный цикл: sync → train → deploy → clean
+make clean-clips     # Удалить сохранённые клипы на RPi
+make clean-dataset   # Удалить размеченные WAV на RPi (сначала sync!)
+make clean-docker    # Очистить Docker-кеш на RPi (volumes не трогает)
+```
+
+### Прочее
+
+```bash
+make fetch-esc50     # Скачать ESC-50 датасет
+make open            # Открыть Web UI в браузере
+make unlock          # Разблокировать SSH-ключ на 10 минут
+```
+
+---
+
+# 12. Долгосрочная цель
 
 Сделать доступную и расширяемую платформу:
 

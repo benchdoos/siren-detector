@@ -123,15 +123,27 @@ Key architectural notes:
 
 ## Retraining workflow
 
+Using Makefile (preferred):
+
 ```bash
-# On Mac, after collecting feedback via UI:
+make retrain         # Full cycle: sync → train → deploy → clean
+# Or step by step:
+make sync-dataset    # Sync labeled data from RPi
+make train           # Train MLP classifier
+make deploy-model    # Push weights to RPi + restart
+```
+
+Manual commands (equivalent):
+
+```bash
 rsync -av doos@192.168.1.100:~/Projects/esphome/dataset/ dataset/
 ml/.venv/bin/python ml/train_classifier.py
-python3 convert.py
 scp ml/results/classifier_weights.npz ml/results/classifier_labels.json \
     doos@192.168.1.100:~/Projects/esphome/ml/results/
 ssh doos@192.168.1.100 "docker restart siren-detector-engine"
 ```
+
+Other useful Makefile targets: `make deploy`, `make deploy-ui`, `make logs`, `make help`.
 
 ## After edits
 - claude or codex should update `README.md` with a summary of the project, setup instructions, and usage examples.
