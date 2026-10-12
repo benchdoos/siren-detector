@@ -197,6 +197,7 @@
 </div>
 <div class="filter-bar">
   <button class="fbtn active" data-filter="all" onclick="setFilter(this)">all</button>
+  <button class="fbtn" data-filter="untagged" onclick="setFilter(this)">untagged</button>
   <button class="fbtn" data-filter="siren" onclick="setFilter(this)">siren</button>
   <button class="fbtn" data-filter="background" onclick="setFilter(this)">background</button>
   <button class="fbtn" data-filter="motorcycle" onclick="setFilter(this)">motorcycle</button>
@@ -262,6 +263,13 @@ let   currentAudio = null;
 const seenEvents = new Set();
 const DETECTOR_NAMES = ['siren', 'explosion', 'motorcycle'];
 const DETECTOR_THRESHOLDS = { siren: 0.10, explosion: 0.15, motorcycle: 0.15 };
+const VALID_LABELS = ['siren', 'background', 'motorcycle', 'explosion', 'unknown'];
+
+function cardMatchesFilter(card, filter) {
+  if (filter === 'all') return true;
+  if (filter === 'untagged') return card.dataset.tagged !== 'true';
+  return card.dataset.label === filter;
+}
 
 function updateDetector(name, score, state) {
   const bar   = document.getElementById('bar-' + name);
@@ -395,18 +403,20 @@ function addEvent(ev) {
     <audio controls src="${ev.clip_url}"></audio>
     <div class="label-row">
       <span>Label:</span>
-      ${['siren','background','motorcycle','explosion','unknown'].map(l =>
+      ${VALID_LABELS.map(l =>
         `<button class="lbtn" data-label="${l}" onclick="sendLabel(this,'${filename}','${l}')">${l}</button>`
       ).join('')}
     </div>
   `;
   eventsEl.insertBefore(card, eventsEl.firstChild);
   if (ev.label) {
+    card.dataset.tagged = 'true';
     applyCardLabel(card, ev.label);
   } else {
     // model prediction — show card but don't highlight any label button
     card.dataset.label = ev.event;
-    card.style.display = (activeFilter === 'all' || ev.event === activeFilter) ? '' : 'none';
+    card.dataset.tagged = 'false';
+    card.style.display = cardMatchesFilter(card, activeFilter) ? '' : 'none';
   }
   card.querySelector('audio').addEventListener('play', function() {
     if (currentAudio && currentAudio !== this) { currentAudio.pause(); currentAudio.currentTime = 0; }
@@ -430,8 +440,7 @@ function setFilter(btn) {
   btn.classList.add('active');
   activeFilter = btn.dataset.filter;
   document.querySelectorAll('#events .event-card').forEach(card => {
-    const lbl = card.dataset.label;
-    card.style.display = (activeFilter === 'all' || lbl === activeFilter) ? '' : 'none';
+    card.style.display = cardMatchesFilter(card, activeFilter) ? '' : 'none';
     const cb = card.querySelector('.ev-check');
     if (cb) cb.checked = false;
   });
@@ -442,6 +451,7 @@ function setFilter(btn) {
 function applyCardLabel(card, label) {
   const prevLabel = card.dataset.label;
   card.dataset.label = label;
+  card.dataset.tagged = 'true';
   const c = LABEL_COLORS[label] || LABEL_COLORS.unknown;
   card.style.borderColor = c.border;
   card.style.background  = c.bg;
@@ -457,12 +467,13 @@ function applyCardLabel(card, label) {
       span.style.color = c.text;
     }
   }
-  const visible = (activeFilter === 'all' || label === activeFilter);
+  const visible = cardMatchesFilter(card, activeFilter);
   card.style.display = visible ? '' : 'none';
   if (!visible) {
     const audio = card.querySelector('audio');
     if (audio && !audio.paused) { audio.pause(); audio.currentTime = 0; }
   }
+  updateEventsCount();
 }
 
 async function sendLabel(btn, filename, label) {
@@ -476,8 +487,12 @@ async function sendLabel(btn, filename, label) {
 }
 
 function updateEventsCount() {
-  const total = eventsEl.querySelectorAll('.event-card').length;
+  const cards = eventsEl.querySelectorAll('.event-card');
+  const total = cards.length;
   document.getElementById('events-count').textContent = total ? `(${total})` : '';
+  const untagged = [...cards].filter(c => c.dataset.tagged !== 'true').length;
+  const btn = document.querySelector('.fbtn[data-filter="untagged"]');
+  if (btn) btn.textContent = untagged ? `untagged (${untagged})` : 'untagged';
 }
 
 function updateSelection() {
