@@ -59,6 +59,7 @@ _merge-recorder:
 	@for label in $(LABELS); do \
 		ssh $(RPI) "mkdir -p $(RPI_BASE)/dataset/$$label && \
 			if ls $(RPI_BASE)/dataset/recorder/$$label/*.wav >/dev/null 2>&1; then \
+				sudo chown \$$(id -u):\$$(id -g) $(RPI_BASE)/dataset/recorder/$$label/*.wav && \
 				mv $(RPI_BASE)/dataset/recorder/$$label/*.wav $(RPI_BASE)/dataset/$$label/ && \
 				echo \"Moved $$label WAVs from recorder to dataset\"; \
 			fi"; \
