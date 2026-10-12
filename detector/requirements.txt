@@ -5,3 +5,4 @@ numpy<2
 soundfile
 fastapi
 uvicorn[standard]
+paho-mqtt>=2.0

@@ -15,6 +15,7 @@ import asyncio
 import collections
 import csv
 import json
+import os
 import socket
 import struct
 import threading
@@ -57,6 +58,112 @@ YAMNET_MIN_GATE = 0.01
 CLIP_SECONDS = 30       # audio saved before confirmed event
 CLIP_DIR = Path("/clips")
 WEB_PORT = 8080
+
+# ── MQTT / Home Assistant ─────────────────────────────────────────────────────
+
+MQTT_HOST = os.environ.get("MQTT_HOST", "")
+MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
+MQTT_USER = os.environ.get("MQTT_USER", "")
+MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD", "")
+
+_mqtt_client = None  # paho.mqtt.client.Client | None
+
+
+def _mqtt_connect() -> None:
+    """Connect to MQTT broker and publish HA discovery configs."""
+    global _mqtt_client
+    if not MQTT_HOST:
+        print("MQTT_HOST not set — MQTT disabled.", flush=True)
+        return
+    try:
+        import paho.mqtt.client as paho_mqtt
+    except ImportError:
+        print("paho-mqtt not installed — MQTT disabled.", flush=True)
+        return
+
+    client = paho_mqtt.Client(
+        paho_mqtt.CallbackAPIVersion.VERSION2,
+        client_id="siren-detector",
+        protocol=paho_mqtt.MQTTv5,
+    )
+    if MQTT_USER:
+        client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
+    client.will_set("sound_detector/availability", "offline", retain=True)
+
+    def on_connect(c, _ud, _flags, rc, _props=None):
+        print(f"MQTT connected to {MQTT_HOST}:{MQTT_PORT}", flush=True)
+        c.publish("sound_detector/availability", "online", retain=True)
+        _mqtt_publish_discovery(c)
+
+    def on_disconnect(c, _ud, _flags, rc, _props=None):
+        print(f"MQTT disconnected: rc={rc}", flush=True)
+
+    client.on_connect = on_connect
+    client.on_disconnect = on_disconnect
+    try:
+        client.connect(MQTT_HOST, MQTT_PORT, keepalive=60)
+        client.loop_start()
+        _mqtt_client = client
+    except Exception as exc:
+        print(f"MQTT connection error: {exc}", flush=True)
+
+
+def _mqtt_publish_discovery(client) -> None:
+    """Publish Home Assistant MQTT Discovery configs for each detector."""
+    device = {
+        "identifiers": ["sound_detector_01"],
+        "name": "Sound Detector",
+        "manufacturer": "DIY",
+        "model": "ESP32-S3 + YAMNet",
+    }
+    availability = {"topic": "sound_detector/availability"}
+
+    for name in DETECTORS:
+        # binary_sensor: ON when confirmed
+        bs_config = {
+            "name": f"Sound {name}",
+            "unique_id": f"sound_detector_{name}",
+            "device_class": "sound",
+            "state_topic": f"sound_detector/{name}/state",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability": availability,
+            "device": device,
+        }
+        client.publish(
+            f"homeassistant/binary_sensor/sound_detector_{name}/config",
+            json.dumps(bs_config),
+            retain=True,
+        )
+
+        # sensor: confidence 0..1
+        sensor_config = {
+            "name": f"Sound {name} confidence",
+            "unique_id": f"sound_detector_{name}_confidence",
+            "state_topic": f"sound_detector/{name}/confidence",
+            "unit_of_measurement": "",
+            "icon": "mdi:volume-high",
+            "availability": availability,
+            "device": device,
+        }
+        client.publish(
+            f"homeassistant/sensor/sound_detector_{name}_confidence/config",
+            json.dumps(sensor_config),
+            retain=True,
+        )
+    print("MQTT discovery configs published.", flush=True)
+
+
+def mqtt_publish_event(name: str, state: str, confidence: float) -> None:
+    """Publish detector state change to MQTT."""
+    if _mqtt_client is None:
+        return
+    if state == "confirmed":
+        _mqtt_client.publish(f"sound_detector/{name}/state", "ON", retain=True)
+        _mqtt_client.publish(f"sound_detector/{name}/confidence", str(round(confidence, 3)), retain=True)
+    elif state == "idle":
+        _mqtt_client.publish(f"sound_detector/{name}/state", "OFF", retain=True)
+        _mqtt_client.publish(f"sound_detector/{name}/confidence", "0", retain=True)
 
 
 # ── audio helpers ──────────────────────────────────────────────────────────────
@@ -165,7 +272,16 @@ def broadcast(msg: dict) -> None:
 
 # ── FastAPI app ────────────────────────────────────────────────────────────────
 
-app = FastAPI()
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def _lifespan(application: FastAPI):
+    await _restore_clips()
+    yield
+
+
+app = FastAPI(lifespan=_lifespan)
 _static = Path(__file__).parent / "static"
 
 
@@ -215,7 +331,6 @@ async def feedback(body: dict):
     return {"ok": True}
 
 
-@app.on_event("startup")
 async def _restore_clips():
     """Scan /clips on startup to restore event history from surviving WAV files."""
     if not CLIP_DIR.exists():
@@ -509,6 +624,7 @@ def inference_loop(args: argparse.Namespace) -> None:
                 "yamnet_top": pk["top"],
             }
             broadcast(event)
+            mqtt_publish_event(name, new_state, pk["score"])
             print(f"EVENT {json.dumps(event)}", flush=True)
             if new_state == "confirmed":
                 peaks[name] = {"score": 0.0, "yamnet": 0.0, "mlp": None, "top": ""}
@@ -527,6 +643,9 @@ def main() -> None:
     parser.add_argument("--classifier-labels", default="/models/classifier_labels.json")
     parser.add_argument("--web-port", type=int, default=WEB_PORT)
     args = parser.parse_args()
+
+    # connect to MQTT (non-blocking, works without broker too)
+    _mqtt_connect()
 
     # run inference in background thread
     threading.Thread(target=inference_loop, args=(args,), daemon=True).start()

@@ -962,6 +962,14 @@ Hub (fan-out relay, RPi :9000)
 - Кнопки лейблинга: при нажатии клип копируется в `/dataset/{label}/` для дообучения
 - Фильтры по типу, история 100 событий
 
+**MQTT / Home Assistant**:
+- Mosquitto broker — отдельный Docker Compose (`mosquitto/`)
+- Detector публикует HA MQTT Discovery при подключении к брокеру
+- В HA автоматически появляется устройство **Sound Detector** с сенсорами:
+  - `binary_sensor.sound_siren` / `sound_explosion` / `sound_motorcycle` — ON при confirmed, OFF после cooldown
+  - `sensor.sound_siren_confidence` / `sound_explosion_confidence` / `sound_motorcycle_confidence`
+- MQTT опционален: без `MQTT_HOST` детектор работает как раньше
+
 Следующий шаг: накопить размеченные примеры через UI → дообучить модель → снизить false positive.
 
 ---
@@ -1003,6 +1011,36 @@ make fetch-esc50     # Скачать ESC-50 датасет
 make open            # Открыть Web UI в браузере
 make unlock          # Разблокировать SSH-ключ на 10 минут
 ```
+
+## MQTT / Home Assistant
+
+Для интеграции с Home Assistant используется MQTT Discovery. Mosquitto запускается отдельным Docker Compose.
+
+### Первый запуск Mosquitto на RPi
+
+```bash
+cd ~/Projects/esphome/mosquitto
+cp .env.example .env
+# отредактировать .env: задать MQTT_USER и MQTT_PASSWORD
+sh create_passwd.sh
+docker compose up -d
+```
+
+### Настройка детектора
+
+В `hub/.env` (или переменных окружения) задать:
+
+```bash
+MQTT_HOST=127.0.0.1
+MQTT_PORT=1883
+MQTT_USER=siren
+MQTT_PASSWORD=<your_password>
+```
+
+После перезапуска детектора в Home Assistant автоматически появится устройство
+**Sound Detector** с binary_sensor и sensor для каждого класса.
+
+Без `MQTT_HOST` детектор работает как раньше — MQTT опционален.
 
 ---
 
