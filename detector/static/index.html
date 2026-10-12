@@ -578,8 +578,9 @@ function clearEvents() {
 
 /* ── Admin auth ──────────────────────────────────── */
 let _adminToken = sessionStorage.getItem('adminToken') || '';
+let _authEnabled = true;  // assume enabled until server says otherwise
 
-function isAdmin() { return !!_adminToken; }
+function isAdmin() { return !_authEnabled || !!_adminToken; }
 
 function adminHeaders() {
   return _adminToken ? {'Authorization': 'Bearer ' + _adminToken} : {};
@@ -588,6 +589,7 @@ function adminHeaders() {
 function updateAdminUI() {
   const authed = isAdmin();
   const btn = document.getElementById('admin-btn');
+  btn.style.display = _authEnabled ? '' : 'none';
   btn.textContent = authed ? 'Admin ✓' : 'Admin';
   btn.classList.toggle('authed', authed);
   // show/hide admin-only elements
@@ -636,6 +638,12 @@ async function doLogin() {
 
 function closeLogin() { document.getElementById('login-overlay').classList.remove('open'); }
 document.getElementById('login-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeLogin(); });
+
+// check if auth is enabled on the server
+fetch('/api/auth/status').then(r => r.json()).then(d => {
+  _authEnabled = d.auth_enabled !== false;
+  updateAdminUI();
+}).catch(() => {});
 
 updateAdminUI();
 

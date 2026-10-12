@@ -246,13 +246,19 @@ def mqtt_publish_event(name: str, state: str, confidence: float) -> None:
 
 # ── Admin auth ────────────────────────────────────────────────────────────────
 
-ADMIN_TOKEN: str = os.environ.get("ADMIN_TOKEN", "")
-if not ADMIN_TOKEN:
-    ADMIN_TOKEN = secrets.token_urlsafe(32)
-    print(f"Generated ADMIN_TOKEN: {ADMIN_TOKEN}", flush=True)
-    print("Set ADMIN_TOKEN env var to use a fixed token.", flush=True)
+AUTH_ENABLED = os.environ.get("AUTH_ENABLED", "true").lower() not in ("0", "false", "no")
+ADMIN_TOKEN: str = ""
+_TOKEN_HASH: bytes = b""
 
-_TOKEN_HASH = hashlib.sha256(ADMIN_TOKEN.encode()).digest()
+if AUTH_ENABLED:
+    ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
+    if not ADMIN_TOKEN:
+        ADMIN_TOKEN = secrets.token_urlsafe(32)
+        print(f"Generated ADMIN_TOKEN: {ADMIN_TOKEN}", flush=True)
+        print("Set ADMIN_TOKEN env var to use a fixed token.", flush=True)
+    _TOKEN_HASH = hashlib.sha256(ADMIN_TOKEN.encode()).digest()
+else:
+    print("AUTH_ENABLED=false — admin auth disabled, all users have full access.", flush=True)
 
 
 def _check_token(token: str) -> bool:
@@ -263,6 +269,8 @@ def _check_token(token: str) -> bool:
 
 
 async def require_admin(authorization: str = Header("")):
+    if not AUTH_ENABLED:
+        return
     token = authorization.removeprefix("Bearer ").strip()
     if not token or not _check_token(token):
         raise HTTPException(status_code=401, detail="Admin token required")
@@ -429,8 +437,15 @@ async def get_settings():
     return {**_settings, "defaults": DEFAULT_SETTINGS}
 
 
+@app.get("/api/auth/status")
+async def auth_status():
+    return {"auth_enabled": AUTH_ENABLED}
+
+
 @app.post("/api/auth/check")
 async def auth_check(body: dict):
+    if not AUTH_ENABLED:
+        return {"ok": True}
     token = body.get("token", "")
     if _check_token(token):
         return {"ok": True}
