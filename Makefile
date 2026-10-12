@@ -95,6 +95,19 @@ clean-docker:
 fetch-esc50:
 	python3 dataset/fetch_esc50.py
 
+## Augment siren data (200 samples by default)
+augment-siren:
+	ml/.venv/bin/python dataset/augment.py siren --count 200
+
+## Augment explosion data (150 samples by default)
+augment-explosion:
+	ml/.venv/bin/python dataset/augment.py explosion --count 150
+
+## Augment all safety-critical classes
+augment:
+	$(MAKE) augment-siren
+	$(MAKE) augment-explosion
+
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
 ## Open Web UI in browser
@@ -127,10 +140,14 @@ help:
 	@echo "  Other"
 	@echo "    make unlock          Unlock SSH key for 10 min"
 	@echo "    make open            Open Web UI in browser"
-	@echo "    make fetch-esc50     Download ESC-50 dataset"
+	@echo "    make fetch-esc50     Download ESC-50 dataset
+	@echo "    make augment         Augment siren + explosion data"
+	@echo "    make augment-siren   Augment siren only"
+	@echo "    make augment-explosion Augment explosion only""
 	@echo ""
 
 .PHONY: deploy deploy-ui deploy-compose restart logs \
         sync-dataset train deploy-model retrain _merge-recorder _clean-trained \
         clean-clips clean-dataset clean-docker \
+        augment augment-siren augment-explosion \
         fetch-esc50 open unlock help

@@ -86,6 +86,8 @@ docker compose run --rm esphome logs /config/siren-detector.yaml --device siren-
 
 **Dataset pipeline**: Long recordings go to `dataset/inbox/`, then `annotate_recording.py` slices them into labeled WAVs and logs provenance in `dataset/annotations.csv`.
 
+**Augmentation**: `dataset/augment.py` creates realistic training data from clean sources (ESC-50, Freesound) by varying volume, mixing with real INMP441 backgrounds, and optionally applying mic noise profile. Run `make augment` before `make retrain`.
+
 ## Key Constraints
 
 - ESPHome config lives in `esp32/siren-detector.yaml` locally but must be deployed to `~/Projects/esphome/esphome/siren-detector.yaml` on Raspberry Pi (`192.168.1.100`).

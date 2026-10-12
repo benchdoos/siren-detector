@@ -462,6 +462,34 @@ python3 dataset/convert_downloads.py motorcycle
 Лицензия и карточка набора:
 [ESC-50 README и лицензия](https://github.com/karolpiczak/ESC-50).
 
+### Аугментация данных
+
+Скрипт `dataset/augment.py` создаёт реалистичные тренировочные данные из чистых
+внешних источников (ESC-50, Freesound), применяя:
+
+- варьирование громкости (-20…+3 dB — имитация разного расстояния);
+- миксование с реальными INMP441 background-записями (улица, комната);
+- опционально: noise profile микрофона (из записи тишины с INMP441).
+
+```bash
+# Аугментировать siren и explosion
+make augment
+
+# Или по отдельности
+make augment-siren
+make augment-explosion
+
+# С noise profile (после записи тишины с INMP441)
+ml/.venv/bin/python dataset/augment.py siren --count 200 \
+  --noise-profile dataset/background/silence.wav
+
+# Посмотреть что будет создано
+ml/.venv/bin/python dataset/augment.py siren --count 10 --dry-run
+```
+
+Аугментированные файлы сохраняются как `dataset/<label>/aug_*.wav` и участвуют
+в тренировке наравне с остальными записями. После аугментации — `make retrain`.
+
 ### Первый локальный baseline: YAMNet
 
 На Mac подготовлено изолированное окружение и скрипт [`ml/evaluate_yamnet.py`](ml/evaluate_yamnet.py).
