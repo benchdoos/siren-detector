@@ -6,7 +6,7 @@ services:
     container_name: siren-audio-recorder
     network_mode: host
     volumes:
-      - ./dataset:/recordings
+      - ../dataset/recorder:/recordings
     command:
       - --bind
       - 127.0.0.1
