@@ -687,18 +687,25 @@ def inference_loop(args: argparse.Namespace) -> None:
 
         # MLP overrides siren score if available
         mlp_score = None
+        mlp_top1 = None
         if clf is not None and "siren" in clf.labels:
             probs = clf.predict(embeddings.numpy())
             siren_idx = clf.labels.index("siren")
             mlp_score = float(probs[:, siren_idx].max())
+            mlp_top1 = clf.labels[int(probs.mean(axis=0).argmax())]
 
         # effective score: MLP for siren (if available), YAMNet for the rest
         # gate: if YAMNet sees no siren at all, don't trust MLP alone
+        # top-1 filter: if MLP top-1 is not the target class and score < 50%,
+        #               MLP itself thinks it's something else — don't trigger
         effective: dict[str, float] = {}
         for name in DETECTORS:
             if name == "siren" and mlp_score is not None:
                 if yamnet_scores["siren"] >= _settings["yamnet_min_gate"]:
-                    effective[name] = mlp_score
+                    if mlp_top1 == name or mlp_score >= 0.5:
+                        effective[name] = mlp_score
+                    else:
+                        effective[name] = 0.0
                 else:
                     effective[name] = 0.0
             else:
