@@ -348,6 +348,8 @@ class TemporalSmoother:
     def push(self, score: float) -> str | None:
         now = time.monotonic()
         if now < self._cooldown_until:
+            if score >= self._threshold:
+                self._cooldown_until = now + self._cooldown_seconds
             return None
         if self._state == "confirmed":
             self._state = "idle"
