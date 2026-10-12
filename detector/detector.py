@@ -14,8 +14,11 @@ import argparse
 import asyncio
 import collections
 import csv
+import hashlib
+import hmac
 import json
 import os
+import secrets
 import socket
 import struct
 import threading
@@ -27,7 +30,7 @@ import numpy as np
 import soundfile as sf
 import tensorflow_hub as hub
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 
 SAMPLE_RATE = 16_000
@@ -241,6 +244,30 @@ def mqtt_publish_event(name: str, state: str, confidence: float) -> None:
         _mqtt_client.publish(f"sound_detector/{name}/confidence", "0", retain=True)
 
 
+# ── Admin auth ────────────────────────────────────────────────────────────────
+
+ADMIN_TOKEN: str = os.environ.get("ADMIN_TOKEN", "")
+if not ADMIN_TOKEN:
+    ADMIN_TOKEN = secrets.token_urlsafe(32)
+    print(f"Generated ADMIN_TOKEN: {ADMIN_TOKEN}", flush=True)
+    print("Set ADMIN_TOKEN env var to use a fixed token.", flush=True)
+
+_TOKEN_HASH = hashlib.sha256(ADMIN_TOKEN.encode()).digest()
+
+
+def _check_token(token: str) -> bool:
+    return hmac.compare_digest(
+        hashlib.sha256(token.encode()).digest(),
+        _TOKEN_HASH,
+    )
+
+
+async def require_admin(authorization: str = Header("")):
+    token = authorization.removeprefix("Bearer ").strip()
+    if not token or not _check_token(token):
+        raise HTTPException(status_code=401, detail="Admin token required")
+
+
 # ── audio helpers ──────────────────────────────────────────────────────────────
 
 def i2s32_to_float32(payload: bytes) -> np.ndarray:
@@ -388,7 +415,6 @@ async def index():
 async def serve_clip(filename: str):
     path = CLIP_DIR / filename
     if not path.exists():
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Clip not found")
     return FileResponse(str(path), media_type="audio/wav")
 
@@ -403,9 +429,16 @@ async def get_settings():
     return {**_settings, "defaults": DEFAULT_SETTINGS}
 
 
-@app.post("/api/settings")
+@app.post("/api/auth/check")
+async def auth_check(body: dict):
+    token = body.get("token", "")
+    if _check_token(token):
+        return {"ok": True}
+    raise HTTPException(status_code=401, detail="Invalid token")
+
+
+@app.post("/api/settings", dependencies=[Depends(require_admin)])
 async def post_settings(body: dict):
-    from fastapi import HTTPException
     SETTING_RANGES = {
         "siren_threshold": (0.0, 1.0),
         "explosion_threshold": (0.0, 1.0),
@@ -437,7 +470,7 @@ async def post_settings(body: dict):
     return _settings
 
 
-@app.post("/api/settings/reset")
+@app.post("/api/settings/reset", dependencies=[Depends(require_admin)])
 async def reset_settings():
     _settings.clear()
     _settings.update(DEFAULT_SETTINGS)
@@ -455,9 +488,8 @@ async def get_metrics():
     return json.loads(metrics_path.read_text(encoding="utf-8"))
 
 
-@app.post("/feedback")
+@app.post("/feedback", dependencies=[Depends(require_admin)])
 async def feedback(body: dict):
-    from fastapi import HTTPException
     import shutil
     filename = body.get("filename", "")
     label = body.get("label", "")
