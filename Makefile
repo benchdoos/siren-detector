@@ -2,6 +2,7 @@ RPI         = doos@192.168.1.100
 RPI_BASE    = ~/Projects/esphome
 CONTAINER   = siren-detector-engine
 WEB_UI      = http://192.168.1.100:8080
+LABELS      = siren background motorcycle explosion unknown
 
 # ── Deploy ────────────────────────────────────────────────────────────────────
 
@@ -45,17 +46,29 @@ deploy-model:
 		$(RPI):$(RPI_BASE)/ml/results/
 	ssh $(RPI) "docker restart $(CONTAINER)"
 
-## Full retrain cycle: sync dataset → train → clean synced → deploy model (restart)
+## Full retrain cycle: merge recorder → sync dataset → train → clean synced → deploy model (restart)
 retrain:
+	$(MAKE) _merge-recorder
 	$(MAKE) sync-dataset
 	$(MAKE) train
 	$(MAKE) _clean-trained
 	$(MAKE) deploy-model
 
+## Move labeled WAVs from recorder/dataset/ into main dataset/ on RPi
+_merge-recorder:
+	@for label in $(LABELS); do \
+		ssh $(RPI) "mkdir -p $(RPI_BASE)/dataset/$$label && \
+			if ls $(RPI_BASE)/recorder/dataset/$$label/*.wav >/dev/null 2>&1; then \
+				sudo cp $(RPI_BASE)/recorder/dataset/$$label/*.wav $(RPI_BASE)/dataset/$$label/ && \
+				sudo rm $(RPI_BASE)/recorder/dataset/$$label/*.wav && \
+				echo \"Moved $$label WAVs from recorder to dataset\"; \
+			fi"; \
+	done
+
 ## Clean from RPi only files we have locally (= synced + trained on). Safe for new arrivals.
 _clean-trained:
 	@count=0; \
-	for label in siren background motorcycle explosion unknown; do \
+	for label in $(LABELS); do \
 		if ls dataset/$$label/*.wav >/dev/null 2>&1; then \
 			NAMES=$$(cd dataset/$$label && ls *.wav | tr '\n' ' '); \
 			ssh $(RPI) "cd $(RPI_BASE)/dataset/$$label && rm -f $$NAMES" && \
@@ -119,6 +132,6 @@ help:
 	@echo ""
 
 .PHONY: deploy deploy-ui deploy-compose restart logs \
-        sync-dataset train deploy-model retrain _clean-trained \
+        sync-dataset train deploy-model retrain _merge-recorder _clean-trained \
         clean-clips clean-dataset clean-docker \
         fetch-esc50 open unlock help
