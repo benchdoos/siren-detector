@@ -98,6 +98,30 @@
   .cm-table .cm-diag { color: #4caf50; font-weight: 600; }
   .cm-table .cm-off { color: #666; }
   .cm-table .cm-zero { color: #333; }
+
+  .s-section { margin-bottom: 16px; }
+  .s-title { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; font-weight: 600; border-bottom: 1px solid #222; padding-bottom: 4px; }
+  .s-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .s-row label { flex: 1; font-size: 13px; color: #ccc; }
+  .s-row input[type="number"] { width: 80px; background: #222; border: 1px solid #444; color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .s-row input[type="number"]:focus { border-color: #4caf50; outline: none; }
+  .s-row input.changed { border-color: #ffa726; }
+  .s-default { font-size: 11px; color: #555; width: 50px; text-align: right; }
+  .s-actions { display: flex; gap: 10px; align-items: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid #222; }
+  .s-save { background: #1a3a1a; border: 1px solid #4caf50; color: #4caf50; padding: 6px 20px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .s-save:hover { background: #2a4a2a; }
+  .s-reset { background: none; border: 1px solid #333; color: #888; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+  .s-reset:hover { color: #ccc; border-color: #555; }
+  .s-status { font-size: 12px; color: #4caf50; margin-left: auto; }
+  .s-help { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid #444; color: #666; font-size: 11px; cursor: pointer; flex-shrink: 0; user-select: none; line-height: 1; }
+  .s-help:hover { border-color: #888; color: #ccc; }
+  .s-help.open { border-color: #4caf50; color: #4caf50; }
+  .s-tooltip { display: none; background: #222; border: 1px solid #333; border-radius: 6px; padding: 10px 12px; margin: 2px 0 8px 0; font-size: 12px; line-height: 1.5; color: #aaa; }
+  .s-tooltip.open { display: block; }
+  .s-tooltip strong { color: #ccc; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  .s-tooltip hr { border: none; border-top: 1px solid #333; margin: 6px 0; }
+  .s-tooltip .s-tip-range { color: #888; }
+  .s-tooltip .s-tip-default { color: #4caf50; }
 </style>
 </head>
 <body>
@@ -106,6 +130,7 @@
   <h1>🚨 Siren Detector</h1>
   <span id="status">disconnected</span>
   <button class="metrics-btn" onclick="showMetrics()">Metrics</button>
+  <button class="metrics-btn" onclick="showSettings()">Settings</button>
   <span class="top-info" id="top-info" onclick="toggleDropdown(event)">
     <span id="top-text"></span>
     <div class="top-dropdown" id="top-dropdown">
@@ -168,6 +193,45 @@
   <button class="fbtn" data-filter="unknown" onclick="setFilter(this)">unknown</button>
 </div>
 <div id="events"><div class="empty" id="empty">No events yet</div></div>
+
+<div class="modal-overlay" id="settings-overlay">
+  <div class="modal" style="max-width:440px">
+    <button class="close-btn" onclick="closeSettings()">&times;</button>
+    <h2>Settings</h2>
+    <div id="settings-body" style="margin-top:12px">
+      <div class="s-section">
+        <div class="s-title">Detection Thresholds</div>
+        <div class="s-row"><label>Siren <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-siren_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="siren_threshold"></span></div>
+        <div class="s-tooltip" data-tip="siren_threshold"><strong>Detection Thresholds · Siren</strong><br>Minimum confidence score for a siren detection to count as a trigger. Lower values catch more sirens but increase false positives. When MLP is active, this applies to the MLP score (gated by YAMNet min gate).<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.10</b></span></div>
+        <div class="s-row"><label>Explosion <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-explosion_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="explosion_threshold"></span></div>
+        <div class="s-tooltip" data-tip="explosion_threshold"><strong>Detection Thresholds · Explosion</strong><br>Minimum YAMNet confidence for explosion/gunshot/burst sounds. Covers classes: Explosion, Burst pop, Gunshot gunfire.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.15</b></span></div>
+        <div class="s-row"><label>Motorcycle <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-motorcycle_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="motorcycle_threshold"></span></div>
+        <div class="s-tooltip" data-tip="motorcycle_threshold"><strong>Detection Thresholds · Motorcycle</strong><br>Minimum YAMNet confidence for motorcycle engine sounds.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.15</b></span></div>
+      </div>
+      <div class="s-section">
+        <div class="s-title">Temporal Smoothing</div>
+        <div class="s-row"><label>Possible triggers <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-possible_triggers" step="1" min="1" max="60"><span class="s-default" data-key="possible_triggers"></span></div>
+        <div class="s-tooltip" data-tip="possible_triggers"><strong>Temporal Smoothing · Possible Triggers</strong><br>Number of above-threshold windows within the smoothing window needed to enter "possible" state. This is the early warning — the UI shows a yellow badge but no clip is saved yet.<hr><span class="s-tip-range">Range: <b>1 – 60</b></span><br><span class="s-tip-default">Default: <b>4</b></span></div>
+        <div class="s-row"><label>Confirmed triggers <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-confirmed_triggers" step="1" min="1" max="60"><span class="s-default" data-key="confirmed_triggers"></span></div>
+        <div class="s-tooltip" data-tip="confirmed_triggers"><strong>Temporal Smoothing · Confirmed Triggers</strong><br>Number of above-threshold windows needed to confirm an event. A confirmed event saves an audio clip, sends MQTT notification, and shows a red badge. Must be greater than possible triggers.<hr><span class="s-tip-range">Range: <b>1 – 60</b></span><br><span class="s-tip-default">Default: <b>8</b></span></div>
+        <div class="s-row"><label>Window (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-smoothing_window_seconds" step="1" min="5" max="120"><span class="s-default" data-key="smoothing_window_seconds"></span></div>
+        <div class="s-tooltip" data-tip="smoothing_window_seconds"><strong>Temporal Smoothing · Window</strong><br>Rolling time window (in seconds) over which trigger counts are accumulated. Inference runs every 0.5s, so a 30s window holds up to 61 slots. Larger window = more tolerant to intermittent sounds, but slower to react.<hr><span class="s-tip-range">Range: <b>5 – 120 sec</b></span><br><span class="s-tip-default">Default: <b>30</b></span></div>
+        <div class="s-row"><label>Cooldown (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-cooldown_seconds" step="1" min="0" max="600"><span class="s-default" data-key="cooldown_seconds"></span></div>
+        <div class="s-tooltip" data-tip="cooldown_seconds"><strong>Temporal Smoothing · Cooldown</strong><br>After a confirmed event, ignore all detections for this many seconds. Prevents duplicate events from the same prolonged sound. Set to 0 for no cooldown (useful for testing).<hr><span class="s-tip-range">Range: <b>0 – 600 sec</b></span><br><span class="s-tip-default">Default: <b>60</b></span></div>
+      </div>
+      <div class="s-section">
+        <div class="s-title">MLP Gate</div>
+        <div class="s-row"><label>YAMNet min gate <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-yamnet_min_gate" step="0.001" min="0" max="1"><span class="s-default" data-key="yamnet_min_gate"></span></div>
+        <div class="s-tooltip" data-tip="yamnet_min_gate"><strong>MLP Gate · YAMNet Min Gate</strong><br>When MLP classifier is active for siren detection, YAMNet must show at least this score for the MLP result to be trusted. Prevents MLP false positives when YAMNet sees no siren-like sound at all. Set to 0 to fully trust MLP regardless of YAMNet opinion — may increase false positives but catches sirens that YAMNet misclassifies as silence.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.01</b></span></div>
+      </div>
+      <div class="s-actions">
+        <button class="s-save" onclick="saveSettings()">Save</button>
+        <button class="s-reset" onclick="resetSettings()">Reset to defaults</button>
+        <span class="s-status" id="s-status"></span>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="modal-overlay" id="metrics-overlay">
   <div class="modal">
@@ -406,6 +470,13 @@ function connect() {
 }
 connect();
 
+/* ── Load thresholds from server on startup ── */
+fetch('/api/settings').then(r => r.json()).then(d => {
+  if (d.siren_threshold) DETECTOR_THRESHOLDS.siren = d.siren_threshold;
+  if (d.explosion_threshold) DETECTOR_THRESHOLDS.explosion = d.explosion_threshold;
+  if (d.motorcycle_threshold) DETECTOR_THRESHOLDS.motorcycle = d.motorcycle_threshold;
+}).catch(() => {});
+
 /* ── Metrics modal ──────────────────────────────── */
 async function showMetrics() {
   const overlay = document.getElementById('metrics-overlay');
@@ -454,6 +525,113 @@ async function showMetrics() {
 }
 function closeMetrics() { document.getElementById('metrics-overlay').classList.remove('open'); }
 document.getElementById('metrics-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeMetrics(); });
+
+/* ── Settings tooltips ────────────────────────────── */
+function toggleTip(helpBtn) {
+  const row = helpBtn.closest('.s-row');
+  const tip = row.nextElementSibling;
+  if (!tip || !tip.classList.contains('s-tooltip')) return;
+  const wasOpen = tip.classList.contains('open');
+  // close all tooltips first
+  document.querySelectorAll('.s-tooltip.open').forEach(t => t.classList.remove('open'));
+  document.querySelectorAll('.s-help.open').forEach(h => h.classList.remove('open'));
+  if (!wasOpen) {
+    tip.classList.add('open');
+    helpBtn.classList.add('open');
+  }
+}
+
+/* ── Settings modal ──────────────────────────────── */
+const SETTINGS_KEYS = [
+  'siren_threshold','explosion_threshold','motorcycle_threshold',
+  'possible_triggers','confirmed_triggers','smoothing_window_seconds',
+  'cooldown_seconds','yamnet_min_gate'
+];
+let _settingsDefaults = {};
+let _settingsLoaded = {};
+
+async function showSettings() {
+  const overlay = document.getElementById('settings-overlay');
+  overlay.classList.add('open');
+  document.getElementById('s-status').textContent = '';
+  try {
+    const res = await fetch('/api/settings');
+    const data = await res.json();
+    _settingsDefaults = data.defaults || {};
+    _settingsLoaded = {};
+    for (const k of SETTINGS_KEYS) {
+      const input = document.getElementById('s-' + k);
+      if (input) {
+        input.value = data[k] ?? _settingsDefaults[k] ?? '';
+        _settingsLoaded[k] = input.value;
+        input.classList.remove('changed');
+        input.oninput = () => {
+          input.classList.toggle('changed', input.value !== _settingsLoaded[k]);
+        };
+      }
+      const def = document.querySelector(`.s-default[data-key="${k}"]`);
+      if (def) def.textContent = `(${_settingsDefaults[k]})`;
+    }
+  } catch(e) {
+    document.getElementById('s-status').textContent = 'Failed to load';
+    document.getElementById('s-status').style.color = '#ef5350';
+  }
+}
+
+function closeSettings() { document.getElementById('settings-overlay').classList.remove('open'); }
+document.getElementById('settings-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeSettings(); });
+
+async function saveSettings() {
+  const body = {};
+  for (const k of SETTINGS_KEYS) {
+    const input = document.getElementById('s-' + k);
+    if (input) body[k] = parseFloat(input.value);
+  }
+  const status = document.getElementById('s-status');
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      status.textContent = 'Saved';
+      status.style.color = '#4caf50';
+      // update loaded values so change indicators reset
+      for (const k of SETTINGS_KEYS) {
+        const input = document.getElementById('s-' + k);
+        if (input) { _settingsLoaded[k] = input.value; input.classList.remove('changed'); }
+      }
+      // update detector thresholds used by score bars
+      const data = await res.json();
+      DETECTOR_THRESHOLDS.siren = data.siren_threshold;
+      DETECTOR_THRESHOLDS.explosion = data.explosion_threshold;
+      DETECTOR_THRESHOLDS.motorcycle = data.motorcycle_threshold;
+    } else {
+      const err = await res.json();
+      status.textContent = err.detail || 'Error';
+      status.style.color = '#ef5350';
+    }
+  } catch(e) {
+    status.textContent = 'Network error';
+    status.style.color = '#ef5350';
+  }
+}
+
+async function resetSettings() {
+  const status = document.getElementById('s-status');
+  try {
+    const res = await fetch('/api/settings/reset', { method: 'POST' });
+    if (res.ok) {
+      status.textContent = 'Reset to defaults';
+      status.style.color = '#ffa726';
+      showSettings();
+    }
+  } catch(e) {
+    status.textContent = 'Network error';
+    status.style.color = '#ef5350';
+  }
+}
 </script>
 
 </body>

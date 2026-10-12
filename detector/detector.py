@@ -59,6 +59,58 @@ CLIP_SECONDS = 30       # audio saved before confirmed event
 CLIP_DIR = Path("/clips")
 WEB_PORT = 8080
 
+# ── Dynamic settings ─────────────────────────────────────────────────────────
+
+SETTINGS_PATH = CLIP_DIR / "settings.json"
+
+DEFAULT_SETTINGS = {
+    "siren_threshold": 0.10,
+    "explosion_threshold": 0.15,
+    "motorcycle_threshold": 0.15,
+    "possible_triggers": 4,
+    "confirmed_triggers": 8,
+    "cooldown_seconds": 60,
+    "smoothing_window_seconds": 30,
+    "yamnet_min_gate": 0.01,
+}
+
+_settings: dict = {}
+_smoothers: dict[str, TemporalSmoother] = {}
+
+
+def _load_settings() -> dict:
+    """Load settings from JSON file, falling back to defaults."""
+    settings = dict(DEFAULT_SETTINGS)
+    if SETTINGS_PATH.exists():
+        try:
+            saved = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+            for k in DEFAULT_SETTINGS:
+                if k in saved:
+                    settings[k] = type(DEFAULT_SETTINGS[k])(saved[k])
+        except Exception as exc:
+            print(f"Settings load error: {exc}", flush=True)
+    return settings
+
+
+def _save_settings() -> None:
+    """Persist current settings to JSON file."""
+    SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SETTINGS_PATH.write_text(json.dumps(_settings, indent=2), encoding="utf-8")
+
+
+def _apply_settings_to_smoothers() -> None:
+    """Push current settings into running TemporalSmoother instances."""
+    for name, smoother in _smoothers.items():
+        thr_key = f"{name}_threshold"
+        if thr_key in _settings:
+            smoother._threshold = _settings[thr_key]
+        smoother._possible = _settings["possible_triggers"]
+        smoother._confirmed = _settings["confirmed_triggers"]
+        smoother._cooldown_seconds = _settings["cooldown_seconds"]
+        new_maxlen = int(_settings["smoothing_window_seconds"] / 0.5) + 1
+        if smoother._scores.maxlen != new_maxlen:
+            smoother._scores = collections.deque(smoother._scores, maxlen=new_maxlen)
+
 # ── MQTT / Home Assistant ─────────────────────────────────────────────────────
 
 MQTT_HOST = os.environ.get("MQTT_HOST", "")
@@ -336,6 +388,54 @@ VALID_LABELS = {"siren", "background", "motorcycle", "explosion", "unknown"}
 _feedback: dict[str, str] = {}  # filename → label
 
 
+@app.get("/api/settings")
+async def get_settings():
+    return {**_settings, "defaults": DEFAULT_SETTINGS}
+
+
+@app.post("/api/settings")
+async def post_settings(body: dict):
+    from fastapi import HTTPException
+    SETTING_RANGES = {
+        "siren_threshold": (0.0, 1.0),
+        "explosion_threshold": (0.0, 1.0),
+        "motorcycle_threshold": (0.0, 1.0),
+        "possible_triggers": (1, 60),
+        "confirmed_triggers": (1, 60),
+        "cooldown_seconds": (0, 600),
+        "smoothing_window_seconds": (5, 120),
+        "yamnet_min_gate": (0.0, 1.0),
+    }
+    updated = {}
+    for k, default_val in DEFAULT_SETTINGS.items():
+        if k in body:
+            try:
+                val = type(default_val)(body[k])
+            except (ValueError, TypeError):
+                raise HTTPException(status_code=400, detail=f"Invalid value for {k}")
+            lo, hi = SETTING_RANGES.get(k, (None, None))
+            if lo is not None and not (lo <= val <= hi):
+                raise HTTPException(status_code=400, detail=f"{k} must be between {lo} and {hi}")
+            updated[k] = val
+    if not updated:
+        raise HTTPException(status_code=400, detail="No valid settings provided")
+    _settings.update(updated)
+    _save_settings()
+    _apply_settings_to_smoothers()
+    print(f"[settings] updated: {updated}", flush=True)
+    return _settings
+
+
+@app.post("/api/settings/reset")
+async def reset_settings():
+    _settings.clear()
+    _settings.update(DEFAULT_SETTINGS)
+    _save_settings()
+    _apply_settings_to_smoothers()
+    print("[settings] reset to defaults", flush=True)
+    return _settings
+
+
 @app.get("/api/metrics")
 async def get_metrics():
     metrics_path = Path("/models/val_metrics.json")
@@ -492,7 +592,10 @@ def udp_receiver(
 # ── inference loop ─────────────────────────────────────────────────────────────
 
 def inference_loop(args: argparse.Namespace) -> None:
-    global _loop
+    global _loop, _settings, _smoothers
+
+    _settings.update(_load_settings())
+    print(f"Settings: {_settings}", flush=True)
 
     print(f"Loading YAMNet from {MODEL_URL} ...", flush=True)
     yamnet = hub.load(MODEL_URL)
@@ -521,15 +624,17 @@ def inference_loop(args: argparse.Namespace) -> None:
     inference_buf = AudioRingBuffer(capacity=int(ANALYSIS_SECONDS * SAMPLE_RATE))
     clip_buf = ClipBuffer(seconds=CLIP_SECONDS)
     smoothers: dict[str, TemporalSmoother] = {}
-    for name, (_, threshold, _) in DETECTORS.items():
+    for name in DETECTORS:
+        thr_key = f"{name}_threshold"
         smoothers[name] = TemporalSmoother(
-            window_seconds=SMOOTHING_WINDOW_SECONDS,
+            window_seconds=_settings["smoothing_window_seconds"],
             hop_seconds=0.5,
-            threshold=threshold,
-            possible=POSSIBLE_TRIGGERS,
-            confirmed=CONFIRMED_TRIGGERS,
-            cooldown_seconds=COOLDOWN_SECONDS,
+            threshold=_settings.get(thr_key, 0.15),
+            possible=_settings["possible_triggers"],
+            confirmed=_settings["confirmed_triggers"],
+            cooldown_seconds=_settings["cooldown_seconds"],
         )
+    _smoothers = smoothers
 
     stop = threading.Event()
     threading.Thread(
@@ -579,7 +684,7 @@ def inference_loop(args: argparse.Namespace) -> None:
         effective: dict[str, float] = {}
         for name in DETECTORS:
             if name == "siren" and mlp_score is not None:
-                if yamnet_scores["siren"] >= YAMNET_MIN_GATE:
+                if yamnet_scores["siren"] >= _settings["yamnet_min_gate"]:
                     effective[name] = mlp_score
                 else:
                     effective[name] = 0.0
