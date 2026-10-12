@@ -229,6 +229,8 @@
         <div class="s-tooltip" data-tip="smoothing_window_seconds"><strong>Temporal Smoothing · Window</strong><br>Rolling time window (in seconds) over which trigger counts are accumulated. Inference runs every 0.5s, so a 30s window holds up to 61 slots. Larger window = more tolerant to intermittent sounds, but slower to react.<hr><span class="s-tip-range">Range: <b>5 – 120 sec</b></span><br><span class="s-tip-default">Default: <b>30</b></span></div>
         <div class="s-row"><label>Cooldown (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-cooldown_seconds" step="1" min="0" max="600"><span class="s-default" data-key="cooldown_seconds"></span></div>
         <div class="s-tooltip" data-tip="cooldown_seconds"><strong>Temporal Smoothing · Cooldown</strong><br>After a confirmed event, ignore all detections for this many seconds. Prevents duplicate events from the same prolonged sound. Set to 0 for no cooldown (useful for testing).<hr><span class="s-tip-range">Range: <b>0 – 600 sec</b></span><br><span class="s-tip-default">Default: <b>60</b></span></div>
+        <div class="s-row"><label>Refractory (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-refractory_seconds" step="1" min="0" max="120"><span class="s-default" data-key="refractory_seconds"></span></div>
+        <div class="s-tooltip" data-tip="refractory_seconds"><strong>Temporal Smoothing · Refractory</strong><br>After cooldown ends, the detector waits up to this many seconds before allowing re-trigger. If the score drops below threshold during this period, the refractory ends immediately (the sound stopped). If the score stays high, the refractory expires by timeout — allowing re-detection of a new/ongoing event. Set to 0 to disable refractory entirely.<hr><span class="s-tip-range">Range: <b>0 – 120 sec</b></span><br><span class="s-tip-default">Default: <b>15</b></span></div>
       </div>
       <div class="s-section">
         <div class="s-title">MLP Gate</div>
@@ -609,7 +611,7 @@ function toggleTip(helpBtn) {
 const SETTINGS_KEYS = [
   'siren_threshold','explosion_threshold','motorcycle_threshold',
   'possible_triggers','confirmed_triggers','smoothing_window_seconds',
-  'cooldown_seconds','yamnet_min_gate'
+  'cooldown_seconds','refractory_seconds','yamnet_min_gate'
 ];
 let _settingsDefaults = {};
 let _settingsLoaded = {};
