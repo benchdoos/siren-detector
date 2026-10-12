@@ -54,13 +54,12 @@ retrain:
 	$(MAKE) _clean-trained
 	$(MAKE) deploy-model
 
-## Move labeled WAVs from recorder/dataset/ into main dataset/ on RPi
+## Move labeled WAVs from dataset/recorder/ into main dataset/ on RPi
 _merge-recorder:
 	@for label in $(LABELS); do \
 		ssh $(RPI) "mkdir -p $(RPI_BASE)/dataset/$$label && \
-			if ls $(RPI_BASE)/recorder/dataset/$$label/*.wav >/dev/null 2>&1; then \
-				sudo cp $(RPI_BASE)/recorder/dataset/$$label/*.wav $(RPI_BASE)/dataset/$$label/ && \
-				sudo rm $(RPI_BASE)/recorder/dataset/$$label/*.wav && \
+			if ls $(RPI_BASE)/dataset/recorder/$$label/*.wav >/dev/null 2>&1; then \
+				mv $(RPI_BASE)/dataset/recorder/$$label/*.wav $(RPI_BASE)/dataset/$$label/ && \
 				echo \"Moved $$label WAVs from recorder to dataset\"; \
 			fi"; \
 	done
