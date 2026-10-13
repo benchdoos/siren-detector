@@ -32,6 +32,7 @@ import tensorflow_hub as hub
 import uvicorn
 from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 SAMPLE_RATE = 16_000
 PACKET_MAX = 4096 + 12
@@ -414,6 +415,7 @@ async def _lifespan(application: FastAPI):
 
 app = FastAPI(lifespan=_lifespan)
 _static = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(_static)), name="static")
 
 
 @app.get("/")
