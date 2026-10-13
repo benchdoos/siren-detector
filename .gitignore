@@ -20,6 +20,11 @@ __pycache__/
 /dataset/unknown/
 /dataset/inbox/
 
+# Environment config (contains IPs, credentials)
+.env
+config.mk
+/esp32/secrets.yaml
+
 # IDE and tooling
 /.idea/
 /.claude/

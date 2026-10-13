@@ -25,6 +25,8 @@
 
 ## 2. Audio Node — впереди
 
+- [ ] Разобраться со спонтанным отвалом Wi-Fi на ESP32 (наблюдалось 2026-10-13,
+  устройство мигает, но не подключается к сети; помогает переподключение).
 - [ ] Отделить аудиозахват и транспорт от конкретного движка распознавания.
 - [ ] Определить формат аудиокадров, временные метки и heartbeat.
 - [ ] Добавить буферизацию и обработку разрыва соединения.
@@ -165,12 +167,19 @@
 
 ## Открытость и воспроизводимость — готовность к внешним пользователям
 
-- [ ] Вынести захардкоженные значения из `Makefile` (`RPI`, `WEB_UI`, `CONTAINER`)
-  в `config.mk` (gitignored) + добавить `config.mk.example`.
+- [x] Вынести захардкоженные значения из `Makefile` (`RPI`, `WEB_UI`, `CONTAINER`)
+  в `.env` (gitignored) + добавить `.env.example`.
+- [x] Параметризовать порты (9000/9001/9002) в docker-compose файлах через
+  переменные окружения (`HUB_PORT`, `RECORDER_PORT`, `DETECTOR_PORT`).
+- [x] Вынести IP и порт UDP-цели из ESP32 YAML в `substitutions` / `secrets.yaml`.
+- [x] Вынести AP fallback password из ESP32 YAML в `secrets.yaml`.
+- [x] Добавить `esp32/secrets.yaml.example` с описанием всех секретов.
+- [x] Добавить `.env.example` для `hub/` с описанием всех переменных
+  (`MQTT_HOST`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASSWORD`, `ADMIN_TOKEN`).
 - [ ] Убрать реальные IP-адреса и SSID из `README.md` — заменить на примеры
   (`<your_rpi_ip>`, `<your_ssid>`).
-- [ ] Добавить `.env.example` для `hub/` с описанием всех переменных
-  (`MQTT_HOST`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASSWORD`, `ADMIN_TOKEN`).
+- [ ] Очистить git-историю от ранее закоммиченных IP-адресов и credentials
+  (git filter-repo / BFG).
 - [ ] Добавить `mosquitto/` в репозиторий (docker-compose.yml, .env.example,
   create_passwd.sh, mosquitto.conf) — README ссылается, но директории нет.
 - [ ] Документировать UDP-протокол: формат пакетов, sequence number, byte order,

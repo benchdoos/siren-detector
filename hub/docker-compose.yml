@@ -1,8 +1,8 @@
 # Persistent services: hub receives audio from ESP32 and fans out to detector.
 # Recorder is a separate on-demand service (see recorder/docker-compose.yml).
 #
-# ESP32 → UDP:9000 → hub → detector(:9002)
-#                       └──> recorder(:9001)  ← started separately when collecting dataset
+# ESP32 → UDP:${HUB_PORT} → hub → detector(:${DETECTOR_PORT})
+#                              └──> recorder(:${RECORDER_PORT})  ← started separately
 
 services:
   hub:
@@ -21,11 +21,11 @@ services:
       - --bind
       - 0.0.0.0
       - --port
-      - "9000"
+      - "${HUB_PORT:-9000}"
       - --forward
-      - 127.0.0.1:9001
+      - "127.0.0.1:${RECORDER_PORT:-9001}"
       - --forward
-      - 127.0.0.1:9002
+      - "127.0.0.1:${DETECTOR_PORT:-9002}"
 
   detector:
     build:
@@ -42,7 +42,7 @@ services:
         max-file: "3"
     environment:
       - TFHUB_CACHE_DIR=/tfhub_cache
-      - MQTT_HOST=${MQTT_HOST:-127.0.0.1}
+      - MQTT_HOST=${MQTT_HOST:-}
       - MQTT_PORT=${MQTT_PORT:-1883}
       - MQTT_USER=${MQTT_USER:-}
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
@@ -57,7 +57,7 @@ services:
       - --bind
       - 127.0.0.1
       - --port
-      - "9002"
+      - "${DETECTOR_PORT:-9002}"
       - --source
       - siren-detector-01
       - --classifier-weights

@@ -11,7 +11,7 @@ services:
       - --bind
       - 127.0.0.1
       - --port
-      - "9001"
+      - "${RECORDER_PORT:-9001}"
       - --output-dir
       - /recordings
       - --label
