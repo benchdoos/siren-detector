@@ -97,11 +97,18 @@ def collect_sources(label: str) -> list[Path]:
 
     # Freesound explosion downloads (converted)
     if label == "explosion":
-        # Look for dl_* files in explosion dir (from convert_downloads.py)
         exp_dir = DATASET / "explosion"
         if exp_dir.exists():
             sources.extend(
                 sorted(p for p in exp_dir.glob("dl_*.wav"))
+            )
+
+    # Freesound motorcycle/moped/scooter downloads
+    if label == "motorcycle":
+        moto_dir = DATASET / "motorcycle"
+        if moto_dir.exists():
+            sources.extend(
+                sorted(p for p in moto_dir.glob("dl_*.wav"))
             )
 
     return sources
