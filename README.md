@@ -61,6 +61,40 @@
         Home Assistant       MQTT          REST/API
 ```
 
+## Quick Start
+
+Минимальный набор для запуска: ESP32-S3 + INMP441 микрофон + любой Linux/Mac хост.
+
+1. **Прошить ESP32**: скопировать `esp32/siren-detector.yaml` на хост с ESPHome,
+   задать Wi-Fi credentials в `secrets.yaml`, прошить. Микрофон подключается
+   по I2S (GPIO4/5/6, см. раздел 5).
+
+2. **Запустить Hub** на хосте (принимает UDP-поток от ESP32):
+   ```bash
+   cd hub
+   docker compose up -d hub
+   ```
+
+3. **Запустить Detector** (YAMNet + MLP):
+   ```bash
+   cp hub/.env.example hub/.env   # задать MQTT и ADMIN_TOKEN при необходимости
+   docker compose up -d detector
+   ```
+
+4. **Открыть Web UI**: `http://<your_host_ip>:8080` — реал-тайм confidence
+   bar, история событий, прослушивание клипов.
+
+5. **Дообучить модель** на своих данных:
+   ```bash
+   make sync-dataset   # синхронизировать размеченные WAV
+   make train          # обучить MLP-классификатор
+   make deploy-model   # задеплоить веса + перезапуск
+   ```
+
+Для автономной работы ESP32 без сервера — см. Phase 9 (в разработке).
+
+---
+
 ## 2. Архитектурные принципы
 
 ### Разделение ответственности
@@ -213,15 +247,18 @@ ESPHome используется сейчас для быстрого bring-up �
 
 ## Сеть
 
+Адреса зависят от конкретной установки. Ниже пример:
+
 | Устройство | Адрес |
 |---|---|
-| MikroTik | `192.168.88.1` |
-| Raspberry Pi 5 | `192.168.1.100` |
-| ESP32-S3 | `192.168.88.49` |
+| Router | `<your_router_ip>` |
+| Raspberry Pi 5 | `<your_rpi_ip>` |
+| ESP32-S3 | `<your_esp32_ip>` |
 | ESP32 hostname | `siren-detector.local` |
-| Wi-Fi SSID | `Batcave` |
+| Wi-Fi SSID | `<your_ssid>` |
 
-Секреты Wi-Fi и пароли в README не хранятся.
+Реальные адреса, пароли и SSID задаются через `.env` файлы и `secrets.yaml`
+(не коммитятся в Git). См. `.env.example` в каждом компоненте.
 
 ## Raspberry Pi
 
@@ -314,7 +351,7 @@ INMP441 data: 1024 bytes, chunks=32, samples=256, rms=0.00..., peak=0.00...
 
 ## UDP recorder: первый рабочий прототип
 
-ESP32 отправляет I²S-пакеты по UDP на Raspberry Pi 5 (`192.168.1.100:9000`). Захват включается при запуске устройства. Каждый пакет получает порядковый номер: если UDP потеряет пакет, recorder вставит на его месте тишину, а не укоротит WAV. Рекордер сохраняет поток как WAV `16 kHz / mono / 16 bit` и не требует сторонних Python-библиотек.
+ESP32 отправляет I²S-пакеты по UDP на Raspberry Pi 5 (`<your_rpi_ip>:9000`). Захват включается при запуске устройства. Каждый пакет получает порядковый номер: если UDP потеряет пакет, recorder вставит на его месте тишину, а не укоротит WAV. Рекордер сохраняет поток как WAV `16 kHz / mono / 16 bit` и не требует сторонних Python-библиотек.
 
 Recorder вынесен в отдельную папку `recorder/`:
 
@@ -336,8 +373,8 @@ recorder/
 Скопировать папку на Raspberry Pi:
 
 ```bash
-scp -r recorder doos@192.168.1.100:~/Projects/esphome/
-ssh doos@192.168.1.100
+scp -r recorder <user>@<your_rpi_ip>:~/Projects/esphome/
+ssh <user>@<your_rpi_ip>
 cd ~/Projects/esphome/recorder
 mkdir -p dataset/{siren,explosion,motorcycle,background,unknown,inbox}
 docker compose build
@@ -977,7 +1014,7 @@ Hub (fan-out relay, RPi :9000)
    └──> Detector (:9002) → YAMNet + MLP → события → Web UI
 ```
 
-**Detector** (`http://192.168.1.100:8080`):
+**Detector** (`http://<your_rpi_ip>:8080`):
 - YAMNet (frozen, TF Hub) извлекает 1024-dim embeddings каждые 0.5 с
 - MLP-классификатор (`siren` / `background` / `explosion` / `motorcycle`) поверх embeddings
 - Temporal smoother: 4 триггера → possible, 8 → confirmed (окно 30 с, cooldown 60 с)
@@ -1089,7 +1126,35 @@ docker compose logs detector | grep ADMIN_TOKEN
 
 ---
 
-# 12. Долгосрочная цель
+# 12. UDP Audio Protocol
+
+ESP32 отправляет аудио по UDP. Каждый пакет имеет заголовок:
+
+```text
+Offset  Size   Type         Description
+──────  ─────  ───────────  ──────────────────────────────────
+0       4      uint32 BE    Magic: 0x53445231 ("SDR1")
+4       4      uint32 BE    Sequence number (monotonically increasing)
+8       2      uint16 BE    Payload size (bytes)
+10      2      uint16 BE    Reserved (0)
+12      N      bytes        Audio payload: signed 32-bit I2S samples (little-endian)
+```
+
+- `HEADER = struct.Struct("!IIHH")` — 12 bytes, network byte order (big-endian)
+- Payload: signed 32-bit I2S slots, little-endian. Для получения 16-bit PCM
+  нужно `sample >> 16` и обрезать до `int16`.
+- Sample rate: 16 kHz, mono.
+- Типичный размер payload: 4096 bytes (1024 сэмпла = ~64 ms аудио).
+- При потере пакетов (gap в sequence numbers) приёмник должен вставить тишину
+  соответствующей длины.
+
+Чтобы подключить свой inference engine, достаточно слушать UDP-порт Hub'а
+и парсить пакеты по этой спецификации. Примеры реализации:
+`recorder/recorder-files/udp_recorder.py` и `detector/detector.py`.
+
+---
+
+# 13. Долгосрочная цель
 
 Сделать доступную и расширяемую платформу:
 

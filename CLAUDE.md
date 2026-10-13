@@ -90,11 +90,11 @@ docker compose run --rm esphome logs /config/siren-detector.yaml --device siren-
 
 ## Key Constraints
 
-- ESPHome config lives in `esp32/siren-detector.yaml` locally but must be deployed to `~/Projects/esphome/esphome/siren-detector.yaml` on Raspberry Pi (`192.168.1.100`).
+- ESPHome config lives in `esp32/siren-detector.yaml` locally but must be deployed to `~/Projects/esphome/esphome/siren-detector.yaml` on the RPi host (IP configured in `config.mk` / `Makefile`).
 - `dataset/external/esc50/audio/` is git-ignored (CC BY-NC 3.0 license, large files).
 - `ml/results/` and `ml/.venv/` are git-ignored.
 - INMP441 sends 24-bit audio in 32-bit I2S slots — the firmware shifts right by 8 bits before normalizing.
-- Current ESP32 IP: `192.168.88.49` / hostname: `siren-detector.local`.
+- ESP32 hostname: `siren-detector.local` (IP depends on local network).
 
 
 ## Detector / Web UI
@@ -102,20 +102,20 @@ docker compose run --rm esphome logs /config/siren-detector.yaml --device siren-
 The detector stack runs on RPi from `hub/docker-compose.yml` (not `detector/docker-compose.yml`):
 
 ```bash
-# Deploy (from Mac)
-scp -r detector/ doos@192.168.1.100:~/Projects/esphome/
-scp hub/docker-compose.yml doos@192.168.1.100:~/Projects/esphome/hub/
+# Deploy (from Mac) — use `make deploy` instead, or manually:
+scp -r detector/ <user>@<rpi_ip>:~/Projects/esphome/
+scp hub/docker-compose.yml <user>@<rpi_ip>:~/Projects/esphome/hub/
 
 # Rebuild & restart (on RPi)
 cd ~/Projects/esphome/hub
 docker compose up --build -d detector
 
-# Static-only update (no rebuild needed)
-scp detector/static/index.html doos@192.168.1.100:~/Projects/esphome/detector/static/
-ssh doos@192.168.1.100 "docker cp ~/Projects/esphome/detector/static/index.html siren-detector-engine:/app/static/index.html"
+# Static-only update (no rebuild needed) — or use `make deploy-ui`
+scp detector/static/index.html <user>@<rpi_ip>:~/Projects/esphome/detector/static/
+ssh <user>@<rpi_ip> "docker cp ~/Projects/esphome/detector/static/index.html siren-detector-engine:/app/static/index.html"
 ```
 
-Web UI: `http://192.168.1.100:8080`
+Web UI: `http://<rpi_ip>:8080`
 
 Key architectural notes:
 - **WebSocket** uses `await ws.receive()` (not `receive_text()`) — handles ping frames correctly; `receive_text()` causes silent client drop
@@ -139,11 +139,11 @@ make deploy-model    # Push weights to RPi + restart
 Manual commands (equivalent):
 
 ```bash
-rsync -av doos@192.168.1.100:~/Projects/esphome/dataset/ dataset/
+rsync -av <user>@<rpi_ip>:~/Projects/esphome/dataset/ dataset/
 ml/.venv/bin/python ml/train_classifier.py
 scp ml/results/classifier_weights.npz ml/results/classifier_labels.json \
-    doos@192.168.1.100:~/Projects/esphome/ml/results/
-ssh doos@192.168.1.100 "docker restart siren-detector-engine"
+    <user>@<rpi_ip>:~/Projects/esphome/ml/results/
+ssh <user>@<rpi_ip> "docker restart siren-detector-engine"
 ```
 
 Other useful Makefile targets: `make deploy`, `make deploy-ui`, `make logs`, `make help`.
