@@ -527,6 +527,9 @@ ml/.venv/bin/python dataset/augment.py siren --count 10 --dry-run
 Аугментированные файлы сохраняются как `dataset/<label>/aug_*.wav` и участвуют
 в тренировке наравне с остальными записями. После аугментации — `make retrain`.
 
+Подробные рекомендации по соотношению aug/real данных, class imbalance, domain gap
+и чеклист перед ретрейном — в [`ml/TRAINING_GUIDE.md`](ml/TRAINING_GUIDE.md).
+
 ### Первый локальный baseline: YAMNet
 
 На Mac подготовлено изолированное окружение и скрипт [`ml/evaluate_yamnet.py`](ml/evaluate_yamnet.py).
