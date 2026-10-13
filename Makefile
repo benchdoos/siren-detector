@@ -59,7 +59,7 @@ _merge-recorder:
 	@for label in $(LABELS); do \
 		ssh $(RPI) "mkdir -p $(RPI_BASE)/dataset/$$label && \
 			if ls $(RPI_BASE)/dataset/recorder/$$label/*.wav >/dev/null 2>&1; then \
-				sudo chown \$$(id -u):\$$(id -g) $(RPI_BASE)/dataset/recorder/$$label/*.wav && \
+				sudo chown \$$(id -u):\$$(id -g) $(RPI_BASE)/dataset/recorder/$$label/ $(RPI_BASE)/dataset/recorder/$$label/*.wav && \
 				mv $(RPI_BASE)/dataset/recorder/$$label/*.wav $(RPI_BASE)/dataset/$$label/ && \
 				echo \"Moved $$label WAVs from recorder to dataset\"; \
 			fi"; \
@@ -104,10 +104,16 @@ augment-siren:
 augment-explosion:
 	ml/.venv/bin/python dataset/augment.py explosion --count 150
 
+## Augment motorcycle data (200 normal + 100 quiet)
+augment-motorcycle:
+	ml/.venv/bin/python dataset/augment.py motorcycle --count 200
+	ml/.venv/bin/python dataset/augment.py motorcycle --count 100 --quiet
+
 ## Augment all safety-critical classes
 augment:
 	$(MAKE) augment-siren
 	$(MAKE) augment-explosion
+	$(MAKE) augment-motorcycle
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -144,11 +150,12 @@ help:
 	@echo "    make fetch-esc50     Download ESC-50 dataset
 	@echo "    make augment         Augment siren + explosion data"
 	@echo "    make augment-siren   Augment siren only"
-	@echo "    make augment-explosion Augment explosion only""
+	@echo "    make augment-explosion Augment explosion only"
+	@echo "    make augment-motorcycle Augment motorcycle (normal + quiet)"
 	@echo ""
 
 .PHONY: deploy deploy-ui deploy-compose restart logs \
         sync-dataset train deploy-model retrain _merge-recorder _clean-trained \
         clean-clips clean-dataset clean-docker \
-        augment augment-siren augment-explosion \
+        augment augment-siren augment-explosion augment-motorcycle \
         fetch-esc50 open unlock help
