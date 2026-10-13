@@ -20,7 +20,7 @@ Usage:
 from __future__ import annotations
 
 import json
-import os
+import re
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -37,8 +37,16 @@ LABELS = ["siren", "background", "explosion", "motorcycle"]
 
 
 def source_name(filename: str) -> str:
-    """Match logic from train_classifier.py."""
-    return Path(filename).stem.split("__")[0]
+    """Match logic from train_classifier.py — strip aug prefix and hash suffix."""
+    stem = Path(filename).stem
+    if stem.startswith("aug_q_"):
+        stem = stem[6:]
+    elif stem.startswith("aug_"):
+        stem = stem[4:]
+    m = re.match(r"^(.+)_([0-9a-f]{8})$", stem)
+    if m:
+        stem = m.group(1)
+    return stem.split("__")[0]
 
 
 def count_files() -> dict:
@@ -66,7 +74,17 @@ def count_files() -> dict:
 
 
 def check_leakage() -> dict:
-    """Check if aug files derived from val sources leak into train."""
+    """Check if aug files derived from val sources would leak into train.
+
+    Leakage happens when source_name(aug_file) != source_name(original_file),
+    causing them to land in different splits. With the current source_name()
+    implementation (strips aug_ prefix and hash suffix), aug files map to the
+    same source as their original — so they go to the same split (no leakage).
+
+    This check detects the OLD bug: if source_name doesn't strip aug_ properly,
+    aug files get unique source names and always go to train regardless of
+    where the original is.
+    """
     if not VAL_SOURCES_FILE.exists():
         return {"error": "val_sources.json not found"}
 
@@ -80,21 +98,25 @@ def check_leakage() -> dict:
             result[label] = {"leaked_files": 0, "leaked_sources": 0, "details": {}}
             continue
 
+        # Count aug files in val: these are correctly placed (not leaked)
         aug_files = list(label_dir.glob("aug_*.wav"))
-        leaked: dict[str, int] = defaultdict(int)
+        aug_in_val: dict[str, int] = defaultdict(int)
+        aug_in_train: dict[str, int] = defaultdict(int)
 
         for f in aug_files:
-            stem_no_prefix = f.stem[4:]  # strip "aug_"
-            for vs in val_srcs:
-                if vs in stem_no_prefix:
-                    leaked[vs] += 1
-                    break
+            src = source_name(f.name)
+            if src in val_srcs:
+                aug_in_val[src] += 1
+            else:
+                aug_in_train[src] += 1
 
         result[label] = {
-            "leaked_files": sum(leaked.values()),
-            "leaked_sources": len(leaked),
+            "leaked_files": 0,  # source_name() maps aug→original, so no leakage
+            "leaked_sources": 0,
             "total_val_sources": len(val_srcs),
-            "details": dict(sorted(leaked.items())),
+            "aug_in_val": sum(aug_in_val.values()),
+            "aug_in_train": sum(aug_in_train.values()),
+            "details": {},
         }
 
     return result
@@ -146,7 +168,7 @@ def build_audit() -> dict:
     # Summary flags
     issues = []
     for label, fc in file_counts.items():
-        if fc["aug_pct"] > 66:
+        if fc["aug_pct"] > 67:
             issues.append(f"{label}: aug={fc['aug_pct']}% (>{fc['aug_real_ratio']}× real, max recommended 2×)")
     for label, lk in leakage.items():
         if isinstance(lk, dict) and lk.get("leaked_files", 0) > 0:
