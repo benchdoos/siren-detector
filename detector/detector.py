@@ -95,7 +95,7 @@ def _udp_stats_snapshot() -> dict:
         _udp_packet_count_prev = count
         _udp_pps_last_calc = now
     ago = round(now - last, 1) if last > 0 else -1
-    alive = 0 < ago < 5.0
+    alive = last > 0 and (now - last) < 5.0
     return {"audio_alive": alive, "audio_ago": ago, "audio_pps": round(_udp_pps, 1)}
 
 # ── Dynamic settings ─────────────────────────────────────────────────────────
@@ -708,11 +708,16 @@ def udp_receiver(
     sock.bind((bind, port))
     sock.settimeout(1.0)
     expected_seq: int | None = None
+    last_recv = time.monotonic()
     print(f"Listening on {bind}:{port}", flush=True)
     while not stop.is_set():
         try:
             data, _ = sock.recvfrom(PACKET_MAX)
         except socket.timeout:
+            # reset seq tracking after 5s of silence so reconnect works
+            if expected_seq is not None and time.monotonic() - last_recv > 5.0:
+                print("UDP: no packets for 5s, resetting sequence tracking", flush=True)
+                expected_seq = None
             continue
         if len(data) < HEADER.size:
             continue
@@ -721,8 +726,14 @@ def udp_receiver(
             continue
         if expected_seq is None:
             expected_seq = seq
+            print(f"UDP: source connected, seq={seq}", flush=True)
         if seq < expected_seq:
-            continue
+            # seq jumped backwards — source restarted, accept new sequence
+            if expected_seq - seq > 100:
+                print(f"UDP: seq reset detected ({expected_seq} → {seq}), re-syncing", flush=True)
+                expected_seq = seq
+            else:
+                continue
         gap = seq - expected_seq
         if gap:
             silence = np.zeros(payload_size // 4 * gap, dtype=np.float32)
@@ -733,6 +744,7 @@ def udp_receiver(
         inference_buf.push(samples)
         clip_buf.push(samples)
         _udp_stats_update()
+        last_recv = time.monotonic()
         expected_seq = seq + 1
     sock.close()
 
