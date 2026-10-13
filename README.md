@@ -65,26 +65,33 @@
 
 Минимальный набор для запуска: ESP32-S3 + INMP441 микрофон + любой Linux/Mac хост.
 
-1. **Прошить ESP32**: скопировать `esp32/siren-detector.yaml` на хост с ESPHome,
-   задать Wi-Fi credentials в `secrets.yaml`, прошить. Микрофон подключается
-   по I2S (GPIO4/5/6, см. раздел 5).
+1. **Настроить окружение**:
+   ```bash
+   cp .env.example .env                         # корневой .env для Makefile
+   cp hub/.env.example hub/.env                  # .env для Docker Compose
+   cp esp32/secrets.yaml.example esp32/secrets.yaml  # ESP32 секреты
+   ```
+   Заполнить IP-адреса, порты и пароли в каждом файле.
 
-2. **Запустить Hub** на хосте (принимает UDP-поток от ESP32):
+2. **Прошить ESP32**: скопировать `esp32/siren-detector.yaml` и `secrets.yaml`
+   на хост с ESPHome, прошить. Микрофон подключается по I2S (GPIO4/5/6,
+   см. раздел 5).
+
+3. **Запустить Hub** на хосте (принимает UDP-поток от ESP32):
    ```bash
    cd hub
    docker compose up -d hub
    ```
 
-3. **Запустить Detector** (YAMNet + MLP):
+4. **Запустить Detector** (YAMNet + MLP):
    ```bash
-   cp hub/.env.example hub/.env   # задать MQTT и ADMIN_TOKEN при необходимости
    docker compose up -d detector
    ```
 
-4. **Открыть Web UI**: `http://<your_host_ip>:8080` — реал-тайм confidence
+5. **Открыть Web UI**: `http://<your_host_ip>:8080` — реал-тайм confidence
    bar, история событий, прослушивание клипов.
 
-5. **Дообучить модель** на своих данных:
+6. **Дообучить модель** на своих данных:
    ```bash
    make sync-dataset   # синхронизировать размеченные WAV
    make train          # обучить MLP-классификатор

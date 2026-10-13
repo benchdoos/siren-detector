@@ -1,3 +1,9 @@
+substitutions:
+  # UDP target: IP and port of the host running Hub (e.g. Raspberry Pi).
+  # Override in secrets.yaml or set here directly.
+  udp_target_ip: !secret udp_target_ip
+  udp_target_port: !secret udp_target_port
+
 esphome:
   name: siren-detector
   friendly_name: Siren Detector
@@ -62,7 +68,7 @@ microphone:
                               ? sqrtf(static_cast<float>(sum_squares / sample_count))
                               : 0.0f;
           // Temporary raw transport for the first recorder prototype.
-          // Raspberry Pi 5: 192.168.1.100, UDP port 9000.
+          // UDP target configured via substitutions (udp_target_ip / udp_target_port).
           static int udp_socket = -1;
           static sockaddr_in udp_address{};
           static uint32_t udp_sequence = 0;
@@ -71,8 +77,8 @@ microphone:
           if (udp_socket < 0) {
             udp_socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
             udp_address.sin_family = AF_INET;
-            udp_address.sin_port = htons(9000);
-            inet_aton("192.168.1.100", &udp_address.sin_addr);
+            udp_address.sin_port = htons(${udp_target_port});
+            inet_aton("${udp_target_ip}", &udp_address.sin_addr);
           }
           if (udp_socket >= 0) {
             // Packet format: magic(4), sequence(4), payload size(2), reserved(2), PCM payload.
@@ -158,6 +164,6 @@ wifi:
 
   ap:
     ssid: "Siren Detector Fallback"
-    password: "changeme"
+    password: !secret ap_password
 
 captive_portal:

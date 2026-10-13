@@ -14,7 +14,7 @@ services:
       - --bind
       - 127.0.0.1
       - --port
-      - "9002"
+      - "${DETECTOR_PORT:-9002}"
       - --source
       - siren-detector-01
       - --classifier-weights

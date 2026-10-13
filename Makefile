@@ -1,7 +1,11 @@
-RPI         = doos@192.168.1.100
-RPI_BASE    = ~/Projects/esphome
-CONTAINER   = siren-detector-engine
-WEB_UI      = http://192.168.1.100:8080
+# Load deployment config from .env (gitignored).
+# Copy .env.example to .env and fill in your values.
+-include .env
+
+RPI         ?= user@192.168.1.100
+RPI_BASE    ?= ~/Projects/esphome
+CONTAINER   ?= siren-detector-engine
+WEB_UI      ?= http://192.168.1.100:8080
 LABELS      = siren background motorcycle explosion unknown
 
 # ── Deploy ────────────────────────────────────────────────────────────────────
@@ -10,6 +14,7 @@ LABELS      = siren background motorcycle explosion unknown
 deploy:
 	scp -r detector/ $(RPI):$(RPI_BASE)/
 	scp hub/docker-compose.yml $(RPI):$(RPI_BASE)/hub/
+	@test -f hub/.env && scp hub/.env $(RPI):$(RPI_BASE)/hub/.env || true
 	ssh $(RPI) "cd $(RPI_BASE)/hub && docker compose up --build -d detector && docker image prune -f"
 
 ## Deploy only frontend (no rebuild needed)
