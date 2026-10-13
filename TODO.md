@@ -132,7 +132,8 @@
 - [ ] Записать 2-3 минуты тишины с INMP441 для noise profile (`--noise-profile`).
 - [ ] Накопить размеченные примеры через UI + снизить false positive уличным фоном
   из той же локации (в процессе).
-- [ ] Улучшить accuracy motorcycle (сейчас 52%) — набрать больше данных.
+- [ ] Улучшить accuracy motorcycle (сейчас 65.8%, было 57%) — набрать больше
+  реальных данных (воспроизведение через колонку + recorder).
 
 ## Web UI — реализован и задеплоен
 
@@ -198,32 +199,29 @@
 
 ## Аудит данных и переобучение по TRAINING_GUIDE
 
-Рекомендации из [`ml/TRAINING_GUIDE.md`](ml/TRAINING_GUIDE.md). Цель — поднять
-accuracy по всем классам, особенно motorcycle и explosion.
+Рекомендации из [`ml/TRAINING_GUIDE.md`](ml/TRAINING_GUIDE.md). Подробные результаты
+аудита и сравнения — в [`ml/AUDIT.md`](ml/AUDIT.md).
 
-- [ ] **Аудит aug/real соотношения**: проверить долю аугментированных файлов
-  по каждому классу (цель: aug ≤ 2× real). Сейчас motorcycle 93% aug, siren 84%.
-- [ ] **Уменьшить количество aug**: siren max 160 (сейчас 427), motorcycle max 120
-  (сейчас 823). Удалить лишние `aug_*.wav` или уменьшить `--count` в Makefile.
-- [ ] **Class weights в loss**: добавить в train_classifier.py веса классов
-  по формуле `sqrt(N_total / N_class)` — компенсировать доминирование background.
-- [ ] **Sample weights**: реальные данные weight=1.0, аугментированные weight=0.3–0.5,
-  чтобы MLP не учил распределение ESC-50/Freesound вместо INMP441.
-- [ ] **Undersample background**: ограничить background до ~1500–2000 windows
-  (сейчас 7272) — 2-3× от среднего по остальным классам.
+Итерация 1 (2026-10-13): siren 76→80%, motorcycle 57→66%, data leakage устранён.
+
+- [x] **Аудит aug/real соотношения**: создан `ml/audit.py` + `make audit`.
+- [x] **Уменьшить количество aug**: siren 792→166 (2×), motorcycle 936→160 (2×).
+  Makefile counts обновлены.
+- [x] **Class weights в loss**: формула `sqrt(N_total / N_class)`.
+- [x] **Sample weights**: real=1.0, aug/external=0.4. Объединены с class weights
+  в единый `sample_weight` (Keras не позволяет оба одновременно).
+- [x] **Undersample background**: `MAX_BG_TRAIN_WINDOWS=2000` (было 36748).
+- [x] **Проверить val split**: `source_name()` теперь strip'ит `aug_` prefix +
+  hash suffix → aug файлы попадают в тот же split. Data leakage = 0.
+- [x] **Переобучить и сравнить**: `make audit-compare` показывает дельты.
 - [ ] **Mixup на embeddings**: реализовать в train_classifier.py —
   смешивание двух embeddings, λ ~ Beta(0.2, 0.2).
-- [ ] **Проверить val split**: убедиться, что aug от того же source не попадает
-  в val вместе с оригиналом (data leakage).
-- [ ] **Переобучить и сравнить**: после изменений — `make retrain`, сравнить
-  per-class accuracy и confusion matrix с текущим baseline.
 
 ## Ближайшие действия
 
-1. **Аудит и переобучение**: пройти чеклист выше (аудит aug/real, class weights,
-   sample weights) — это даст наибольший прирост accuracy.
-2. **Улучшить motorcycle accuracy** (57%): набрать больше реальных данных с Freesound,
-   записать через колонку + рекордер, дообучить.
+1. **Набрать реальных данных motorcycle и explosion**: воспроизведение через
+   колонку + recorder на INMP441. Цель: motorcycle 80→150+ real файлов.
+2. **Mixup на embeddings**: реализовать в train_classifier.py (+1-3% accuracy).
 3. **Накопить данные + снизить FP**: слушать события через UI, лейблить; добавить
    уличный фон из реальной локации (INMP441).
 4. **Noise profile**: записать 2-3 мин тишины с INMP441 для `--noise-profile`.

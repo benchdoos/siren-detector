@@ -14,22 +14,52 @@ make audit-compare OLD=audit_20261013_224053.json NEW=audit_20261014_120000.json
 
 Snapshots сохраняются в `ml/results/audits/` (gitignored). `latest.json` → последний.
 
-## Baseline — 2026-10-13
+## Текущее состояние — после итерации 1 (2026-10-13)
 
-Первый аудит перед началом оптимизации.
+### Val accuracy
+
+| Класс | Windows | Accuracy | Δ vs baseline |
+|---|---|---|---|
+| **siren** | 3579 | **79.8%** | **+3.4%** ✓ |
+| background | 8700 | 81.4% | -8.1% (ожидаемо) |
+| explosion | 1395 | 71.3% | -7.5% |
+| **motorcycle** | 658 | **65.8%** | **+8.4%** ✓ |
 
 ### Файлы: aug/real соотношение
 
-| Класс | Всего | Real | Aug | Aug% | Ratio | Max рек. | Статус |
-|---|---|---|---|---|---|---|---|
-| siren | 875 | 83 | 792 | 90.5% | 9.5× | 166 | ⚠ критично |
-| background | 674 | 674 | 0 | 0% | 0× | — | OK |
-| explosion | 610 | 258 | 352 | 57.7% | 1.4× | 516 | OK |
-| motorcycle | 1016 | 80 | 936 | 92.1% | 11.7× | 160 | ⚠ критично |
+| Класс | Всего | Real | Aug | Aug% | Ratio | Статус |
+|---|---|---|---|---|---|---|
+| siren | 249 | 83 | 166 | 66.7% | 2.0× | OK |
+| background | 674 | 674 | 0 | 0% | 0× | OK |
+| explosion | 610 | 258 | 352 | 57.7% | 1.4× | OK |
+| motorcycle | 240 | 80 | 160 | 66.7% | 2.0× | OK |
 
-**Правило из TRAINING_GUIDE:** aug ≤ 2× real. siren и motorcycle далеко за пределами — модель учит распределение ESC-50/Freesound, а не INMP441.
+### Confusion matrix
 
-### Val accuracy
+```
+                  siren  background  explosion  motorcycle
+  siren           2856        353        128        242
+  background       910       7085        507        198
+  explosion        100        273        994         28
+  motorcycle       132         24         69        433
+```
+
+### Состояние train_classifier.py
+
+- ✅ Class weights: `sqrt(N_total / N_class)`
+- ✅ Sample weights: real=1.0, aug/external=0.4
+- ✅ Val split по source (с учётом aug — data leakage = 0)
+- ✅ Dead window filtering (UDP drops)
+- ✅ Background undersampling (MAX_BG_TRAIN_WINDOWS=2000)
+- ✅ Embedding cache
+- ❌ Mixup на embeddings — ещё не реализовано
+
+---
+
+<details>
+<summary>Baseline — до оптимизации (2026-10-13)</summary>
+
+### Val accuracy (baseline)
 
 | Класс | Windows | Accuracy |
 |---|---|---|
@@ -38,18 +68,16 @@ Snapshots сохраняются в `ml/results/audits/` (gitignored). `latest.j
 | explosion | 312 | 78.8% |
 | motorcycle | 176 | **57.4%** |
 
-### Class imbalance (val windows)
+### Файлы (baseline)
 
-| Класс | Windows | Ratio к min |
-|---|---|---|
-| background | 7272 | **41.3×** |
-| siren | 2691 | 15.3× |
-| explosion | 312 | 1.8× |
-| motorcycle | 176 | 1.0× (min) |
+| Класс | Всего | Real | Aug | Aug% | Ratio | Статус |
+|---|---|---|---|---|---|---|
+| siren | 875 | 83 | 792 | 90.5% | 9.5× | ⚠ критично |
+| background | 674 | 674 | 0 | 0% | 0× | OK |
+| explosion | 610 | 258 | 352 | 57.7% | 1.4× | OK |
+| motorcycle | 1016 | 80 | 936 | 92.1% | 11.7× | ⚠ критично |
 
-Background доминирует в 41× — TRAINING_GUIDE рекомендует 2-3× от среднего.
-
-### Confusion matrix
+### Confusion matrix (baseline)
 
 ```
                   siren  background  explosion  motorcycle
@@ -59,33 +87,14 @@ Background доминирует в 41× — TRAINING_GUIDE рекомендуе�
   motorcycle         5         55         15        101
 ```
 
-Главные проблемы:
-- **siren → background** (360, 13%) — модель пропускает сирену
-- **background → explosion** (426, 5.9%) — ложные explosion
-- **background → motorcycle** (199, 2.7%) — ложные motorcycle
+### Проблемы (baseline)
 
-### Data leakage ⚠
+- Aug/real ratio: siren 9.5×, motorcycle 11.7× (рекомендация ≤ 2×)
+- Class imbalance: background 41.3× vs motorcycle
+- Data leakage: 295 aug файлов от val sources в train
+- Нет sample weights, нет background undersampling
 
-Aug файлы от val sources попадают в train из-за разных source names (`aug_` prefix):
-
-| Класс | Leaked files | Из val sources |
-|---|---|---|
-| siren | 175 | 13 / 18 |
-| explosion | 25 | 11 / 17 |
-| motorcycle | **95** | **3 / 3** (все!) |
-
-motorcycle worst case — **все** val sources утекли. Val метрики завышены.
-
-### Что есть в train_classifier.py
-
-- ✅ Class weights: `N_total / (N_classes × N_class)` — есть
-- ✅ Val split по source — есть
-- ✅ Dead window filtering (UDP drops) — есть
-- ✅ Embedding cache — есть
-- ❌ Sample weights (real vs aug) — **нет**
-- ❌ Leakage prevention для aug → val — **нет**
-- ❌ Background undersampling — **нет**
-- ❌ Mixup на embeddings — **нет**
+</details>
 
 ## Итерация 1 — 2026-10-13
 
