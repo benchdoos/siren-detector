@@ -136,11 +136,13 @@
   .s-section { margin-bottom: 16px; }
   .s-title { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; font-weight: 600; border-bottom: 1px solid #222; padding-bottom: 4px; }
   .s-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-  .s-row label { flex: 1; font-size: 13px; color: #ccc; }
+  .s-row label { width: 150px; flex-shrink: 0; font-size: 13px; color: #ccc; }
   .s-row input[type="number"] { width: 80px; background: #222; border: 1px solid #444; color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
   .s-row input[type="number"]:focus { border-color: #4caf50; outline: none; }
   .s-row input.changed { border-color: #ffa726; }
-  .s-default { font-size: 11px; color: #555; width: 50px; text-align: right; }
+  .s-default { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: #555; cursor: pointer; white-space: nowrap; user-select: none; width: 55px; }
+  .s-default:hover { color: #aaa; }
+  .s-default:hover .s-reset-icon { color: #aaa; }
   .s-actions { display: flex; gap: 10px; align-items: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid #222; }
   .s-save { background: #1a3a1a; border: 1px solid #4caf50; color: #4caf50; padding: 6px 20px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; }
   .s-save:hover { background: #2a4a2a; }
@@ -166,6 +168,10 @@
   .admin-only-inline.visible { display: inline-block !important; }
   .admin-only-btn { display: none !important; }
   .admin-only-btn.visible { display: inline-block !important; }
+  .ev-check { display: none; }
+  .ev-check.visible { display: inline-block; }
+  .label-row { display: none; }
+  .label-row.visible { display: flex; }
 
   .login-row { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
   .login-row input { flex: 1; background: #222; border: 1px solid #444; color: #e0e0e0; padding: 6px 10px; border-radius: 4px; font-size: 14px; font-family: monospace; }
@@ -292,6 +298,11 @@
         <div class="s-title">MLP Gate</div>
         <div class="s-row"><label>YAMNet min gate <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-yamnet_min_gate" step="0.001" min="0" max="1"><span class="s-default" data-key="yamnet_min_gate"></span></div>
         <div class="s-tooltip" data-tip="yamnet_min_gate"><strong>MLP Gate · YAMNet Min Gate</strong><br>When MLP classifier is active for siren detection, YAMNet must show at least this score for the MLP result to be trusted. Prevents MLP false positives when YAMNet sees no siren-like sound at all. Set to 0 to fully trust MLP regardless of YAMNet opinion — may increase false positives but catches sirens that YAMNet misclassifies as silence.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.01</b></span></div>
+      </div>
+      <div class="s-section">
+        <div class="s-title">Clip</div>
+        <div class="s-row"><label>Clip length (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-clip_seconds" step="1" min="5" max="60"><span class="s-default" data-key="clip_seconds"></span></div>
+        <div class="s-tooltip" data-tip="clip_seconds"><strong>Clip · Length</strong><br>Duration of audio clip (in seconds) saved when an event is confirmed. Shorter clips contain less background noise for retraining. Applies immediately.<hr><span class="s-tip-range">Range: <b>5 – 60 sec</b></span><br><span class="s-tip-default">Default: <b>10</b></span></div>
       </div>
       <div class="s-actions">
         <button class="s-save" onclick="saveSettings()">Save</button>
@@ -512,7 +523,7 @@ function addEvent(ev) {
 
   card.innerHTML = `
     <div class="event-meta">
-      <input type="checkbox" class="ev-check" onchange="updateSelection()" ${!isAdmin() ? 'style="display:none"' : ''}>
+      <input type="checkbox" class="ev-check" onchange="updateSelection()">
       <span class="badge ${ev.event}">${ev.event.toUpperCase()}</span>
       <span class="event-time">${ts}</span>
       <span class="event-conf">${(ev.confidence * 100).toFixed(1)}%</span>
@@ -522,7 +533,7 @@ function addEvent(ev) {
     ${breakdown ? `<div class="event-breakdown">${breakdown}</div>` : ''}
     <div class="ev-details">${detailsHtml}</div>
     <audio controls src="${ev.clip_url}"></audio>
-    <div class="label-row" ${!isAdmin() ? 'style="display:none"' : ''}>
+    <div class="label-row">
       <span>Label:</span>
       ${VALID_LABELS.map(l =>
         `<button class="lbtn" data-label="${l}" onclick="sendLabel(this,'${filename}','${l}')">${l}</button>`
@@ -543,6 +554,9 @@ function addEvent(ev) {
     if (currentAudio && currentAudio !== this) { currentAudio.pause(); currentAudio.currentTime = 0; }
     currentAudio = this;
   });
+  const authed = isAdmin();
+  card.querySelectorAll('.ev-check').forEach(el => el.classList.toggle('visible', authed));
+  card.querySelectorAll('.label-row').forEach(el => el.classList.toggle('visible', authed));
   updateEventsCount();
 }
 
@@ -688,8 +702,8 @@ function updateAdminUI() {
   document.querySelectorAll('.admin-only-inline').forEach(el => el.classList.toggle('visible', authed));
   document.querySelectorAll('.admin-only-btn').forEach(el => el.classList.toggle('visible', authed));
   // show/hide label rows and checkboxes in event cards
-  document.querySelectorAll('.label-row').forEach(el => el.style.display = authed ? '' : 'none');
-  document.querySelectorAll('.ev-check').forEach(el => el.style.display = authed ? '' : 'none');
+  document.querySelectorAll('.label-row').forEach(el => el.classList.toggle('visible', authed));
+  document.querySelectorAll('.ev-check').forEach(el => el.classList.toggle('visible', authed));
 }
 
 function toggleAdmin() {
@@ -831,7 +845,8 @@ function toggleTip(helpBtn) {
 const SETTINGS_KEYS = [
   'siren_threshold','explosion_threshold','motorcycle_threshold',
   'possible_triggers','confirmed_triggers','smoothing_window_seconds',
-  'cooldown_seconds','refractory_seconds','yamnet_min_gate'
+  'cooldown_seconds','refractory_seconds','yamnet_min_gate',
+  'clip_seconds'
 ];
 let _settingsDefaults = {};
 let _settingsLoaded = {};
@@ -856,7 +871,14 @@ async function showSettings() {
         };
       }
       const def = document.querySelector(`.s-default[data-key="${k}"]`);
-      if (def) def.textContent = `(${_settingsDefaults[k]})`;
+      if (def) {
+        def.innerHTML = `<span class="s-reset-icon">↺</span>${_settingsDefaults[k]}`;
+        def.title = 'Reset to default';
+        def.onclick = () => {
+          input.value = _settingsDefaults[k];
+          input.classList.toggle('changed', input.value !== _settingsLoaded[k]);
+        };
+      }
     }
   } catch(e) {
     document.getElementById('s-status').textContent = 'Failed to load';

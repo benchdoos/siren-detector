@@ -117,6 +117,7 @@ DEFAULT_SETTINGS = {
 
 _settings: dict = {}
 _smoothers: dict[str, TemporalSmoother] = {}
+_clip_buf: ClipBuffer | None = None
 
 
 def _load_settings() -> dict:
@@ -137,6 +138,18 @@ def _save_settings() -> None:
     """Persist current settings to JSON file."""
     SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
     SETTINGS_PATH.write_text(json.dumps(_settings, indent=2), encoding="utf-8")
+
+
+def _apply_clip_seconds() -> None:
+    """Resize ClipBuffer when clip_seconds setting changes."""
+    global _clip_buf
+    if _clip_buf is None:
+        return
+    new_seconds = _settings.get("clip_seconds", CLIP_SECONDS)
+    new_maxlen = int(new_seconds * SAMPLE_RATE)
+    if _clip_buf._buf.maxlen != new_maxlen:
+        _clip_buf._buf = collections.deque(_clip_buf._buf, maxlen=new_maxlen)
+        print(f"[settings] clip buffer resized to {new_seconds}s", flush=True)
 
 
 def _apply_settings_to_smoothers() -> None:
@@ -522,6 +535,7 @@ async def post_settings(body: dict):
         "refractory_seconds": (0, 120),
         "smoothing_window_seconds": (5, 120),
         "yamnet_min_gate": (0.0, 1.0),
+        "clip_seconds": (5, 60),
     }
     updated = {}
     for k, default_val in DEFAULT_SETTINGS.items():
@@ -539,6 +553,7 @@ async def post_settings(body: dict):
     _settings.update(updated)
     _save_settings()
     _apply_settings_to_smoothers()
+    _apply_clip_seconds()
     print(f"[settings] updated: {updated}", flush=True)
     return _settings
 
@@ -549,6 +564,7 @@ async def reset_settings():
     _settings.update(DEFAULT_SETTINGS)
     _save_settings()
     _apply_settings_to_smoothers()
+    _apply_clip_seconds()
     print("[settings] reset to defaults", flush=True)
     return _settings
 
@@ -783,7 +799,9 @@ def inference_loop(args: argparse.Namespace) -> None:
         print("No classifier weights — using raw YAMNet siren score.", flush=True)
 
     inference_buf = AudioRingBuffer(capacity=int(ANALYSIS_SECONDS * SAMPLE_RATE))
-    clip_buf = ClipBuffer(seconds=_settings.get("clip_seconds", CLIP_SECONDS))
+    global _clip_buf
+    _clip_buf = ClipBuffer(seconds=_settings.get("clip_seconds", CLIP_SECONDS))
+    clip_buf = _clip_buf
     smoothers: dict[str, TemporalSmoother] = {}
     for name in DETECTORS:
         thr_key = f"{name}_threshold"
