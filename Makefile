@@ -121,6 +121,20 @@ augment:
 	$(MAKE) augment-explosion
 	$(MAKE) augment-motorcycle
 
+# ── Audit ────────────────────────────────────────────────────────────────────
+
+## Run dataset & model audit, save snapshot
+audit:
+	ml/.venv/bin/python ml/audit.py
+
+## Compare latest audit with previous (or: make audit-compare OLD=file NEW=file)
+audit-compare:
+ifdef OLD
+	ml/.venv/bin/python ml/audit_compare.py $(OLD) $(NEW)
+else
+	ml/.venv/bin/python ml/audit_compare.py
+endif
+
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
 ## Open Web UI in browser
