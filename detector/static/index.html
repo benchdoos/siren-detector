@@ -12,6 +12,9 @@
   .header-logo { width: 28px; height: 28px; background: #e0e0e0; border-radius: 50%; padding: 2px; flex-shrink: 0; }
   #status { font-size: 13px; padding: 3px 8px; border-radius: 4px; background: #333; color: #888; }
   #status.connected { background: #1a3a1a; color: #4caf50; }
+  #audio-status { font-size: 13px; padding: 3px 8px; border-radius: 4px; background: #333; color: #888; }
+  #audio-status.alive { background: #1a3a1a; color: #4caf50; }
+  #audio-status.dead { background: #3a1a1a; color: #ef5350; }
   .top-info { font-size: 13px; color: #666; margin-left: auto; font-variant-numeric: tabular-nums; cursor: pointer; position: relative; user-select: none; }
   .top-info .top-label { color: #888; }
   .top-info:hover { color: #aaa; }
@@ -177,6 +180,7 @@
 <header>
   <h1><img src="/static/img/siren-detector-logo.svg" alt="Logo" class="header-logo"> Siren Detector</h1>
   <span id="status">disconnected</span>
+  <span id="audio-status">audio: —</span>
   <button class="metrics-btn" onclick="showMetrics()">Metrics</button>
   <button class="metrics-btn admin-only-btn" id="settings-btn" onclick="showSettings()">Settings</button>
   <button class="admin-btn" id="admin-btn" onclick="toggleAdmin()">Admin</button>
@@ -416,6 +420,19 @@ function updateScores(msg) {
 
   if (msg.yamnet_top3) renderTop3(document.getElementById('dd-yamnet'), msg.yamnet_top3);
   if (msg.mlp_top3) renderTop3(document.getElementById('dd-mlp'), msg.mlp_top3);
+
+  // audio source status
+  const audioEl = document.getElementById('audio-status');
+  if (msg.audio_alive != null) {
+    if (msg.audio_alive) {
+      audioEl.textContent = `audio: ${msg.audio_pps} pps`;
+      audioEl.className = 'alive';
+    } else {
+      const ago = msg.audio_ago;
+      audioEl.textContent = ago < 0 ? 'audio: no signal' : `audio: lost ${ago.toFixed(0)}s ago`;
+      audioEl.className = 'dead';
+    }
+  }
 }
 
 function toggleDetails(btn) {

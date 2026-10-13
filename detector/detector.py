@@ -63,6 +63,41 @@ CLIP_SECONDS = 30       # audio saved before confirmed event
 CLIP_DIR = Path("/clips")
 WEB_PORT = 8080
 
+# ── UDP packet stats ─────────────────────────────────────────────────────────
+
+_udp_stats_lock = threading.Lock()
+_udp_last_packet_time: float = 0.0  # monotonic
+_udp_packet_count: int = 0
+_udp_packet_count_prev: int = 0
+_udp_pps: float = 0.0
+_udp_pps_last_calc: float = 0.0
+
+
+def _udp_stats_update() -> None:
+    """Called on each received UDP packet."""
+    global _udp_last_packet_time, _udp_packet_count
+    with _udp_stats_lock:
+        _udp_last_packet_time = time.monotonic()
+        _udp_packet_count += 1
+
+
+def _udp_stats_snapshot() -> dict:
+    """Return current UDP stats for broadcasting to UI."""
+    global _udp_pps, _udp_pps_last_calc, _udp_packet_count_prev
+    now = time.monotonic()
+    with _udp_stats_lock:
+        last = _udp_last_packet_time
+        count = _udp_packet_count
+    # recalculate pps every ~2 seconds
+    dt = now - _udp_pps_last_calc
+    if dt >= 2.0:
+        _udp_pps = (count - _udp_packet_count_prev) / dt
+        _udp_packet_count_prev = count
+        _udp_pps_last_calc = now
+    ago = round(now - last, 1) if last > 0 else -1
+    alive = 0 < ago < 5.0
+    return {"audio_alive": alive, "audio_ago": ago, "audio_pps": round(_udp_pps, 1)}
+
 # ── Dynamic settings ─────────────────────────────────────────────────────────
 
 SETTINGS_PATH = CLIP_DIR / "settings.json"
@@ -697,6 +732,7 @@ def udp_receiver(
         samples = i2s32_to_float32(payload)
         inference_buf.push(samples)
         clip_buf.push(samples)
+        _udp_stats_update()
         expected_seq = seq + 1
     sock.close()
 
@@ -776,6 +812,7 @@ def inference_loop(args: argparse.Namespace) -> None:
                     heartbeat[f"{name}_confirmed_needed"] = smoothers[name].confirmed_needed
                     heartbeat[f"{name}_cooldown"] = round(smoothers[name].cooldown_remaining, 1)
                     heartbeat[f"{name}_refractory"] = round(smoothers[name].refractory_remaining, 1)
+                heartbeat.update(_udp_stats_snapshot())
                 broadcast(heartbeat)
                 _last_heartbeat = now
             continue
@@ -873,6 +910,7 @@ def inference_loop(args: argparse.Namespace) -> None:
         if cur_mlp_top3:
             score_msg["mlp_top3"] = cur_mlp_top3
 
+        score_msg.update(_udp_stats_snapshot())
         broadcast(score_msg)
         _last_heartbeat = time.monotonic()
 
