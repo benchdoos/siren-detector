@@ -103,6 +103,30 @@ def _cached_embeddings(yamnet, path: Path) -> np.ndarray:
     return emb
 
 
+YAMNET_WIN_SAMPLES = int(0.96 * SAMPLE_RATE)   # 15360
+YAMNET_HOP_SAMPLES = int(0.48 * SAMPLE_RATE)   # 7680
+ZERO_WINDOW_THRESHOLD = 0.5  # drop window if >50% samples are exactly 0.0
+
+
+def _dead_window_mask(path: Path, n_windows: int) -> np.ndarray:
+    """Return boolean mask: True for windows where >50% samples are zero (UDP drops)."""
+    try:
+        audio = load_mono_16k(path, max_seconds=MAX_SECONDS_PER_FILE)
+    except Exception:
+        return np.zeros(n_windows, dtype=bool)
+    mask = np.zeros(n_windows, dtype=bool)
+    for i in range(n_windows):
+        start = i * YAMNET_HOP_SAMPLES
+        end = start + YAMNET_WIN_SAMPLES
+        if end > len(audio):
+            break
+        chunk = audio[start:end]
+        zero_frac = np.mean(chunk == 0.0)
+        if zero_frac > ZERO_WINDOW_THRESHOLD:
+            mask[i] = True
+    return mask
+
+
 def extract_embeddings(
     yamnet,
     files: list[Path],
@@ -115,6 +139,12 @@ def extract_embeddings(
     for path in files:
         emb = _cached_embeddings(yamnet, path)          # (n_windows, 1024)
 
+        # Filter out dead windows (UDP packet drops → zeros)
+        dead = _dead_window_mask(path, len(emb))
+        n_dead = int(dead.sum())
+        if n_dead > 0:
+            emb = emb[~dead]
+
         if len(emb) > MAX_WINDOWS_PER_FILE:
             idx = np.random.choice(len(emb), MAX_WINDOWS_PER_FILE, replace=False)
             emb = emb[idx]
@@ -124,7 +154,8 @@ def extract_embeddings(
         all_lbl.extend([label_idx] * len(emb))
         all_src.extend([src] * len(emb))
 
-        print(f"    {label_name:12s}  {path.name}  → {len(emb)} windows", flush=True)
+        dead_info = f" ({n_dead} dead dropped)" if n_dead else ""
+        print(f"    {label_name:12s}  {path.name}  → {len(emb)} windows{dead_info}", flush=True)
 
     if not all_emb:
         return np.empty((0, 1024)), np.empty(0, dtype=int), []
