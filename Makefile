@@ -50,6 +50,7 @@ deploy-model:
 retrain:
 	$(MAKE) _merge-recorder
 	$(MAKE) sync-dataset
+	$(MAKE) augment
 	$(MAKE) train
 	$(MAKE) _clean-trained
 	$(MAKE) deploy-model

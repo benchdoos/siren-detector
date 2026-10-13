@@ -59,7 +59,7 @@ DETECTORS = {
 # to filter out false positives (e.g. Speech classified as siren by MLP)
 YAMNET_MIN_GATE = 0.01
 
-CLIP_SECONDS = 30       # audio saved before confirmed event
+CLIP_SECONDS = 10       # default; overridden by settings["clip_seconds"]
 CLIP_DIR = Path("/clips")
 WEB_PORT = 8080
 
@@ -112,6 +112,7 @@ DEFAULT_SETTINGS = {
     "refractory_seconds": 15,
     "smoothing_window_seconds": 30,
     "yamnet_min_gate": 0.01,
+    "clip_seconds": 10,
 }
 
 _settings: dict = {}
@@ -782,7 +783,7 @@ def inference_loop(args: argparse.Namespace) -> None:
         print("No classifier weights — using raw YAMNet siren score.", flush=True)
 
     inference_buf = AudioRingBuffer(capacity=int(ANALYSIS_SECONDS * SAMPLE_RATE))
-    clip_buf = ClipBuffer(seconds=CLIP_SECONDS)
+    clip_buf = ClipBuffer(seconds=_settings.get("clip_seconds", CLIP_SECONDS))
     smoothers: dict[str, TemporalSmoother] = {}
     for name in DETECTORS:
         thr_key = f"{name}_threshold"
