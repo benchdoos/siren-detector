@@ -346,6 +346,24 @@ class TemporalSmoother:
     def trigger_count(self) -> int:
         return self._last_trigger_count
 
+    @property
+    def cooldown_remaining(self) -> float:
+        r = self._cooldown_until - time.monotonic()
+        return max(0.0, r)
+
+    @property
+    def refractory_remaining(self) -> float:
+        r = self._refractory_until - time.monotonic()
+        return max(0.0, r)
+
+    @property
+    def possible_needed(self) -> int:
+        return self._possible
+
+    @property
+    def confirmed_needed(self) -> int:
+        return self._confirmed
+
     def push(self, score: float) -> str | None:
         now = time.monotonic()
         if now < self._cooldown_until:
@@ -753,6 +771,11 @@ def inference_loop(args: argparse.Namespace) -> None:
                 for name in DETECTORS:
                     heartbeat[f"{name}_score"] = 0.0
                     heartbeat[f"{name}_state"] = smoothers[name].state
+                    heartbeat[f"{name}_triggers"] = smoothers[name].trigger_count
+                    heartbeat[f"{name}_possible_needed"] = smoothers[name].possible_needed
+                    heartbeat[f"{name}_confirmed_needed"] = smoothers[name].confirmed_needed
+                    heartbeat[f"{name}_cooldown"] = round(smoothers[name].cooldown_remaining, 1)
+                    heartbeat[f"{name}_refractory"] = round(smoothers[name].refractory_remaining, 1)
                 broadcast(heartbeat)
                 _last_heartbeat = now
             continue
@@ -839,6 +862,11 @@ def inference_loop(args: argparse.Namespace) -> None:
         for name in DETECTORS:
             score_msg[f"{name}_score"] = round(effective[name], 3)
             score_msg[f"{name}_state"] = smoothers[name].state
+            score_msg[f"{name}_triggers"] = smoothers[name].trigger_count
+            score_msg[f"{name}_possible_needed"] = smoothers[name].possible_needed
+            score_msg[f"{name}_confirmed_needed"] = smoothers[name].confirmed_needed
+            score_msg[f"{name}_cooldown"] = round(smoothers[name].cooldown_remaining, 1)
+            score_msg[f"{name}_refractory"] = round(smoothers[name].refractory_remaining, 1)
         score_msg["yamnet"] = round(yamnet_scores.get("siren", 0.0), 3)
         score_msg["mlp"] = round(mlp_score, 3) if mlp_score is not None else None
         score_msg["yamnet_top3"] = cur_yamnet_top3
