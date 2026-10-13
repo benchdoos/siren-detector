@@ -25,6 +25,7 @@ from __future__ import annotations
 import csv
 import json
 import random
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -46,6 +47,7 @@ SAMPLE_RATE = 16_000
 LABELS = ["siren", "background", "explosion", "motorcycle"]
 VAL_SPLIT = 0.2
 MAX_WINDOWS_PER_FILE = 300          # cap long files so one recording doesn't dominate
+MAX_BG_TRAIN_WINDOWS = 2000         # undersample background: cap at 2-3× avg of other classes
 RANDOM_SEED = 42
 # read at most this many seconds from any single file to avoid OOM on long recordings
 MAX_SECONDS_PER_FILE = MAX_WINDOWS_PER_FILE * 0.5 + 5.0
@@ -84,8 +86,27 @@ def load_mono_16k(path: Path, max_seconds: float | None = None) -> np.ndarray:
 
 
 def source_name(filename: str) -> str:
-    """'20261009-070807__siren__1918-2124s.wav' → '20261009-070807'"""
-    return Path(filename).stem.split("__")[0]
+    """Extract original source from filename, stripping aug prefix and hash suffix.
+
+    '20261009-070807__siren__1918-2124s.wav' → '20261009-070807'
+    'aug_freesound_133989_244ff033.wav'      → 'freesound_133989'
+    'aug_q_1-54084-A-42_04986324.wav'        → '1-54084-A-42'
+    """
+    stem = Path(filename).stem
+    if stem.startswith("aug_q_"):
+        stem = stem[6:]
+    elif stem.startswith("aug_"):
+        stem = stem[4:]
+    # Strip trailing _XXXXXXXX hex hash added by augment.py
+    m = re.match(r"^(.+)_([0-9a-f]{8})$", stem)
+    if m:
+        stem = m.group(1)
+    return stem.split("__")[0]
+
+
+def is_augmented(filename: str) -> bool:
+    """Check if file is augmented (starts with aug_ or aug_q_)."""
+    return Path(filename).name.startswith("aug_")
 
 
 # ── embedding extraction ────────────────────────────────────────────────────────
@@ -132,9 +153,9 @@ def extract_embeddings(
     files: list[Path],
     label_idx: int,
     label_name: str,
-) -> tuple[np.ndarray, np.ndarray, list[str]]:
-    """Return (embeddings, labels, sources) for all windows across all files."""
-    all_emb, all_lbl, all_src = [], [], []
+) -> tuple[np.ndarray, np.ndarray, list[str], list[bool]]:
+    """Return (embeddings, labels, sources, is_aug) for all windows across all files."""
+    all_emb, all_lbl, all_src, all_aug = [], [], [], []
 
     for path in files:
         emb = _cached_embeddings(yamnet, path)          # (n_windows, 1024)
@@ -150,17 +171,20 @@ def extract_embeddings(
             emb = emb[idx]
 
         src = source_name(path.name)
+        aug = is_augmented(path.name)
         all_emb.append(emb)
         all_lbl.extend([label_idx] * len(emb))
         all_src.extend([src] * len(emb))
+        all_aug.extend([aug] * len(emb))
 
         dead_info = f" ({n_dead} dead dropped)" if n_dead else ""
-        print(f"    {label_name:12s}  {path.name}  → {len(emb)} windows{dead_info}", flush=True)
+        aug_tag = " [aug]" if aug else ""
+        print(f"    {label_name:12s}  {path.name}  → {len(emb)} windows{dead_info}{aug_tag}", flush=True)
 
     if not all_emb:
-        return np.empty((0, 1024)), np.empty(0, dtype=int), []
+        return np.empty((0, 1024)), np.empty(0, dtype=int), [], []
 
-    return np.vstack(all_emb), np.array(all_lbl), all_src
+    return np.vstack(all_emb), np.array(all_lbl), all_src, all_aug
 
 
 # ── train / val split by source ────────────────────────────────────────────────
@@ -183,9 +207,11 @@ def split_by_source(
     embeddings: np.ndarray,
     labels: np.ndarray,
     sources: list[str],
+    is_aug: list[bool],
     val_frac: float,
     seed: int,
-) -> tuple[np.ndarray, np.ndarray, list[str], np.ndarray, np.ndarray, list[str]]:
+) -> tuple[np.ndarray, np.ndarray, list[str], list[bool],
+           np.ndarray, np.ndarray, list[str], list[bool]]:
     """Train/val split per class with fixed val sources.
 
     On first run: picks val sources randomly (val_frac per class), saves to
@@ -230,10 +256,12 @@ def split_by_source(
 
     train_src = [s for s, m in zip(sources, train_mask) if m]
     val_src = [s for s, m in zip(sources, val_mask) if m]
+    train_aug = [a for a, m in zip(is_aug, train_mask) if m]
+    val_aug = [a for a, m in zip(is_aug, val_mask) if m]
 
     return (
-        embeddings[train_mask], labels[train_mask], train_src,
-        embeddings[val_mask],   labels[val_mask], val_src,
+        embeddings[train_mask], labels[train_mask], train_src, train_aug,
+        embeddings[val_mask],   labels[val_mask], val_src, val_aug,
     )
 
 
@@ -262,18 +290,19 @@ def main() -> None:
 
     # ── собственные записи (split by source) ────────────────────────────────
     print("\nExtracting own-recording embeddings:")
-    own_emb, own_lbl, own_src = [], [], []
+    own_emb, own_lbl, own_src, own_aug = [], [], [], []
     for idx, label in enumerate(LABELS):
         files = sorted((DATASET / label).glob("*.wav"))
         if not files:
             print(f"  {label}: no files, skipping")
             continue
-        emb, lbl, src = extract_embeddings(yamnet, files, idx, label)
+        emb, lbl, src, aug = extract_embeddings(yamnet, files, idx, label)
         if len(emb) == 0:
             continue
         own_emb.append(emb)
         own_lbl.append(lbl)
         own_src.extend(src)
+        own_aug.extend(aug)
 
     # ── Curated ESC-50 subsets (hand-picked, per label) ─────────────────────
     if ESC50_CURATED_DIR.exists():
@@ -283,11 +312,12 @@ def main() -> None:
             if not curated_files:
                 continue
             idx = LABELS.index(label)
-            emb, lbl, src = extract_embeddings(yamnet, curated_files, idx, f"curated/{label}")
+            emb, lbl, src, aug = extract_embeddings(yamnet, curated_files, idx, f"curated/{label}")
             if len(emb):
                 own_emb.append(emb)
                 own_lbl.append(lbl)
                 own_src.extend(src)
+                own_aug.extend(aug)
 
     # ── Freesound downloads (all treated as siren) ────────────────────────────
     freesound_audio = FREESOUND_DIR / "audio"
@@ -299,30 +329,35 @@ def main() -> None:
         if fs_files:
             print(f"\nExtracting Freesound siren embeddings ({len(fs_files)} files):")
             siren_idx = LABELS.index("siren")
-            emb, lbl, src = extract_embeddings(yamnet, fs_files, siren_idx, "freesound/siren")
+            emb, lbl, src, aug = extract_embeddings(yamnet, fs_files, siren_idx, "freesound/siren")
             if len(emb):
                 own_emb.append(emb)
                 own_lbl.append(lbl)
                 own_src.extend(src)
+                own_aug.extend(aug)
 
     if own_emb:
         print("\nSplitting own recordings by source:")
-        X_own_tr, y_own_tr, own_tr_src, X_own_val, y_own_val, own_val_src = split_by_source(
-            np.vstack(own_emb), np.concatenate(own_lbl), own_src,
+        (X_own_tr, y_own_tr, own_tr_src, own_tr_aug,
+         X_own_val, y_own_val, own_val_src, own_val_aug) = split_by_source(
+            np.vstack(own_emb), np.concatenate(own_lbl), own_src, own_aug,
             VAL_SPLIT, RANDOM_SEED,
         )
     else:
         X_own_tr = X_own_val = np.empty((0, 1024), dtype=np.float32)
         y_own_tr = y_own_val = np.empty(0, dtype=np.int64)
         own_tr_src, own_val_src = [], []
+        own_tr_aug, own_val_aug = [], []
 
     # ── ESC-50 (split by fold 5) ─────────────────────────────────────────────
     esc_tr_emb: list[np.ndarray] = []
     esc_tr_lbl: list[np.ndarray] = []
     esc_tr_src: list[str] = []
+    esc_tr_aug: list[bool] = []  # ESC-50 treated as external (weight like aug)
     esc_val_emb: list[np.ndarray] = []
     esc_val_lbl: list[np.ndarray] = []
     esc_val_src: list[str] = []
+    esc_val_aug: list[bool] = []
     esc50_csv = ESC50_DIR / "meta" / "esc50.csv"
     if esc50_csv.exists():
         print("\nExtracting ESC-50 embeddings:")
@@ -344,22 +379,24 @@ def main() -> None:
                     esc_train_by_label[lbl_idx].append(path)
 
         for lbl_idx, files in sorted(esc_train_by_label.items()):
-            emb, lbl, src = extract_embeddings(
+            emb, lbl, src, _aug = extract_embeddings(
                 yamnet, files, lbl_idx, f"esc50-train/{LABELS[lbl_idx]}"
             )
             if len(emb):
                 esc_tr_emb.append(emb)
                 esc_tr_lbl.append(lbl)
                 esc_tr_src.extend(src)
+                esc_tr_aug.extend([True] * len(src))  # external data → low weight
 
         for lbl_idx, files in sorted(esc_val_by_label.items()):
-            emb, lbl, src = extract_embeddings(
+            emb, lbl, src, _aug = extract_embeddings(
                 yamnet, files, lbl_idx, f"esc50-val/{LABELS[lbl_idx]}"
             )
             if len(emb):
                 esc_val_emb.append(emb)
                 esc_val_lbl.append(lbl)
                 esc_val_src.extend(src)
+                esc_val_aug.extend([True] * len(src))
     else:
         print("\nESC-50 not found — training on own recordings only.")
 
@@ -369,9 +406,11 @@ def main() -> None:
     prev_tr_emb: list[np.ndarray] = []
     prev_tr_lbl: list[np.ndarray] = []
     prev_tr_src: list[str] = []
+    prev_tr_aug: list[bool] = []
     prev_val_emb: list[np.ndarray] = []
     prev_val_lbl: list[np.ndarray] = []
     prev_val_src: list[str] = []
+    prev_val_aug: list[bool] = []
 
     if SAVED_EMB.exists():
         saved = np.load(SAVED_EMB, allow_pickle=True)
@@ -384,14 +423,23 @@ def main() -> None:
             # keep only windows whose source is NOT in fresh data (avoid duplicates)
             tr_keep = [i for i, s in enumerate(s_tr_src) if s not in fresh_sources]
             val_keep = [i for i, s in enumerate(s_val_src) if s not in fresh_sources]
+            # Load is_aug if saved, otherwise infer from source name
+            if "is_aug_train" in saved:
+                s_tr_aug = list(saved["is_aug_train"])
+                s_val_aug = list(saved["is_aug_val"])
+            else:
+                s_tr_aug = [s.startswith("aug_") for s in s_tr_src]
+                s_val_aug = [s.startswith("aug_") for s in s_val_src]
             if tr_keep:
                 prev_tr_emb.append(s_Xtr[tr_keep])
                 prev_tr_lbl.append(s_ytr[tr_keep])
                 prev_tr_src.extend(s_tr_src[i] for i in tr_keep)
+                prev_tr_aug.extend(s_tr_aug[i] for i in tr_keep)
             if val_keep:
                 prev_val_emb.append(s_Xval[val_keep])
                 prev_val_lbl.append(s_yval[val_keep])
                 prev_val_src.extend(s_val_src[i] for i in val_keep)
+                prev_val_aug.extend(s_val_aug[i] for i in val_keep)
             n_reused = len(tr_keep) + len(val_keep)
             n_total = len(s_tr_src) + len(s_val_src)
             print(f"\nSaved embeddings: reused {n_reused}/{n_total} windows "
@@ -402,6 +450,8 @@ def main() -> None:
     # ── объединяем train и val ───────────────────────────────────────────────
     all_tr_src = prev_tr_src + own_tr_src + esc_tr_src
     all_val_src = prev_val_src + own_val_src + esc_val_src
+    all_tr_aug = prev_tr_aug + own_tr_aug + esc_tr_aug
+    all_val_aug = prev_val_aug + own_val_aug + esc_val_aug
 
     X_train = np.vstack([*prev_tr_emb, X_own_tr, *esc_tr_emb])
     y_train = np.concatenate([*prev_tr_lbl, y_own_tr, *esc_tr_lbl])
@@ -413,23 +463,61 @@ def main() -> None:
 
     num_classes = len(LABELS)
 
+    # undersample background in train
+    bg_idx_val = LABELS.index("background")
+    bg_mask = y_train == bg_idx_val
+    n_bg = int(bg_mask.sum())
+    if n_bg > MAX_BG_TRAIN_WINDOWS:
+        bg_indices = np.where(bg_mask)[0]
+        keep_bg = np.random.choice(bg_indices, MAX_BG_TRAIN_WINDOWS, replace=False)
+        non_bg = np.where(~bg_mask)[0]
+        keep_all = np.sort(np.concatenate([non_bg, keep_bg]))
+        print(f"\nUndersample background: {n_bg} → {MAX_BG_TRAIN_WINDOWS} windows")
+        X_train = X_train[keep_all]
+        y_train = y_train[keep_all]
+        all_tr_src = [all_tr_src[i] for i in keep_all]
+        all_tr_aug = [all_tr_aug[i] for i in keep_all]
+
     # class distribution
+    aug_arr = np.array(all_tr_aug)
     print("\nClass distribution (train):")
     for i, name in enumerate(LABELS):
-        n = int((y_train == i).sum())
-        print(f"  {name}: {n} windows")
+        mask = y_train == i
+        n = int(mask.sum())
+        n_aug = int((mask & aug_arr).sum())
+        n_real = n - n_aug
+        print(f"  {name}: {n} windows ({n_real} real, {n_aug} aug/external)")
     print("\nClass distribution (val):")
+    val_aug_arr = np.array(all_val_aug)
     for i, name in enumerate(LABELS):
-        n = int((y_val == i).sum())
-        print(f"  {name}: {n} windows")
+        mask = y_val == i
+        n = int(mask.sum())
+        n_aug = int((mask & val_aug_arr).sum())
+        n_real = n - n_aug
+        print(f"  {name}: {n} windows ({n_real} real, {n_aug} aug/external)")
 
-    # class weights
+    # combined sample weights = class_weight × source_weight
+    # source weight: real=1.0, augmented/external=0.4
+    AUG_SAMPLE_WEIGHT = 0.4
+    source_weights = np.where(aug_arr, AUG_SAMPLE_WEIGHT, 1.0).astype(np.float32)
+
+    # class weights — sqrt formula from TRAINING_GUIDE
     class_counts = np.bincount(y_train.astype(int), minlength=num_classes)
-    class_weights = {
-        i: len(y_train) / (num_classes * max(c, 1))
+    n_total = len(y_train)
+    class_weight_map = {
+        i: float(np.sqrt(n_total / max(c, 1)))
         for i, c in enumerate(class_counts)
     }
-    print(f"\n  Class weights: { {LABELS[i]: round(w, 2) for i, w in class_weights.items()} }")
+    class_weight_arr = np.array([class_weight_map[int(y)] for y in y_train], dtype=np.float32)
+
+    # Keras doesn't allow class_weight + sample_weight simultaneously,
+    # so we multiply them into a single sample_weight array
+    sample_weights = source_weights * class_weight_arr
+
+    print(f"\n  Source weights: real=1.0, aug/external={AUG_SAMPLE_WEIGHT}")
+    print(f"  Class weights: { {LABELS[i]: round(w, 2) for i, w in class_weight_map.items()} }")
+    print(f"  Effective train size: {sample_weights.sum():.0f} "
+          f"(from {len(sample_weights)} windows)")
 
     # build and train
     model = build_model(num_classes)
@@ -456,7 +544,7 @@ def main() -> None:
         validation_data=(X_val, y_val),
         epochs=100,
         batch_size=256,
-        class_weight=class_weights,
+        sample_weight=sample_weights,
         callbacks=callbacks,
         verbose=1,
     )
@@ -501,6 +589,8 @@ def main() -> None:
         X_val=X_val, y_val=y_val,
         sources_train=np.array(all_tr_src, dtype=object),
         sources_val=np.array(all_val_src, dtype=object),
+        is_aug_train=np.array(all_tr_aug),
+        is_aug_val=np.array(all_val_aug),
         labels=json.dumps(LABELS),
     )
     print(f"Saved embeddings: {SAVED_EMB}  ({SAVED_EMB.stat().st_size // 1024 // 1024} MB)")

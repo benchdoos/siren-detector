@@ -87,10 +87,44 @@ motorcycle worst case — **все** val sources утекли. Val метрик�
 - ❌ Background undersampling — **нет**
 - ❌ Mixup на embeddings — **нет**
 
-## План улучшений
+## Итерация 1 — 2026-10-13
 
-1. **Починить data leakage** — `source_name()` должна возвращать оригинальный source для aug файлов
-2. **Урезать aug**: siren max ~166, motorcycle max ~160
-3. **Добавить sample weights**: real=1.0, aug=0.3–0.5
-4. **Undersample background** до ~1500–2000 windows
-5. **Переобучить и сравнить**: `make retrain` → `make audit` → `make audit-compare`
+### Что сделано
+
+1. ✅ **Data leakage fix** — `source_name()` теперь strip'ит `aug_`/`aug_q_` prefix и `_XXXXXXXX` hash suffix → aug файлы попадают в тот же split что оригинал
+2. ✅ **Урезаны aug**: siren 792→166 (2×), motorcycle 936→160 (2×)
+3. ✅ **Sample weights**: real=1.0, aug/external=0.4, умножаются на class weights
+4. ✅ **Class weights**: формула `sqrt(N_total / N_class)` (TRAINING_GUIDE)
+5. ✅ **Undersample background**: 36748→2000 windows в train
+6. ✅ **Пересоздан val split** (удалён старый `val_sources.json`)
+
+### Результаты vs baseline
+
+| Класс | Baseline | После | Дельта |
+|---|---|---|---|
+| **siren** | 76.4% | **79.8%** | **+3.4%** ✓ |
+| **motorcycle** | 57.4% | **65.8%** | **+8.4%** ✓ |
+| background | 89.5% | 81.4% | -8.1% (ожидаемо) |
+| explosion | 78.8% | 71.3% | -7.5% |
+
+Background accuracy снизилась потому что модель перестала «лениться» предсказывать
+доминирующий класс. siren и motorcycle — главные цели — значительно выросли.
+
+Data leakage: **0** (было 295 файлов в 3 классах).
+
+### Текущее состояние train_classifier.py
+
+- ✅ Class weights: `sqrt(N_total / N_class)`
+- ✅ Sample weights: real=1.0, aug/external=0.4
+- ✅ Val split по source (с учётом aug)
+- ✅ Dead window filtering (UDP drops)
+- ✅ Background undersampling (MAX_BG_TRAIN_WINDOWS=2000)
+- ✅ Embedding cache
+- ❌ Mixup на embeddings — ещё не реализовано
+
+## Следующие шаги
+
+1. **Набрать реальных данных** — motorcycle и explosion нуждаются в real recordings
+2. **Mixup на embeddings** — смешивание двух embeddings, λ ~ Beta(0.2, 0.2)
+3. **Noise profile** — записать 2-3 мин тишины с INMP441 для `--noise-profile`
+4. **Задеплоить** — `make deploy-model` чтобы проверить на живом потоке

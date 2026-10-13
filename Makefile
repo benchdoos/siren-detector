@@ -102,18 +102,18 @@ clean-docker:
 fetch-esc50:
 	python3 dataset/fetch_esc50.py
 
-## Augment siren data (200 samples by default)
+## Augment siren data (aug ≤ 2× real; 83 real → max 166)
 augment-siren:
-	ml/.venv/bin/python dataset/augment.py siren --count 200
+	ml/.venv/bin/python dataset/augment.py siren --count 166
 
-## Augment explosion data (150 samples by default)
+## Augment explosion data (258 real → max 516, using 150)
 augment-explosion:
 	ml/.venv/bin/python dataset/augment.py explosion --count 150
 
-## Augment motorcycle data (200 normal + 100 quiet)
+## Augment motorcycle data (aug ≤ 2× real; 80 real → max 160: 120 normal + 40 quiet)
 augment-motorcycle:
-	ml/.venv/bin/python dataset/augment.py motorcycle --count 200
-	ml/.venv/bin/python dataset/augment.py motorcycle --count 100 --quiet
+	ml/.venv/bin/python dataset/augment.py motorcycle --count 120
+	ml/.venv/bin/python dataset/augment.py motorcycle --count 40 --quiet
 
 ## Augment all safety-critical classes
 augment:
