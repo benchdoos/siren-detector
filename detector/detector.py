@@ -525,6 +525,23 @@ async def feedback(body: dict):
     return {"ok": True}
 
 
+def _save_clip_meta(clip_name: str, meta: dict) -> None:
+    """Save event metadata as JSON sidecar next to the WAV clip."""
+    meta_path = CLIP_DIR / (clip_name.rsplit(".", 1)[0] + ".json")
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+
+def _load_clip_meta(clip_name: str) -> dict | None:
+    """Load event metadata from JSON sidecar, if it exists."""
+    meta_path = CLIP_DIR / (clip_name.rsplit(".", 1)[0] + ".json")
+    if not meta_path.exists():
+        return None
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
 async def _restore_clips():
     """Scan /clips on startup to restore event history from surviving WAV files."""
     if not CLIP_DIR.exists():
@@ -532,23 +549,28 @@ async def _restore_clips():
     wavs = sorted(CLIP_DIR.glob("*.wav"))
     for path in wavs:
         name = path.name
-        # detect event type from prefix
-        if name.startswith("exp-"):
-            event_type = "explosion"
-            date_part = name[4:].replace(".wav", "")
-        elif name.startswith("moto-"):
-            event_type = "motorcycle"
-            date_part = name[5:].replace(".wav", "")
+        meta = _load_clip_meta(name)
+        if meta:
+            event_type = meta["event"]
+            ts = meta["timestamp"]
         else:
-            event_type = "siren"
-            date_part = name.replace(".wav", "")
-        # parse YYYYMMDD-HHMMSS → ISO timestamp
-        try:
-            ts = datetime.strptime(date_part, "%Y%m%d-%H%M%S").replace(
-                tzinfo=timezone.utc
-            ).isoformat(timespec="seconds")
-        except ValueError:
-            ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            # fallback: detect event type from prefix
+            if name.startswith("exp-"):
+                event_type = "explosion"
+                date_part = name[4:].replace(".wav", "")
+            elif name.startswith("moto-"):
+                event_type = "motorcycle"
+                date_part = name[5:].replace(".wav", "")
+            else:
+                event_type = "siren"
+                date_part = name.replace(".wav", "")
+            # parse YYYYMMDD-HHMMSS → ISO timestamp
+            try:
+                ts = datetime.strptime(date_part, "%Y%m%d-%H%M%S").replace(
+                    tzinfo=timezone.utc
+                ).isoformat(timespec="seconds")
+            except ValueError:
+                ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
         # check if feedback label exists in dataset
         for label in VALID_LABELS:
             if (DATASET_DIR / label / name).exists():
@@ -556,9 +578,19 @@ async def _restore_clips():
                 break
         ev = {
             "type": "event", "event": event_type, "state": "confirmed",
-            "confidence": 0.0, "timestamp": ts,
-            "source": "restored", "engine": "unknown", "clip_url": f"/clips/{name}",
-            "yamnet": 0.0, "mlp": None, "yamnet_top": "",
+            "confidence": meta.get("confidence", 0.0) if meta else 0.0,
+            "timestamp": ts,
+            "source": meta.get("source", "restored") if meta else "restored",
+            "engine": meta.get("engine", "unknown") if meta else "unknown",
+            "clip_url": f"/clips/{name}",
+            "yamnet": meta.get("yamnet", 0.0) if meta else 0.0,
+            "mlp": meta.get("mlp") if meta else None,
+            "yamnet_top": meta.get("yamnet_top", "") if meta else "",
+            "yamnet_top3": meta.get("yamnet_top3", []) if meta else [],
+            "mlp_top3": meta.get("mlp_top3", []) if meta else [],
+            "threshold": meta.get("threshold") if meta else None,
+            "triggers": meta.get("triggers") if meta else None,
+            "triggers_needed": meta.get("triggers_needed") if meta else None,
         }
         _event_history.append(ev)
     if wavs:
@@ -829,6 +861,19 @@ def inference_loop(args: argparse.Namespace) -> None:
                 clip_buf.save(CLIP_DIR / clip_name)
                 clip_url = f"/clips/{clip_name}"
                 print(f"[{ts}] {name} clip saved: {clip_url}", flush=True)
+                # save event metadata as JSON sidecar for restore after restart
+                _save_clip_meta(clip_name, {
+                    "event": name, "confidence": round(pk["score"], 3),
+                    "timestamp": ts, "source": args.source, "engine": det_engine,
+                    "yamnet": round(pk["yamnet"], 3),
+                    "mlp": round(pk["mlp"], 3) if pk["mlp"] is not None else None,
+                    "yamnet_top": pk["top"],
+                    "yamnet_top3": pk.get("yamnet_top3", []),
+                    "mlp_top3": pk.get("mlp_top3", []),
+                    "threshold": _settings.get(thr_key, 0.15),
+                    "triggers": smoothers[name].trigger_count,
+                    "triggers_needed": _settings["confirmed_triggers"],
+                })
 
             pk = peaks[name]
             det_engine = engine if (name == "siren" and clf is not None) else "yamnet"
