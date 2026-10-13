@@ -61,7 +61,7 @@ ESC50_LABEL_MAP: dict[str, str] = {
     "washing_machine": "background",
     "keyboard_typing": "background",
     "clock_alarm":     "background",
-    "engine":          "motorcycle",
+    "engine":          "background",
     "fireworks":       "background",
     "thunderstorm":    "background",
     "helicopter":      "background",
