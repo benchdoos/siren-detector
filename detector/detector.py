@@ -449,6 +449,7 @@ class TemporalSmoother:
 # ── WebSocket broadcast ────────────────────────────────────────────────────────
 
 _client_queues: dict[WebSocket, asyncio.Queue] = {}
+_audio_queues: dict[WebSocket, asyncio.Queue] = {}
 _loop: asyncio.AbstractEventLoop | None = None
 _event_history: collections.deque = collections.deque(maxlen=100)
 _last_score: dict = {"type": "score", "top": ""}
@@ -459,6 +460,17 @@ def _enqueue_all(msg: dict) -> None:
         q.put_nowait(msg)
 
 
+def _enqueue_audio(data: bytes) -> None:
+    dead = []
+    for ws, q in _audio_queues.items():
+        if q.qsize() < 50:  # drop if client is too slow
+            q.put_nowait(data)
+        else:
+            dead.append(ws)
+    for ws in dead:
+        _audio_queues.pop(ws, None)
+
+
 def broadcast(msg: dict) -> None:
     global _last_score
     if msg.get("type") == "event":
@@ -467,6 +479,14 @@ def broadcast(msg: dict) -> None:
         _last_score = msg
     if _loop and not _loop.is_closed():
         _loop.call_soon_threadsafe(_enqueue_all, msg)
+
+
+def broadcast_audio(samples: np.ndarray) -> None:
+    """Send raw float32 PCM to all listening audio WebSocket clients."""
+    if not _audio_queues or not _loop or _loop.is_closed():
+        return
+    data = samples.astype(np.float32).tobytes()
+    _loop.call_soon_threadsafe(_enqueue_audio, data)
 
 
 # ── FastAPI app ────────────────────────────────────────────────────────────────
@@ -631,6 +651,9 @@ async def _restore_clips():
             elif name.startswith("moto-"):
                 event_type = "motorcycle"
                 date_part = name[5:].replace(".wav", "")
+            elif name.startswith("manual-"):
+                event_type = "unknown"
+                date_part = name[7:].replace(".wav", "")
             else:
                 event_type = "siren"
                 date_part = name.replace(".wav", "")
@@ -665,6 +688,65 @@ async def _restore_clips():
         _event_history.append(ev)
     if wavs:
         print(f"Restored {len(wavs)} clips from /clips/", flush=True)
+
+
+@app.websocket("/ws/audio")
+async def ws_audio_endpoint(ws: WebSocket):
+    """Stream raw float32 PCM audio to the browser for live listening."""
+    await ws.accept()
+    queue: asyncio.Queue = asyncio.Queue()
+    _audio_queues[ws] = queue
+    try:
+        async def sender():
+            while True:
+                data = await queue.get()
+                await ws.send_bytes(data)
+
+        async def receiver():
+            while True:
+                msg = await ws.receive()
+                if msg["type"] == "websocket.disconnect":
+                    return
+
+        sender_task = asyncio.create_task(sender())
+        receiver_task = asyncio.create_task(receiver())
+        done, pending = await asyncio.wait(
+            [sender_task, receiver_task],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for task in pending:
+            task.cancel()
+    except Exception:
+        pass
+    finally:
+        _audio_queues.pop(ws, None)
+
+
+@app.post("/api/manual-event", dependencies=[Depends(require_admin)])
+async def manual_event():
+    """Save the current clip buffer as a manual (user-triggered) event."""
+    if _clip_buf is None:
+        raise HTTPException(status_code=503, detail="Detector not ready")
+    ts = datetime.now(timezone.utc)
+    clip_name = f"manual-{ts.strftime('%Y%m%d-%H%M%S')}.wav"
+    _clip_buf.save(CLIP_DIR / clip_name)
+    clip_url = f"/clips/{clip_name}"
+    ts_iso = ts.isoformat(timespec="seconds")
+    meta = {
+        "event": "unknown", "confidence": 0.0,
+        "timestamp": ts_iso, "source": "manual", "engine": "user",
+    }
+    _save_clip_meta(clip_name, meta)
+    ev = {
+        "type": "event", "event": "unknown", "state": "confirmed",
+        "confidence": 0.0, "timestamp": ts_iso,
+        "source": "manual", "engine": "user", "clip_url": clip_url,
+        "yamnet": 0.0, "mlp": None, "yamnet_top": "",
+        "yamnet_top3": [], "mlp_top3": [],
+    }
+    broadcast(ev)
+    print(f"[{ts_iso}] manual event saved: {clip_url}", flush=True)
+    return {"ok": True, "clip_url": clip_url}
 
 
 @app.websocket("/ws")
@@ -760,6 +842,7 @@ def udp_receiver(
         samples = i2s32_to_float32(payload)
         inference_buf.push(samples)
         clip_buf.push(samples)
+        broadcast_audio(samples)
         _udp_stats_update()
         last_recv = time.monotonic()
         expected_seq = seq + 1
