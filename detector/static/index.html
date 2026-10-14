@@ -537,7 +537,7 @@ function addEvent(ev) {
     </div>
     ${breakdown ? `<div class="event-breakdown">${breakdown}</div>` : ''}
     <div class="ev-details">${detailsHtml}</div>
-    <audio controls src="${esc(ev.clip_url)}"></audio>
+    <audio controls src="${esc(ev.clip_url)}${_adminToken ? '?token=' + encodeURIComponent(_adminToken) : ''}"></audio>
     <div class="label-row">
       <span>Label:</span>
       ${VALID_LABELS.map(l =>
@@ -757,9 +757,14 @@ fetch('/api/auth/status').then(r => r.json()).then(d => {
 
 updateAdminUI();
 
-function connect() {
+function _wsUrl(path) {
   const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${wsProtocol}//${location.host}/ws`);
+  const q = _adminToken ? `?token=${encodeURIComponent(_adminToken)}` : '';
+  return `${wsProtocol}//${location.host}${path}${q}`;
+}
+
+function connect() {
+  const ws = new WebSocket(_wsUrl('/ws'));
   ws.onopen  = () => { statusEl.textContent = 'connected'; statusEl.className = 'connected'; };
   ws.onclose = () => { statusEl.textContent = 'reconnecting…'; statusEl.className = ''; setTimeout(connect, 2000); };
   ws.onmessage = ({ data }) => {
@@ -771,7 +776,7 @@ function connect() {
 connect();
 
 /* ── Load thresholds from server on startup ── */
-fetch('/api/settings').then(r => r.json()).then(d => {
+fetch('/api/settings', { headers: adminHeaders() }).then(r => r.json()).then(d => {
   if (d.siren_threshold) DETECTOR_THRESHOLDS.siren = d.siren_threshold;
   if (d.explosion_threshold) DETECTOR_THRESHOLDS.explosion = d.explosion_threshold;
   if (d.motorcycle_threshold) DETECTOR_THRESHOLDS.motorcycle = d.motorcycle_threshold;
@@ -784,7 +789,7 @@ async function showMetrics() {
   body.innerHTML = '<span style="color:#666">Loading…</span>';
   overlay.classList.add('open');
   try {
-    const res = await fetch('/api/metrics');
+    const res = await fetch('/api/metrics', { headers: adminHeaders() });
     const d = await res.json();
     if (d.error) { body.innerHTML = `<span style="color:#888">${esc(d.error)}</span>`; return; }
     let html = '';
@@ -847,8 +852,7 @@ function toggleListen() {
 function startListen() {
   _audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
   _audioNextTime = 0;
-  const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  _audioWs = new WebSocket(`${wsProtocol}//${location.host}/ws/audio`);
+  _audioWs = new WebSocket(_wsUrl('/ws/audio'));
   _audioWs.binaryType = 'arraybuffer';
   _audioWs.onopen = () => {
     document.getElementById('listen-btn').classList.add('listening');
@@ -931,7 +935,7 @@ async function showSettings() {
   overlay.classList.add('open');
   document.getElementById('s-status').textContent = '';
   try {
-    const res = await fetch('/api/settings');
+    const res = await fetch('/api/settings', { headers: adminHeaders() });
     const data = await res.json();
     _settingsDefaults = data.defaults || {};
     _settingsLoaded = {};

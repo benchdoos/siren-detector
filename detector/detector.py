@@ -326,6 +326,23 @@ async def require_admin(authorization: str = Header("")):
         raise HTTPException(status_code=401, detail="Admin token required")
 
 
+async def require_viewer(authorization: str = Header("")):
+    """Read-level auth: same token, but separate dependency for clarity."""
+    if not AUTH_ENABLED:
+        return
+    token = authorization.removeprefix("Bearer ").strip()
+    if not token or not _check_token(token):
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+
+def _ws_check_token(ws: WebSocket) -> bool:
+    """Check token from WebSocket query param ?token=..."""
+    if not AUTH_ENABLED:
+        return True
+    token = ws.query_params.get("token", "")
+    return bool(token) and _check_token(token)
+
+
 # ── audio helpers ──────────────────────────────────────────────────────────────
 
 def i2s32_to_float32(payload: bytes) -> np.ndarray:
@@ -511,7 +528,11 @@ async def index():
 
 
 @app.get("/clips/{filename}")
-async def serve_clip(filename: str):
+async def serve_clip(filename: str, token: str = "", authorization: str = Header("")):
+    if AUTH_ENABLED:
+        hdr_token = authorization.removeprefix("Bearer ").strip()
+        if not ((hdr_token and _check_token(hdr_token)) or (token and _check_token(token))):
+            raise HTTPException(status_code=401, detail="Authentication required")
     path = (CLIP_DIR / filename).resolve()
     if not path.is_relative_to(CLIP_DIR.resolve()):
         raise HTTPException(status_code=400, detail="Invalid filename")
@@ -525,7 +546,7 @@ VALID_LABELS = {"siren", "background", "motorcycle", "explosion", "unknown"}
 _feedback: dict[str, str] = {}  # filename → label
 
 
-@app.get("/api/settings")
+@app.get("/api/settings", dependencies=[Depends(require_viewer)])
 async def get_settings():
     return {**_settings, "defaults": DEFAULT_SETTINGS}
 
@@ -591,7 +612,7 @@ async def reset_settings():
     return _settings
 
 
-@app.get("/api/metrics")
+@app.get("/api/metrics", dependencies=[Depends(require_viewer)])
 async def get_metrics():
     metrics_path = Path("/models/val_metrics.json")
     if not metrics_path.exists():
@@ -697,6 +718,9 @@ async def _restore_clips():
 @app.websocket("/ws/audio")
 async def ws_audio_endpoint(ws: WebSocket):
     """Stream raw float32 PCM audio to the browser for live listening."""
+    if not _ws_check_token(ws):
+        await ws.close(code=4401, reason="Authentication required")
+        return
     await ws.accept()
     queue: asyncio.Queue = asyncio.Queue()
     _audio_queues[ws] = queue
@@ -755,6 +779,9 @@ async def manual_event():
 
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
+    if not _ws_check_token(ws):
+        await ws.close(code=4401, reason="Authentication required")
+        return
     await ws.accept()
     await ws.send_json(_last_score)
     for ev in list(_event_history):
