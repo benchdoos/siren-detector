@@ -1,8 +1,8 @@
 # YAMNet + CPU inference on Apple Silicon; keep Keras 2 compatibility.
-tensorflow==2.16.2
+tensorflow==2.18.1
 tensorflow-hub==0.16.1
-tf-keras==2.16.0
+tf-keras==2.18.0
 numpy<2
-scipy
-soundfile
+scipy==1.17.1
+soundfile==0.14.0
 setuptools<81

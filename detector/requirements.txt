@@ -1,8 +1,8 @@
-tensorflow==2.16.2
+tensorflow==2.18.1
 tensorflow-hub==0.16.1
-tf-keras==2.16.0
+tf-keras==2.18.0
 numpy<2
-soundfile
-fastapi
-uvicorn[standard]
-paho-mqtt>=2.0
+soundfile==0.14.0
+fastapi==0.115.14
+uvicorn[standard]==0.34.3
+paho-mqtt==2.1.0
