@@ -413,11 +413,15 @@ def main() -> None:
     prev_val_aug: list[bool] = []
 
     if SAVED_EMB.exists():
-        saved = np.load(SAVED_EMB, allow_pickle=True)
-        saved_labels = json.loads(saved["labels"].item())
-        if saved_labels == LABELS:
-            s_tr_src = list(saved["sources_train"])
-            s_val_src = list(saved["sources_val"])
+        try:
+            saved = np.load(SAVED_EMB)
+        except ValueError:
+            print(f"\nSaved embeddings use legacy format (allow_pickle) — "
+                  f"delete {SAVED_EMB} and re-run to rebuild")
+            saved = None
+        if saved is not None and json.loads(saved["labels"].item()) == LABELS:
+            s_tr_src = json.loads(saved["sources_train"].item())
+            s_val_src = json.loads(saved["sources_val"].item())
             s_Xtr, s_ytr = saved["X_train"], saved["y_train"]
             s_Xval, s_yval = saved["X_val"], saved["y_val"]
             # keep only windows whose source is NOT in fresh data (avoid duplicates)
@@ -444,8 +448,8 @@ def main() -> None:
             n_total = len(s_tr_src) + len(s_val_src)
             print(f"\nSaved embeddings: reused {n_reused}/{n_total} windows "
                   f"(skipped {n_total - n_reused} — fresh data available)")
-        else:
-            print(f"\nSaved embeddings have different labels {saved_labels} vs {LABELS} — skipping")
+        elif saved is not None:
+            print(f"\nSaved embeddings have different labels — skipping")
 
     # ── объединяем train и val ───────────────────────────────────────────────
     all_tr_src = prev_tr_src + own_tr_src + esc_tr_src
@@ -587,8 +591,8 @@ def main() -> None:
         SAVED_EMB,
         X_train=X_train, y_train=y_train,
         X_val=X_val, y_val=y_val,
-        sources_train=np.array(all_tr_src, dtype=object),
-        sources_val=np.array(all_val_src, dtype=object),
+        sources_train=json.dumps(all_tr_src),
+        sources_val=json.dumps(all_val_src),
         is_aug_train=np.array(all_tr_aug),
         is_aug_val=np.array(all_val_aug),
         labels=json.dumps(LABELS),

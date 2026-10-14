@@ -512,7 +512,9 @@ async def index():
 
 @app.get("/clips/{filename}")
 async def serve_clip(filename: str):
-    path = CLIP_DIR / filename
+    path = (CLIP_DIR / filename).resolve()
+    if not path.is_relative_to(CLIP_DIR.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid filename")
     if not path.exists():
         raise HTTPException(status_code=404, detail="Clip not found")
     return FileResponse(str(path), media_type="audio/wav")
@@ -604,12 +606,14 @@ async def feedback(body: dict):
     label = body.get("label", "")
     if not filename or label not in VALID_LABELS:
         raise HTTPException(status_code=400, detail="Invalid filename or label")
-    src = CLIP_DIR / filename
+    src = (CLIP_DIR / filename).resolve()
+    if not src.is_relative_to(CLIP_DIR.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid filename")
     if not src.exists():
         raise HTTPException(status_code=404, detail="Clip not found")
     dst_dir = DATASET_DIR / label
     dst_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(str(src), str(dst_dir / filename))
+    shutil.copy2(str(src), str(dst_dir / src.name))
     _feedback[filename] = label
     print(f"[feedback] {filename} → {label}", flush=True)
     return {"ok": True}
@@ -758,7 +762,8 @@ async def ws_endpoint(ws: WebSocket):
         if not clip_url:
             continue
         filename = clip_url.split("/")[-1]
-        if not (CLIP_DIR / filename).exists():
+        resolved = (CLIP_DIR / filename).resolve()
+        if not resolved.is_relative_to(CLIP_DIR.resolve()) or not resolved.exists():
             continue
         ev_out = dict(ev)
         if filename in _feedback:
