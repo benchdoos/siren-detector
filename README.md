@@ -1028,7 +1028,7 @@ Hub (fan-out relay, RPi :9000)
 - YAMNet (frozen, TF Hub) извлекает 1024-dim embeddings каждые 0.5 с
 - MLP-классификатор (`siren` / `background` / `explosion` / `motorcycle`) поверх embeddings
 - Temporal smoother: 4 триггера → possible, 8 → confirmed (окно 30 с, cooldown 60 с)
-- На confirmed: сохраняется 30-секундный WAV-клип в `/clips/`
+- На confirmed: сохраняется WAV-клип в `/clips/` (два режима записи, см. ниже)
 - WebSocket бродкаст: score каждые 0.5 с + события
 
 **Web UI**:
@@ -1037,6 +1037,11 @@ Hub (fan-out relay, RPi :9000)
 - Кнопки лейблинга: при нажатии клип копируется в `/dataset/{label}/` для дообучения
 - Фильтры по типу, история 100 событий
 - Admin-авторизация: просмотр/прослушивание — без токена; разметка, настройки — требуют `ADMIN_TOKEN`
+
+**Режимы записи клипов** (настройка `Clip from possible` в Settings):
+
+- **Off** (по умолчанию) — клип содержит последние N секунд до момента `confirmed`. Подходит для общего мониторинга.
+- **On** — клип начинается с момента `possible` (+ 2 с pre-buffer), захватывая саму звуковую волну, которая вызвала детекцию. В JSON-метадату клипа сохраняются per-window scores для точной разметки при дообучении. Рекомендуется для сбора качественного тренировочного датасета.
 
 **MQTT / Home Assistant**:
 - Mosquitto broker — отдельный Docker Compose (`mosquitto/`)

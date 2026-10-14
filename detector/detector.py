@@ -113,6 +113,7 @@ DEFAULT_SETTINGS = {
     "smoothing_window_seconds": 30,
     "yamnet_min_gate": 0.01,
     "clip_seconds": 10,
+    "clip_from_possible": 0,
 }
 
 _settings: dict = {}
@@ -380,9 +381,13 @@ class ClipBuffer:
         with self._lock:
             self._buf.extend(samples.tolist())
 
-    def save(self, path: Path) -> None:
+    def save(self, path: Path, last_seconds: float | None = None) -> None:
         with self._lock:
             audio = np.array(self._buf, dtype=np.float32)
+        if last_seconds is not None:
+            max_samples = int(last_seconds * SAMPLE_RATE)
+            if len(audio) > max_samples:
+                audio = audio[-max_samples:]
         path.parent.mkdir(parents=True, exist_ok=True)
         sf.write(str(path), audio, SAMPLE_RATE, subtype="PCM_16")
 
@@ -579,6 +584,7 @@ async def post_settings(body: dict):
         "smoothing_window_seconds": (5, 120),
         "yamnet_min_gate": (0.0, 1.0),
         "clip_seconds": (5, 60),
+        "clip_from_possible": (0, 1),
     }
     updated = {}
     for k, default_val in DEFAULT_SETTINGS.items():
@@ -931,6 +937,10 @@ def inference_loop(args: argparse.Namespace) -> None:
         )
     _smoothers = smoothers
 
+    # Track possible start time and per-window scores for clip_from_possible mode
+    possible_start: dict[str, float | None] = {name: None for name in DETECTORS}
+    window_scores: dict[str, list[dict]] = {name: [] for name in DETECTORS}
+
     stop = threading.Event()
     threading.Thread(
         target=udp_receiver,
@@ -1040,6 +1050,21 @@ def inference_loop(args: argparse.Namespace) -> None:
                     "mlp_top3": cur_mlp_top3,
                 }
 
+        # track possible start and per-window scores for clip_from_possible
+        for name in DETECTORS:
+            st = smoothers[name].state
+            if st == "possible" and possible_start[name] is None:
+                possible_start[name] = time.monotonic()
+                window_scores[name] = []
+            if st in ("possible", "confirmed"):
+                window_scores[name].append({
+                    "t": round(time.monotonic() - (possible_start[name] or time.monotonic()), 2),
+                    "score": round(effective[name], 3),
+                })
+            if st == "idle":
+                possible_start[name] = None
+                window_scores[name] = []
+
         # push scores to UI
         score_msg: dict = {"type": "score", "top": yamnet_top}
         for name in DETECTORS:
@@ -1070,11 +1095,17 @@ def inference_loop(args: argparse.Namespace) -> None:
             clip_url = None
             if new_state == "confirmed":
                 clip_name = f"{prefix}{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.wav"
-                clip_buf.save(CLIP_DIR / clip_name)
+                # clip_from_possible: save from possible start + 2s padding
+                clip_duration = None
+                if _settings.get("clip_from_possible") and possible_start[name] is not None:
+                    elapsed = time.monotonic() - possible_start[name] + 2.0
+                    clip_seconds = _settings.get("clip_seconds", CLIP_SECONDS)
+                    clip_duration = min(elapsed, clip_seconds)
+                clip_buf.save(CLIP_DIR / clip_name, last_seconds=clip_duration)
                 clip_url = f"/clips/{clip_name}"
                 print(f"[{ts}] {name} clip saved: {clip_url}", flush=True)
                 # save event metadata as JSON sidecar for restore after restart
-                _save_clip_meta(clip_name, {
+                meta = {
                     "event": name, "confidence": round(pk["score"], 3),
                     "timestamp": ts, "source": args.source, "engine": det_engine,
                     "yamnet": round(pk["yamnet"], 3),
@@ -1085,7 +1116,12 @@ def inference_loop(args: argparse.Namespace) -> None:
                     "threshold": _settings.get(thr_key, 0.15),
                     "triggers": smoothers[name].trigger_count,
                     "triggers_needed": _settings["confirmed_triggers"],
-                })
+                }
+                if window_scores[name]:
+                    meta["window_scores"] = window_scores[name]
+                _save_clip_meta(clip_name, meta)
+                possible_start[name] = None
+                window_scores[name] = []
 
             pk = peaks[name]
             det_engine = engine if (name == "siren" and clf is not None) else "yamnet"
