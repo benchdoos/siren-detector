@@ -82,6 +82,7 @@
   .badge.confirmed, .badge.siren { background: #5a1a1a; color: #ef5350; }
   .badge.explosion  { background: #3a1a00; color: #ff7043; }
   .badge.motorcycle { background: #2a2a00; color: #ffd54f; }
+  .badge.unknown   { background: #2a2a2a; color: #888; }
   .badge.possible  { background: #3a2a00; color: #ffa726; }
   .event-time { font-size: 14px; color: #666; }
   .event-conf { font-size: 14px; color: #888; }
@@ -100,6 +101,7 @@
 
   .metrics-btn { font-size: 13px; padding: 3px 10px; border-radius: 4px; border: 1px solid #333; background: none; color: #888; cursor: pointer; }
   .metrics-btn:hover { color: #ccc; border-color: #555; }
+  .metrics-btn.listening { background: #1a3a1a; border-color: #4caf50; color: #4caf50; }
 
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200; justify-content: center; align-items: center; }
   .modal-overlay.open { display: flex; }
@@ -187,6 +189,7 @@
   <h1><img src="/static/img/siren-detector-logo.svg" alt="Logo" class="header-logo"> Siren Detector</h1>
   <span id="status">disconnected</span>
   <span id="audio-status">audio: —</span>
+  <button class="metrics-btn" id="listen-btn" onclick="toggleListen()">Listen</button>
   <button class="metrics-btn" onclick="showMetrics()">Metrics</button>
   <button class="metrics-btn admin-only-btn" id="settings-btn" onclick="showSettings()">Settings</button>
   <button class="admin-btn" id="admin-btn" onclick="toggleAdmin()">Admin</button>
@@ -245,6 +248,7 @@
   <span>Events <span class="events-count" id="events-count"></span></span>
   <span style="display:flex;gap:6px;align-items:center">
     <label class="admin-only-inline" id="select-all-label" style="font-size:11px;color:#666;cursor:pointer"><input type="checkbox" id="select-all" onchange="toggleSelectAll(this.checked)"> Select all</label>
+    <button class="admin-only-btn" id="manual-event-btn" onclick="createManualEvent()">+ Event</button>
     <button onclick="clearEvents()">Clear</button>
   </span>
 </div>
@@ -825,6 +829,76 @@ document.getElementById('metrics-overlay').addEventListener('click', e => { if (
 function showDetectorHelp() { document.getElementById('detector-help-overlay').classList.add('open'); }
 function closeDetectorHelp() { document.getElementById('detector-help-overlay').classList.remove('open'); }
 document.getElementById('detector-help-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeDetectorHelp(); });
+
+/* ── Live audio streaming ────────────────────────── */
+let _audioWs = null;
+let _audioCtx = null;
+let _audioNextTime = 0;
+
+function toggleListen() {
+  if (_audioWs) {
+    stopListen();
+  } else {
+    startListen();
+  }
+}
+
+function startListen() {
+  _audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+  _audioNextTime = 0;
+  const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  _audioWs = new WebSocket(`${wsProtocol}//${location.host}/ws/audio`);
+  _audioWs.binaryType = 'arraybuffer';
+  _audioWs.onopen = () => {
+    document.getElementById('listen-btn').classList.add('listening');
+    document.getElementById('listen-btn').textContent = 'Listening…';
+  };
+  _audioWs.onclose = () => stopListen();
+  _audioWs.onmessage = ({ data }) => {
+    if (!_audioCtx) return;
+    const float32 = new Float32Array(data);
+    const buf = _audioCtx.createBuffer(1, float32.length, 16000);
+    buf.getChannelData(0).set(float32);
+    const src = _audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(_audioCtx.destination);
+    const now = _audioCtx.currentTime;
+    if (_audioNextTime < now) _audioNextTime = now + 0.05;
+    src.start(_audioNextTime);
+    _audioNextTime += buf.duration;
+  };
+}
+
+function stopListen() {
+  if (_audioWs) { _audioWs.close(); _audioWs = null; }
+  if (_audioCtx) { _audioCtx.close(); _audioCtx = null; }
+  const btn = document.getElementById('listen-btn');
+  btn.classList.remove('listening');
+  btn.textContent = 'Listen';
+}
+
+/* ── Manual event ────────────────────────────────── */
+async function createManualEvent() {
+  const btn = document.getElementById('manual-event-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    const res = await fetch('/api/manual-event', {
+      method: 'POST',
+      headers: adminHeaders(),
+    });
+    if (res.status === 401) { toggleAdmin(); return; }
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.detail || 'Error');
+    }
+  } catch(e) {
+    alert('Network error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '+ Event';
+  }
+}
 
 /* ── Settings tooltips ────────────────────────────── */
 function toggleTip(helpBtn) {
