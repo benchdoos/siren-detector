@@ -367,6 +367,7 @@ let   currentAudio = null;
 const seenEvents = new Set();
 const DETECTOR_NAMES = ['siren', 'explosion', 'motorcycle'];
 const DETECTOR_THRESHOLDS = { siren: 0.10, explosion: 0.15, motorcycle: 0.15 };
+const _cooldownStart = {};  // track when cooldown first began per detector
 const VALID_LABELS = ['siren', 'background', 'motorcycle', 'explosion', 'unknown'];
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
@@ -399,10 +400,15 @@ function updateDetector(name, score, state, triggers, possibleNeeded, confirmedN
   const timerEl = document.getElementById('timer-' + name);
   if (timerEl) {
     if (cooldown > 0) {
-      timerEl.innerHTML = `<span class="timer-label">cooldown</span> <span class="timer-val cooldown">${cooldown.toFixed(0)}s</span>`;
+      if (!_cooldownStart[name]) _cooldownStart[name] = Date.now();
+      const elapsed = (Date.now() - _cooldownStart[name]) / 1000;
+      const durInfo = elapsed >= 10 ? ` <span style="color:#888;font-size:11px">(${Math.round(elapsed)}s total)</span>` : '';
+      timerEl.innerHTML = `<span class="timer-label">cooldown</span> <span class="timer-val cooldown">${cooldown.toFixed(0)}s</span>${durInfo}`;
     } else if (refractory > 0) {
+      _cooldownStart[name] = 0;
       timerEl.innerHTML = `<span class="timer-label">refractory</span> <span class="timer-val">${refractory.toFixed(0)}s</span>`;
     } else {
+      _cooldownStart[name] = 0;
       timerEl.innerHTML = '';
     }
   }
