@@ -9,6 +9,7 @@
 !/ml/results/val_sources.json
 !/ml/results/classifier_weights.npz
 !/ml/results/classifier_labels.json
+!/ml/results/model_card.json
 **/.DS_Store
 __pycache__/
 *.py[cod]
