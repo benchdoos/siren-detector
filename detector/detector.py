@@ -628,16 +628,23 @@ async def get_metrics():
 
 @app.get("/api/audits", dependencies=[Depends(require_viewer)])
 async def get_audits():
-    audits_dir = Path("/models/audits")
-    if not audits_dir.exists():
-        return {"audits": []}
-    files = sorted(audits_dir.glob("audit_*.json"), reverse=True)[:5]
     audits = []
-    for f in files:
-        try:
-            audits.append(json.loads(f.read_text(encoding="utf-8")))
-        except Exception:
-            pass
+    audits_dir = Path("/models/audits")
+    if audits_dir.exists():
+        files = sorted(audits_dir.glob("audit_*.json"), reverse=True)[:5]
+        for f in files:
+            try:
+                audits.append(json.loads(f.read_text(encoding="utf-8")))
+            except Exception:
+                pass
+    # Fallback: model_card.json (committed to repo, always available)
+    if not audits:
+        card_path = Path("/models/model_card.json")
+        if card_path.exists():
+            try:
+                audits.append(json.loads(card_path.read_text(encoding="utf-8")))
+            except Exception:
+                pass
     return {"audits": audits}
 
 
