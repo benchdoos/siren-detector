@@ -287,7 +287,27 @@ def save_audit(audit: dict) -> Path:
 
     print(f"Saved: {path}")
     print(f"Latest: {latest} → {path.name}")
+
+    # Write model_card.json (committed to repo, single file)
+    save_model_card(audit)
+
     return path
+
+
+def save_model_card(audit: dict) -> None:
+    """Write ml/results/model_card.json — a single committed summary of model state."""
+    card = {
+        "audit_timestamp": audit["timestamp"],
+        "model_trained_at": audit.get("model_trained_at"),
+        "labels": audit["labels"],
+        "val_accuracy": audit.get("val_accuracy", {}),
+        "confusion_matrix": audit.get("confusion_matrix"),
+        "file_counts": audit.get("file_counts", {}),
+        "issues": audit.get("issues", []),
+    }
+    path = RESULTS / "model_card.json"
+    path.write_text(json.dumps(card, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Model card: {path}")
 
 
 def main() -> None:

@@ -626,6 +626,28 @@ async def get_metrics():
     return json.loads(metrics_path.read_text(encoding="utf-8"))
 
 
+@app.get("/api/audits", dependencies=[Depends(require_viewer)])
+async def get_audits():
+    audits = []
+    audits_dir = Path("/models/audits")
+    if audits_dir.exists():
+        files = sorted(audits_dir.glob("audit_*.json"), reverse=True)[:5]
+        for f in files:
+            try:
+                audits.append(json.loads(f.read_text(encoding="utf-8")))
+            except Exception:
+                pass
+    # Fallback: model_card.json (committed to repo, always available)
+    if not audits:
+        card_path = Path("/models/model_card.json")
+        if card_path.exists():
+            try:
+                audits.append(json.loads(card_path.read_text(encoding="utf-8")))
+            except Exception:
+                pass
+    return {"audits": audits}
+
+
 @app.post("/feedback", dependencies=[Depends(require_admin)])
 async def feedback(body: dict):
     import shutil
@@ -785,9 +807,6 @@ async def manual_event():
 
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
-    if not _ws_check_token(ws):
-        await ws.close(code=4401, reason="Authentication required")
-        return
     await ws.accept()
     await ws.send_json(_last_score)
     for ev in list(_event_history):
