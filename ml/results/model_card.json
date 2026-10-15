@@ -1,6 +1,6 @@
 {
-  "audit_timestamp": "2026-10-15T20:27:41+00:00",
-  "model_trained_at": "2026-10-15T20:27:36+00:00",
+  "audit_timestamp": "2026-10-15T20:34:29+00:00",
+  "model_trained_at": "2026-10-15T20:34:26+00:00",
   "labels": [
     "siren",
     "background",
@@ -9,55 +9,55 @@
   ],
   "val_accuracy": {
     "siren": {
-      "accuracy": 0.793,
-      "windows": 4119
+      "accuracy": 0.782,
+      "windows": 3609
     },
     "background": {
-      "accuracy": 0.835,
+      "accuracy": 0.859,
       "windows": 8700
     },
     "explosion": {
-      "accuracy": 0.734,
-      "windows": 1594
+      "accuracy": 0.697,
+      "windows": 946
     },
     "motorcycle": {
-      "accuracy": 0.634,
-      "windows": 1388
+      "accuracy": 0.693,
+      "windows": 648
     }
   },
   "confusion_matrix": [
     [
-      3265,
-      361,
-      223,
-      270
+      2822,
+      382,
+      97,
+      308
     ],
     [
-      496,
-      7261,
-      694,
-      249
+      577,
+      7469,
+      390,
+      264
     ],
     [
-      50,
-      321,
-      1170,
-      53
+      44,
+      215,
+      659,
+      28
     ],
     [
-      188,
-      92,
-      228,
-      880
+      84,
+      37,
+      78,
+      449
     ]
   ],
   "file_counts": {
     "siren": {
-      "total": 497,
+      "total": 260,
       "real": 88,
-      "aug": 409,
-      "aug_pct": 82.3,
-      "aug_real_ratio": 4.6,
+      "aug": 172,
+      "aug_pct": 66.2,
+      "aug_real_ratio": 2.0,
       "max_recommended_aug": 176
     },
     "background": {
@@ -69,24 +69,23 @@
       "max_recommended_aug": 1480
     },
     "explosion": {
-      "total": 721,
+      "total": 408,
       "real": 258,
-      "aug": 463,
-      "aug_pct": 64.2,
-      "aug_real_ratio": 1.8,
+      "aug": 150,
+      "aug_pct": 36.8,
+      "aug_real_ratio": 0.6,
       "max_recommended_aug": 516
     },
     "motorcycle": {
-      "total": 538,
+      "total": 249,
       "real": 89,
-      "aug": 449,
-      "aug_pct": 83.5,
-      "aug_real_ratio": 5.0,
+      "aug": 160,
+      "aug_pct": 64.3,
+      "aug_real_ratio": 1.8,
       "max_recommended_aug": 178
     }
   },
   "issues": [
-    "siren: aug=82.3% (>4.6× real, max recommended 2×)",
-    "motorcycle: aug=83.5% (>5.0× real, max recommended 2×)"
+    "background: 13.4× more windows than smallest class"
   ]
 }
