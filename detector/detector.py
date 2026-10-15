@@ -800,9 +800,6 @@ async def manual_event():
 
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
-    if not _ws_check_token(ws):
-        await ws.close(code=4401, reason="Authentication required")
-        return
     await ws.accept()
     await ws.send_json(_last_score)
     for ev in list(_event_history):
