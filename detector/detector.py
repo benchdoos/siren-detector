@@ -626,6 +626,21 @@ async def get_metrics():
     return json.loads(metrics_path.read_text(encoding="utf-8"))
 
 
+@app.get("/api/audits", dependencies=[Depends(require_viewer)])
+async def get_audits():
+    audits_dir = Path("/models/audits")
+    if not audits_dir.exists():
+        return {"audits": []}
+    files = sorted(audits_dir.glob("audit_*.json"), reverse=True)[:5]
+    audits = []
+    for f in files:
+        try:
+            audits.append(json.loads(f.read_text(encoding="utf-8")))
+        except Exception:
+            pass
+    return {"audits": audits}
+
+
 @app.post("/feedback", dependencies=[Depends(require_admin)])
 async def feedback(body: dict):
     import shutil
