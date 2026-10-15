@@ -108,9 +108,14 @@ clean-docker:
 fetch-esc50:
 	python3 dataset/fetch_esc50.py
 
-## Augment siren data (aug ≤ 2× real; 83 real → max 166)
+## Remove all augmented files before regenerating
+clean-aug:
+	find dataset/siren dataset/explosion dataset/motorcycle -name 'aug_*' -delete 2>/dev/null || true
+	@echo "Cleaned aug files"
+
+## Augment siren data (aug ≤ 2× real; 86 real → max 172)
 augment-siren:
-	ml/.venv/bin/python dataset/augment.py siren --count 166
+	ml/.venv/bin/python dataset/augment.py siren --count 172
 
 ## Augment explosion data (258 real → max 516, using 150)
 augment-explosion:
@@ -121,8 +126,9 @@ augment-motorcycle:
 	ml/.venv/bin/python dataset/augment.py motorcycle --count 120
 	ml/.venv/bin/python dataset/augment.py motorcycle --count 40 --quiet
 
-## Augment all safety-critical classes
+## Augment all safety-critical classes (cleans old aug first)
 augment:
+	$(MAKE) clean-aug
 	$(MAKE) augment-siren
 	$(MAKE) augment-explosion
 	$(MAKE) augment-motorcycle
