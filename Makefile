@@ -49,14 +49,20 @@ deploy-model:
 	scp ml/results/classifier_weights.npz ml/results/classifier_labels.json \
 		ml/results/val_metrics.json \
 		$(RPI):$(RPI_BASE)/ml/results/
+	@if [ -d ml/results/audits ]; then \
+		ssh $(RPI) "mkdir -p $(RPI_BASE)/ml/results/audits"; \
+		scp ml/results/audits/audit_*.json $(RPI):$(RPI_BASE)/ml/results/audits/; \
+	fi
 	ssh $(RPI) "docker restart $(CONTAINER)"
 
-## Full retrain cycle: merge recorder → sync dataset → train → clean synced → deploy model (restart)
+## Full retrain cycle: merge recorder → sync dataset → train → audit → clean synced → deploy model (restart)
 retrain:
 	$(MAKE) _merge-recorder
 	$(MAKE) sync-dataset
 	$(MAKE) augment
 	$(MAKE) train
+	$(MAKE) audit
+	-$(MAKE) audit-compare
 	$(MAKE) _clean-trained
 	$(MAKE) deploy-model
 
@@ -172,10 +178,13 @@ help:
 	@echo "    make augment-siren   Augment siren only"
 	@echo "    make augment-explosion Augment explosion only"
 	@echo "    make augment-motorcycle Augment motorcycle (normal + quiet)"
+	@echo "    make audit           Run dataset/model audit snapshot"
+	@echo "    make audit-compare   Compare latest vs previous audit"
 	@echo ""
 
 .PHONY: deploy deploy-ui deploy-compose restart logs \
         sync-dataset train deploy-model retrain _merge-recorder _clean-trained \
         clean-clips clean-dataset clean-docker \
         augment augment-siren augment-explosion augment-motorcycle \
+        audit audit-compare \
         fetch-esc50 open unlock help
