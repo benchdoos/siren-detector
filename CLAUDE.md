@@ -151,3 +151,4 @@ Other useful Makefile targets: `make deploy`, `make deploy-ui`, `make logs`, `ma
 ## After edits
 - claude or codex should update `README.md` with a summary of the project, setup instructions, and usage examples.
 - claude or codex should also update `TODO.md` with a clear list of tasks, marking completed items and indicating next steps for development and testing.
+- show list of affected files and directories, including any new files created, and any files that were deleted or renamed.
