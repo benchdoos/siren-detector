@@ -114,17 +114,19 @@ clean-aug:
 	@echo "Cleaned aug files"
 
 ## Augment siren data (aug ≤ 2× real; 86 real → max 172)
+NOISE_PROFILE := dataset/background/noise-profile-inmp441.wav
+
 augment-siren:
-	ml/.venv/bin/python dataset/augment.py siren --count 172
+	ml/.venv/bin/python dataset/augment.py siren --count 172 --noise-profile $(NOISE_PROFILE)
 
 ## Augment explosion data (258 real → max 516, using 150)
 augment-explosion:
-	ml/.venv/bin/python dataset/augment.py explosion --count 150
+	ml/.venv/bin/python dataset/augment.py explosion --count 150 --noise-profile $(NOISE_PROFILE)
 
 ## Augment motorcycle data (aug ≤ 2× real; 80 real → max 160: 120 normal + 40 quiet)
 augment-motorcycle:
-	ml/.venv/bin/python dataset/augment.py motorcycle --count 120
-	ml/.venv/bin/python dataset/augment.py motorcycle --count 40 --quiet
+	ml/.venv/bin/python dataset/augment.py motorcycle --count 120 --noise-profile $(NOISE_PROFILE)
+	ml/.venv/bin/python dataset/augment.py motorcycle --count 40 --quiet --noise-profile $(NOISE_PROFILE)
 
 ## Augment all safety-critical classes (cleans old aug first)
 augment:

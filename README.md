@@ -525,7 +525,7 @@ make augment-explosion
 
 # С noise profile (после записи тишины с INMP441)
 ml/.venv/bin/python dataset/augment.py siren --count 200 \
-  --noise-profile dataset/background/silence.wav
+  --noise-profile dataset/background/noise-profile-inmp441.wav
 
 # Посмотреть что будет создано
 ml/.venv/bin/python dataset/augment.py siren --count 10 --dry-run
