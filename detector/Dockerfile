@@ -1,10 +1,8 @@
 FROM python:3.11-slim
 
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY detector.py .
-COPY classifier_infer.py .
-COPY static/ static/
+COPY requirements.txt /app/detector/requirements.txt
+RUN pip install --no-cache-dir -r /app/detector/requirements.txt
+COPY . /app/detector/
 
-ENTRYPOINT ["python", "detector.py"]
+ENTRYPOINT ["python", "-m", "detector.main"]
