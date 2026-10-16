@@ -103,7 +103,7 @@
   .event-engine { font-size: 13px; color: #444; }
   .event-breakdown { font-size: 13px; color: #555; margin-bottom: 8px; }
   .clip-player { margin-top: 4px; position: relative; }
-  .spec-canvas { width: 100%; height: 60px; border-radius: 4px; cursor: pointer; display: block; background: #111; }
+  .spec-canvas { width: 100%; height: 60px; border-radius: 4px; cursor: pointer; display: block; background: #111; touch-action: none; }
   .player-controls { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
   .player-controls audio { flex: 1; min-width: 180px; height: 36px; filter: invert(1) hue-rotate(180deg) brightness(0.8); }
   .pc-buttons { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
@@ -121,6 +121,33 @@
   .lbtn.active { background: #1a3a1a; border-color: #4caf50; color: #4caf50; cursor: default; }
   .lbtn.siren { border-color: #5a1a1a; color: #ef5350; }
   .lbtn.siren:hover { background: #3a0000; }
+
+  /* ── Segment annotations ── */
+  .seg-section { margin-top: 8px; display: none; }
+  .seg-section.visible { display: block; }
+  .seg-toggle { font-size: 12px; color: #555; cursor: pointer; background: none; border: none; padding: 0; user-select: none; }
+  .seg-toggle:hover { color: #aaa; }
+  .seg-body { display: none; margin-top: 8px; }
+  .seg-body.open { display: block; }
+  .seg-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+  .seg-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #aaa; background: #151515; border: 1px solid #222; border-radius: 4px; padding: 4px 8px; }
+  .seg-item .seg-label-badge { padding: 1px 6px; border-radius: 3px; font-weight: 600; font-size: 11px; }
+  .seg-item .seg-times { font-variant-numeric: tabular-nums; color: #888; }
+  .seg-item .seg-del { background: none; border: none; color: #555; cursor: pointer; font-size: 14px; margin-left: auto; padding: 0 4px; }
+  .seg-item .seg-del:hover { color: #ef5350; }
+  .seg-add-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .seg-add-row select { background: #222; border: 1px solid #444; color: #e0e0e0; padding: 3px 6px; border-radius: 4px; font-size: 12px; -webkit-appearance: none; appearance: none; }
+  .seg-add-row .seg-time-input { width: 52px; background: #222; border: 1px solid #444; color: #e0e0e0; padding: 3px 6px; border-radius: 4px; font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; }
+  .seg-add-row .seg-time-input:focus { border-color: #4caf50; outline: none; }
+  .seg-add-row .seg-save-btn { font-size: 12px; padding: 3px 10px; border-radius: 4px; border: 1px solid #4caf50; background: #1a3a1a; color: #4caf50; cursor: pointer; }
+  .seg-add-row .seg-save-btn:hover { background: #2a4a2a; }
+  .seg-add-row .seg-save-btn:disabled { opacity: 0.4; cursor: default; }
+  .seg-hint { font-size: 11px; color: #444; margin-top: 4px; }
+  .spec-canvas.seg-dragging { cursor: crosshair; }
+  @media (max-width: 480px) {
+    .seg-add-row { gap: 4px; }
+    .seg-add-row .seg-time-input { width: 46px; font-size: 11px; }
+  }
 
   .metrics-btn { font-size: 13px; padding: 3px 10px; border-radius: 4px; border: 1px solid #333; background: none; color: #888; cursor: pointer; }
   .metrics-btn:hover { color: #ccc; border-color: #555; }
@@ -634,6 +661,22 @@ function addEvent(ev) {
         `<button class="lbtn" data-label="${l}" onclick="sendLabel(this,'${filename}','${l}')">${l}</button>`
       ).join('')}
     </div>
+    <div class="seg-section">
+      <button class="seg-toggle" onclick="toggleSegments(this)">segments ▸</button>
+      <div class="seg-body">
+        <div class="seg-list"></div>
+        <div class="seg-add-row">
+          <select class="seg-label-select">
+            ${['siren','explosion','motorcycle'].map(l => `<option value="${l}">${l}</option>`).join('')}
+          </select>
+          <input class="seg-time-input seg-start" placeholder="from" readonly>
+          <span style="color:#555">–</span>
+          <input class="seg-time-input seg-end" placeholder="to" readonly>
+          <button class="seg-save-btn" onclick="addSegment(this)" disabled>+ Add</button>
+        </div>
+        <div class="seg-hint">drag on spectrogram to select range</div>
+      </div>
+    </div>
   `;
   eventsEl.insertBefore(card, eventsEl.firstChild);
   if (ev.label) {
@@ -645,10 +688,16 @@ function addEvent(ev) {
     card.dataset.tagged = 'false';
     card.style.display = cardMatchesFilter(card, activeFilter) ? '' : 'none';
   }
+  // Restore segments from event data
+  if (ev.segments && ev.segments.length) {
+    card._segments = ev.segments;
+    renderSegments(card);
+  }
   initClipPlayer(card);
   const authed = isAdmin();
   card.querySelectorAll('.ev-check').forEach(el => el.classList.toggle('visible', authed));
   card.querySelectorAll('.label-row').forEach(el => el.classList.toggle('visible', authed));
+  card.querySelectorAll('.seg-section').forEach(el => el.classList.toggle('visible', authed));
   updateEventsCount();
 }
 
@@ -796,6 +845,7 @@ function updateAdminUI() {
   // show/hide label rows and checkboxes in event cards
   document.querySelectorAll('.label-row').forEach(el => el.classList.toggle('visible', authed));
   document.querySelectorAll('.ev-check').forEach(el => el.classList.toggle('visible', authed));
+  document.querySelectorAll('.seg-section').forEach(el => el.classList.toggle('visible', authed));
   // update clip players: show/hide controls, set/remove audio src
   document.querySelectorAll('.clip-player').forEach(player => {
     const controls = player.querySelector('.player-controls');
@@ -1280,6 +1330,12 @@ function loadSpectrogram(player) {
     });
 }
 
+const SEG_COLORS = {
+  siren:      { fill: 'rgba(239,83,80,0.25)', stroke: 'rgba(239,83,80,0.7)' },
+  explosion:  { fill: 'rgba(255,112,67,0.25)', stroke: 'rgba(255,112,67,0.7)' },
+  motorcycle: { fill: 'rgba(255,213,79,0.25)', stroke: 'rgba(255,213,79,0.7)' },
+};
+
 function drawSpecFrame(canvas, offscreen, currentTime, duration) {
   const w = canvas.clientWidth || 300;
   const h = canvas.clientHeight || 60;
@@ -1290,6 +1346,35 @@ function drawSpecFrame(canvas, offscreen, currentTime, duration) {
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height);
+
+  // Draw segment overlays
+  const player = canvas.closest('.clip-player');
+  const card = canvas.closest('.event-card');
+  if (card && card._segments && duration > 0) {
+    for (const seg of card._segments) {
+      const x1 = Math.round(seg.start / duration * canvas.width);
+      const x2 = Math.round(seg.end / duration * canvas.width);
+      const c = SEG_COLORS[seg.label] || { fill: 'rgba(136,136,136,0.25)', stroke: 'rgba(136,136,136,0.7)' };
+      ctx.fillStyle = c.fill;
+      ctx.fillRect(x1, 0, x2 - x1, canvas.height);
+      ctx.strokeStyle = c.stroke;
+      ctx.lineWidth = devicePixelRatio;
+      ctx.strokeRect(x1, 0, x2 - x1, canvas.height);
+    }
+  }
+  // Draw drag selection preview
+  if (player && player._dragStart != null && player._dragEnd != null && duration > 0) {
+    const x1 = Math.round(player._dragStart / duration * canvas.width);
+    const x2 = Math.round(player._dragEnd / duration * canvas.width);
+    ctx.fillStyle = 'rgba(76,175,80,0.2)';
+    ctx.fillRect(Math.min(x1,x2), 0, Math.abs(x2-x1), canvas.height);
+    ctx.strokeStyle = 'rgba(76,175,80,0.8)';
+    ctx.lineWidth = 2 * devicePixelRatio;
+    ctx.setLineDash([4 * devicePixelRatio, 4 * devicePixelRatio]);
+    ctx.strokeRect(Math.min(x1,x2), 0, Math.abs(x2-x1), canvas.height);
+    ctx.setLineDash([]);
+  }
+
   // Progress line
   if (currentTime > 0 && duration > 0) {
     const xPos = Math.round(currentTime / duration * canvas.width);
@@ -1312,15 +1397,71 @@ function initClipPlayer(card) {
   // Load spectrogram
   loadSpectrogram(player);
 
-  // Canvas click to seek
+  // Canvas: drag to select segment range, click to seek
   const canvas = player.querySelector('.spec-canvas');
-  canvas.addEventListener('click', function(e) {
+  let _dragStartX = null;
+  function _canvasTime(e) {
+    const rect = canvas.getBoundingClientRect();
     const audio = player.querySelector('audio');
-    if (!audio || !audio.duration || !isAdmin()) return;
-    const rect = this.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    audio.currentTime = Math.max(0, Math.min(audio.duration, x * audio.duration));
-    if (player._specImage) drawSpecFrame(canvas, player._specImage, audio.currentTime, player._specDuration);
+    const dur = player._specDuration || (audio && audio.duration) || 0;
+    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    return +(x * dur).toFixed(2);
+  }
+  canvas.addEventListener('pointerdown', function(e) {
+    if (!isAdmin()) return;
+    _dragStartX = e.clientX;
+    player._dragStart = _canvasTime(e);
+    player._dragEnd = null;
+    canvas.setPointerCapture(e.pointerId);
+    canvas.classList.add('seg-dragging');
+  });
+  canvas.addEventListener('pointermove', function(e) {
+    if (_dragStartX == null) return;
+    player._dragEnd = _canvasTime(e);
+    if (player._specImage) drawSpecFrame(canvas, player._specImage,
+      player.querySelector('audio')?.currentTime || 0, player._specDuration);
+  });
+  canvas.addEventListener('pointerup', function(e) {
+    if (_dragStartX == null) return;
+    canvas.classList.remove('seg-dragging');
+    const dist = Math.abs(e.clientX - _dragStartX);
+    if (dist < 6) {
+      // Simple click → seek
+      player._dragStart = null; player._dragEnd = null;
+      _dragStartX = null;
+      const audio = player.querySelector('audio');
+      if (audio && audio.duration) {
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width;
+        audio.currentTime = Math.max(0, Math.min(audio.duration, x * audio.duration));
+        if (player._specImage) drawSpecFrame(canvas, player._specImage, audio.currentTime, player._specDuration);
+      }
+      return;
+    }
+    // Drag completed → fill segment time inputs
+    const card = canvas.closest('.event-card');
+    const t1 = player._dragStart, t2 = _canvasTime(e);
+    const from = Math.min(t1, t2), to = Math.max(t1, t2);
+    const startInput = card.querySelector('.seg-start');
+    const endInput = card.querySelector('.seg-end');
+    if (startInput) startInput.value = from.toFixed(1) + 's';
+    if (endInput) endInput.value = to.toFixed(1) + 's';
+    // Enable add button
+    const addBtn = card.querySelector('.seg-save-btn');
+    if (addBtn) addBtn.disabled = false;
+    // Open segments if closed
+    const body = card.querySelector('.seg-body');
+    if (body && !body.classList.contains('open')) {
+      body.classList.add('open');
+      const toggle = card.querySelector('.seg-toggle');
+      if (toggle) toggle.textContent = 'segments ▾';
+    }
+    player._dragStart = null; player._dragEnd = null;
+    _dragStartX = null;
+    // Store pending times on card
+    card._pendingSeg = { start: from, end: to };
+    if (player._specImage) drawSpecFrame(canvas, player._specImage,
+      player.querySelector('audio')?.currentTime || 0, player._specDuration);
   });
 
   const audio = player.querySelector('audio');
@@ -1384,6 +1525,80 @@ function pcSpeed(btn) {
   idx = (idx + 1) % SPEED_STEPS.length;
   audio.playbackRate = SPEED_STEPS[idx];
   btn.textContent = SPEED_STEPS[idx] + '\u00D7';
+}
+
+/* ── Segment annotations ──────────────────────── */
+function toggleSegments(btn) {
+  const body = btn.nextElementSibling;
+  const open = body.classList.toggle('open');
+  btn.textContent = open ? 'segments ▾' : 'segments ▸';
+}
+
+function fmtSec(s) { return s.toFixed(1) + 's'; }
+
+function renderSegments(card) {
+  const list = card.querySelector('.seg-list');
+  const segs = card._segments || [];
+  if (!segs.length) { list.innerHTML = ''; return; }
+  list.innerHTML = segs.map((s, i) => {
+    const c = SEG_COLORS[s.label] || { stroke: '#888' };
+    return `<div class="seg-item">
+      <span class="seg-label-badge" style="background:${c.stroke};color:#000">${esc(s.label)}</span>
+      <span class="seg-times">${fmtSec(s.start)} – ${fmtSec(s.end)}</span>
+      <button class="seg-del" onclick="deleteSegment(this,${i})" title="Remove">&times;</button>
+    </div>`;
+  }).join('');
+}
+
+async function addSegment(btn) {
+  const card = btn.closest('.event-card');
+  const pending = card._pendingSeg;
+  if (!pending) return;
+  const label = card.querySelector('.seg-label-select').value;
+  const seg = { label, start: pending.start, end: pending.end };
+  if (!card._segments) card._segments = [];
+  card._segments.push(seg);
+  card._pendingSeg = null;
+  // Clear inputs
+  card.querySelector('.seg-start').value = '';
+  card.querySelector('.seg-end').value = '';
+  btn.disabled = true;
+  renderSegments(card);
+  redrawCardSpec(card);
+  await saveSegments(card);
+}
+
+async function deleteSegment(btn, idx) {
+  const card = btn.closest('.event-card');
+  if (!card._segments) return;
+  card._segments.splice(idx, 1);
+  renderSegments(card);
+  redrawCardSpec(card);
+  await saveSegments(card);
+}
+
+function redrawCardSpec(card) {
+  const player = card.querySelector('.clip-player');
+  if (!player || !player._specImage) return;
+  const audio = player.querySelector('audio');
+  drawSpecFrame(player.querySelector('.spec-canvas'), player._specImage,
+    audio?.currentTime || 0, player._specDuration);
+}
+
+async function saveSegments(card) {
+  const filename = card.dataset.filename;
+  const segments = card._segments || [];
+  try {
+    const res = await fetch('/feedback/segments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify({ filename, segments }),
+    });
+    if (res.status === 401) { toggleAdmin(); return; }
+    if (!res.ok) console.error('Failed to save segments:', await res.text());
+  } catch (e) {
+    console.error('Failed to save segments:', e);
+  }
 }
 
 async function resetSettings() {

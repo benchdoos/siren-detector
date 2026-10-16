@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import wave
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -11,9 +12,9 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..auth import AUTH_ENABLED, check_token, require_admin, require_viewer
-from ..config import CLIP_DIR, DATASET_DIR, DEFAULT_SETTINGS, VALID_LABELS
+from ..config import CLIP_DIR, DATASET_DIR, DEFAULT_SETTINGS, VALID_LABELS, SAMPLE_RATE
 from .. import settings as settings_mod
-from .routes_clips import save_clip_meta
+from .routes_clips import save_clip_meta, _load_clip_meta
 
 if TYPE_CHECKING:
     from ..bus import EventBus
@@ -124,6 +125,24 @@ async def get_audits():
     return {"audits": audits}
 
 
+def _clean_dataset_artifacts(stem: str) -> int:
+    """Remove all dataset files derived from a clip (full copy, segments, gaps).
+
+    Searches all label dirs for files starting with *stem* (.wav).
+    Returns the number of files removed.
+    """
+    removed = 0
+    if not DATASET_DIR.exists():
+        return removed
+    for label_dir in DATASET_DIR.iterdir():
+        if not label_dir.is_dir():
+            continue
+        for f in label_dir.glob(f"{stem}*.wav"):
+            f.unlink()
+            removed += 1
+    return removed
+
+
 @router.post("/feedback", dependencies=[Depends(require_admin)])
 async def feedback(body: dict):
     filename = body.get("filename", "")
@@ -135,12 +154,165 @@ async def feedback(body: dict):
         raise HTTPException(status_code=400, detail="Invalid filename")
     if not src.exists():
         raise HTTPException(status_code=404, detail="Clip not found")
+
+    stem = src.stem
+
+    # Remove any previous dataset artifacts for this clip
+    removed = _clean_dataset_artifacts(stem)
+
+    # Check if clip has segments — if so, save only the gaps (non-segment parts)
+    meta = _load_clip_meta(filename)
+    segments = (meta or {}).get("segments", [])
+
     dst_dir = DATASET_DIR / label
     dst_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(str(src), str(dst_dir / src.name))
+
+    if segments:
+        # Re-save segment slices (they may have landed in a different label dir before)
+        _save_segment_slices(src, segments)
+        _save_gap_slices(src, segments, label, dst_dir)
+    else:
+        shutil.copy2(str(src), str(dst_dir / src.name))
+
     _bus.feedback[filename] = label
-    print(f"[feedback] {filename} → {label}", flush=True)
+    info = f"[feedback] {filename} → {label}"
+    if removed:
+        info += f" (cleaned {removed} old files)"
+    if segments:
+        info += f" (gaps only, {len(segments)} segments excluded)"
+    print(info, flush=True)
     return {"ok": True}
+
+
+def _save_gap_slices(
+    src: Path, segments: list[dict], label: str, dst_dir: Path,
+) -> None:
+    """Save non-segment portions of *src* WAV into *dst_dir* as *label*."""
+    with wave.open(str(src), "rb") as wf:
+        params = wf.getparams()
+        sr = wf.getframerate()
+        n_frames = wf.getnframes()
+        all_frames = wf.readframes(n_frames)
+    frame_size = params.sampwidth * params.nchannels
+    duration = n_frames  # in frames
+
+    # Build sorted, merged occupied intervals (in frames)
+    occupied = sorted(
+        (max(0, int(s["start"] * sr)), min(duration, int(s["end"] * sr)))
+        for s in segments
+    )
+    merged: list[tuple[int, int]] = []
+    for s, e in occupied:
+        if merged and s <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], e))
+        else:
+            merged.append((s, e))
+
+    # Gaps = [0..first_seg_start, between segs, last_seg_end..duration]
+    gaps: list[tuple[int, int]] = []
+    prev = 0
+    for s, e in merged:
+        if s > prev:
+            gaps.append((prev, s))
+        prev = e
+    if prev < duration:
+        gaps.append((prev, duration))
+
+    stem = src.stem
+    min_frames = sr  # skip gaps shorter than 1 second
+    for i, (gs, ge) in enumerate(gaps):
+        if ge - gs < min_frames:
+            continue
+        seg_frames = all_frames[gs * frame_size : ge * frame_size]
+        gap_name = f"{stem}__gap{i}__{label}.wav"
+        with wave.open(str(dst_dir / gap_name), "wb") as out:
+            out.setparams(params)
+            out.setnframes(0)
+            out.writeframes(seg_frames)
+
+
+def _save_segment_slices(src: Path, segments: list[dict]) -> None:
+    """Slice WAV into per-segment files in dataset/{label}/."""
+    with wave.open(str(src), "rb") as wf:
+        params = wf.getparams()
+        sr = wf.getframerate()
+        n_frames = wf.getnframes()
+        all_frames = wf.readframes(n_frames)
+    frame_size = params.sampwidth * params.nchannels
+    stem = src.stem
+    for i, seg in enumerate(segments):
+        s_frame = int(seg["start"] * sr)
+        e_frame = int(seg["end"] * sr)
+        s_frame = max(0, min(s_frame, n_frames))
+        e_frame = max(s_frame, min(e_frame, n_frames))
+        seg_frames = all_frames[s_frame * frame_size : e_frame * frame_size]
+        if not seg_frames:
+            continue
+        dst_dir = DATASET_DIR / seg["label"]
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        seg_name = f"{stem}__seg{i}__{seg['label']}.wav"
+        with wave.open(str(dst_dir / seg_name), "wb") as out:
+            out.setparams(params)
+            out.setnframes(0)
+            out.writeframes(seg_frames)
+
+
+SEGMENT_LABELS = {"siren", "explosion", "motorcycle"}
+
+
+@router.post("/feedback/segments", dependencies=[Depends(require_admin)])
+async def feedback_segments(body: dict):
+    filename = body.get("filename", "")
+    segments = body.get("segments", [])
+    if not filename:
+        raise HTTPException(status_code=400, detail="Missing filename")
+    src = (CLIP_DIR / filename).resolve()
+    if not src.is_relative_to(CLIP_DIR.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not src.exists():
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    # Validate segments
+    clean = []
+    for s in segments:
+        label = s.get("label", "")
+        start = s.get("start")
+        end = s.get("end")
+        if label not in SEGMENT_LABELS:
+            raise HTTPException(status_code=400, detail=f"Invalid segment label: {label}")
+        if not isinstance(start, (int, float)) or not isinstance(end, (int, float)):
+            raise HTTPException(status_code=400, detail="Segment start/end must be numbers")
+        if start >= end:
+            raise HTTPException(status_code=400, detail="Segment start must be < end")
+        clean.append({"label": label, "start": round(start, 2), "end": round(end, 2)})
+
+    # Save segments to clip metadata
+    meta = _load_clip_meta(filename) or {}
+    meta["segments"] = clean
+    save_clip_meta(filename, meta)
+
+    # Clean old artifacts and re-slice
+    stem = src.stem
+    removed = _clean_dataset_artifacts(stem)
+
+    if clean:
+        _save_segment_slices(src, clean)
+
+    # If clip already has a label, re-save gaps too
+    current_label = _bus.feedback.get(filename) if _bus else None
+    if current_label and current_label in VALID_LABELS:
+        dst_dir = DATASET_DIR / current_label
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        if clean:
+            _save_gap_slices(src, clean, current_label, dst_dir)
+        else:
+            # No segments left — restore full copy
+            shutil.copy2(str(src), str(dst_dir / src.name))
+
+    print(f"[segments] {filename} → {len(clean)} segments"
+          + (f" (cleaned {removed} old files)" if removed else ""),
+          flush=True)
+    return {"ok": True, "count": len(clean)}
 
 
 @router.post("/api/manual-event", dependencies=[Depends(require_admin)])
