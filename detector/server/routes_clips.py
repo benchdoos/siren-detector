@@ -165,6 +165,7 @@ async def restore_clips(bus: EventBus) -> None:
             "threshold": meta.get("threshold") if meta else None,
             "triggers": meta.get("triggers") if meta else None,
             "triggers_needed": meta.get("triggers_needed") if meta else None,
+            "segments": meta.get("segments", []) if meta else [],
         }
         bus.event_history.append(ev)
     if wavs:
