@@ -177,6 +177,10 @@
 - [x] Добавить `esp32/secrets.yaml.example` с описанием всех секретов.
 - [x] Добавить `.env.example` для `hub/` с описанием всех переменных
   (`MQTT_HOST`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASSWORD`, `ADMIN_TOKEN`).
+- [x] Добавить файл `LICENSE` (CC BY-NC 4.0) и секции Disclaimer / License
+  в README.md.
+- [x] Добавить кнопку «About» в Web UI с информацией о проекте, ссылкой на
+  репозиторий, дисклеймером и лицензией.
 - [ ] Убрать реальные IP-адреса и SSID из `README.md` — заменить на примеры
   (`<your_rpi_ip>`, `<your_ssid>`).
 - [ ] Очистить git-историю от ранее закоммиченных IP-адресов и credentials

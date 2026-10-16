@@ -240,6 +240,7 @@
     <button class="metrics-btn" onclick="showMetrics()">Metrics</button>
     <button class="metrics-btn admin-only-btn" id="settings-btn" onclick="showSettings()">Settings</button>
     <button class="admin-btn" id="admin-btn" onclick="toggleAdmin()">Admin</button>
+    <button class="metrics-btn" onclick="showAbout()">About</button>
     <span class="top-info" id="top-info" onclick="toggleDropdown(event)">
       <span id="top-text"></span>
       <div class="top-dropdown" id="top-dropdown">
@@ -398,6 +399,25 @@
     <p><span class="help-term">Refractory</span> — after cooldown, waits for score to drop below threshold (or timeout) before allowing new detections.</p>
     <hr>
     <p style="color:#666">Each detector (siren, explosion, motorcycle) has its own independent counters and timers.</p>
+  </div>
+</div>
+
+<div class="help-overlay" id="about-overlay">
+  <div class="help-modal" style="max-width:440px">
+    <button class="close-btn" onclick="closeAbout()">&times;</button>
+    <h2 style="display:flex;align-items:center;gap:8px"><img src="/static/img/siren-detector-logo.svg" alt="Logo" class="header-logo"> Siren Detector</h2>
+    <p>Universal audio event detection platform. ESP32-S3 captures audio from an INMP441 microphone and streams it to a detection engine powered by YAMNet + MLP.</p>
+    <p>Target classes: <span class="help-val">siren</span>, <span class="help-val">explosion</span>, <span class="help-val">motorcycle</span>, <span class="help-val">background</span>.</p>
+    <hr>
+    <p><span class="help-term">Repository</span><br>
+    <a href="https://github.com/benchdoos/siren-detector" target="_blank" rel="noopener" style="color:#4caf50;text-decoration:none">github.com/benchdoos/siren-detector</a></p>
+    <hr>
+    <p style="color:#ffa726;font-size:12px;line-height:1.5"><span class="help-term" style="color:#ffa726">Disclaimer</span><br>
+    This application and all its components are intended exclusively for peaceful purposes. Any use of this software for military, harmful, or destructive purposes is strictly prohibited.</p>
+    <hr>
+    <p style="font-size:12px;line-height:1.5"><span class="help-term">License</span> — CC BY-NC 4.0<br>
+    This software is provided <b>"as is"</b>, without warranty of any kind. You are free to copy, share, and adapt it for <b>non-commercial</b> purposes, provided you give appropriate credit to the original author and link to the source repository.<br>
+    <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener" style="color:#4caf50;text-decoration:none;font-size:11px">creativecommons.org/licenses/by-nc/4.0</a></p>
   </div>
 </div>
 
@@ -1002,6 +1022,10 @@ document.getElementById('metrics-overlay').addEventListener('click', e => { if (
 function showDetectorHelp() { document.getElementById('detector-help-overlay').classList.add('open'); }
 function closeDetectorHelp() { document.getElementById('detector-help-overlay').classList.remove('open'); }
 document.getElementById('detector-help-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeDetectorHelp(); });
+
+function showAbout() { document.getElementById('about-overlay').classList.add('open'); }
+function closeAbout() { document.getElementById('about-overlay').classList.remove('open'); }
+document.getElementById('about-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeAbout(); });
 
 /* ── Live audio streaming ────────────────────────── */
 let _audioWs = null;

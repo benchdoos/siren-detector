@@ -1195,3 +1195,15 @@ Open architecture.
 Replaceable intelligence.  
 Real-world data.  
 Safety over hype.**
+
+---
+
+## Disclaimer
+
+This application and all its components are intended exclusively for peaceful purposes. Any use of this software for military, harmful, or destructive purposes is strictly prohibited.
+
+## License
+
+This project is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/).
+
+You are free to copy, share, and adapt it for **non-commercial** purposes, provided you give appropriate credit and link to the [original repository](https://github.com/benchdoos/siren-detector). The software is provided **"as is"**, without warranty of any kind.
