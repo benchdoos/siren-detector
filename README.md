@@ -1,19 +1,19 @@
 # Sound Detector
 
-Масштабируемая open-source платформа для обнаружения звуковых событий с упором на дешёвые edge-устройства, локальную обработку и возможность подключения внешних движков распознавания.
+Open-source детектор опасных звуковых событий на базе ESP32 + Raspberry Pi. Распознаёт сирены гражданского оповещения, взрывы и приближение мотоциклов — звуки, на которые важно среагировать вовремя.
 
 ## 1. Концепция проекта
 
 ### Идея
 
-Сделать не отдельный «детектор сирены», а универсальную платформу **Audio Event Detection**.
+Автономный детектор звуков, представляющих опасность или требующих внимания. Не универсальный классификатор всех звуков мира, а система с конкретной задачей — предупредить, когда рядом происходит что-то, на что стоит обратить внимание.
 
-Первичные классы для проекта:
+Целевые классы:
 
-- 🚨 `siren` — сирены, в первую очередь системы гражданского оповещения;
-- 💥 `explosion` — взрывы и похожие импульсные события;
-- 🛵 `motorcycle` — мопеды/мотоциклы;
-- 🔇 `background` / `unknown` — обычные и неуверенно классифицируемые звуки.
+- 🚨 `siren` — сирены гражданского оповещения (воздушная тревога);
+- 💥 `explosion` — взрывы и резкие импульсные звуки;
+- 🛵 `motorcycle` — мопеды;
+- 🔇 `background` / `unknown` — обычный фон и неуверенные классификации.
 
 Ключевой принцип:
 
@@ -130,13 +130,36 @@
 
 Ни один из этих компонентов не должен быть жёстко связан с конкретным производителем железа.
 
+### Модульная архитектура detector
+
+Detection Engine реализован как Python-пакет `detector/` с атомарными слоями,
+связанными через in-process **EventBus** (`detector/bus.py`):
+
+```
+detector/
+├── main.py               # точка входа: собирает bus, engine, server, integrations
+├── config.py             # константы, определения детекторов, настройки по умолчанию
+├── bus.py                # EventBus — единственный shared object между слоями
+├── transport/udp.py      # UDP-приёмник (SDR1-протокол)
+├── engine/
+│   ├── interface.py      # EngineInterface Protocol — контракт для замены движка
+│   ├── smoother.py       # TemporalSmoother (idle → possible → confirmed)
+│   └── yamnet_engine.py  # YAMNet + MLP (текущая реализация)
+├── server/               # FastAPI: WebSocket, clips, feedback, settings
+└── integrations/mqtt.py  # MQTT, Home Assistant discovery
+```
+
+Чтобы подключить свой движок, реализуйте класс с методом
+`start(bus, settings, args)` по контракту `detector/engine/interface.py`
+и подключите его в `main.py`.
+
 ### Interchangeable Engine
 
 ESP32 не должен знать, какая именно нейросеть находится на сервере.
 
 Возможные движки:
 
-- YAMNet;
+- YAMNet + MLP (текущий, `detector/engine/yamnet_engine.py`);
 - собственная TensorFlow/TFLite-модель;
 - LiteRT/TensorFlow Lite Micro;
 - ONNX Runtime;
@@ -1165,7 +1188,7 @@ Offset  Size   Type         Description
 
 Чтобы подключить свой inference engine, достаточно слушать UDP-порт Hub'а
 и парсить пакеты по этой спецификации. Примеры реализации:
-`recorder/recorder-files/udp_recorder.py` и `detector/detector.py`.
+`recorder/recorder-files/udp_recorder.py` и `detector/transport/udp.py`.
 
 ---
 

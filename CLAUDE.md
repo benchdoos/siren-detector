@@ -4,19 +4,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Universal **Audio Event Detection** platform. ESP32-S3 with INMP441 microphone acts as an Audio Node (capture + transport), while a separate Detection Engine (currently YAMNet on Mac/Raspberry Pi) handles ML inference. Target classes: `siren`, `explosion`, `motorcycle`, `background`, `unknown`.
+**Dangerous sound detector** (sirens, explosions, motorcycles). ESP32-S3 with INMP441 microphone acts as an Audio Node (capture + transport), while a separate Detection Engine (currently YAMNet + MLP on Raspberry Pi) handles ML inference. Target classes: `siren`, `explosion`, `motorcycle`, `background`, `unknown`.
 
 ## Repository Structure
 
 ```
-esp32/           # ESPHome YAML config for ESP32-S3 firmware
-recorder/        # Docker-based UDP recorder (runs on Raspberry Pi)
-ml/              # ML baseline scripts (run on Mac)
-hub/             # UDP fan-out relay + detector (Docker Compose, runs on RPi)
-detector/        # FastAPI detection engine: YAMNet + MLP + WebSocket UI + MQTT
-dataset/         # Labeled WAV recordings (not committed to Git)
-mosquitto/       # Standalone MQTT broker (Docker Compose, runs on RPi)
-label-studio/    # Label Studio annotation stack (Docker Compose, runs on Mac)
+esp32/                    # ESPHome YAML config for ESP32-S3 firmware
+recorder/                 # Docker-based UDP recorder (runs on Raspberry Pi)
+ml/                       # ML baseline scripts (run on Mac)
+hub/                      # UDP fan-out relay + detector (Docker Compose, runs on RPi)
+dataset/                  # Labeled WAV recordings (not committed to Git)
+mosquitto/                # Standalone MQTT broker (Docker Compose, runs on RPi)
+label-studio/             # Label Studio annotation stack (Docker Compose, runs on Mac)
+
+detector/                 # Modular detection engine (Python package)
+├── main.py               #   Entry point: wires bus, engine, server, integrations
+├── config.py             #   Constants, detector definitions, default settings
+├── audio.py              #   I2S conversion, AudioRingBuffer, ClipBuffer
+├── settings.py           #   Dynamic settings: load, save, apply
+├── auth.py               #   Admin token auth for FastAPI
+├── bus.py                #   EventBus: in-process pub/sub (replaces globals)
+├── classifier_infer.py   #   MLP classifier (numpy-only inference)
+├── transport/
+│   └── udp.py            #   UDP receiver (SDR1 protocol)
+├── engine/
+│   ├── interface.py      #   EngineInterface Protocol (contract for custom engines)
+│   ├── smoother.py       #   TemporalSmoother (idle → possible → confirmed)
+│   └── yamnet_engine.py  #   YAMNet + MLP inference loop
+├── server/
+│   ├── app.py            #   FastAPI app factory, static mount, lifespan
+│   ├── routes_clips.py   #   /clips, spectrogram, clip restore
+│   ├── routes_api.py     #   /api/settings, /feedback, /api/metrics, etc.
+│   └── routes_ws.py      #   /ws, /ws/audio WebSocket endpoints
+├── integrations/
+│   └── mqtt.py           #   MQTT client, HA discovery
+└── static/index.html     #   Web UI (single-page)
 ```
 
 ## Commands
@@ -103,7 +125,7 @@ The detector stack runs on RPi from `hub/docker-compose.yml` (not `detector/dock
 
 ```bash
 # Deploy (from Mac) — use `make deploy` instead, or manually:
-scp -r detector/ <user>@<rpi_ip>:~/Projects/esphome/
+rsync -av --delete --exclude='__pycache__' detector/ <user>@<rpi_ip>:~/Projects/esphome/detector/
 scp hub/docker-compose.yml <user>@<rpi_ip>:~/Projects/esphome/hub/
 
 # Rebuild & restart (on RPi)
@@ -112,17 +134,19 @@ docker compose up --build -d detector
 
 # Static-only update (no rebuild needed) — or use `make deploy-ui`
 scp detector/static/index.html <user>@<rpi_ip>:~/Projects/esphome/detector/static/
-ssh <user>@<rpi_ip> "docker cp ~/Projects/esphome/detector/static/index.html siren-detector-engine:/app/static/index.html"
+ssh <user>@<rpi_ip> "docker cp ~/Projects/esphome/detector/static/index.html siren-detector-engine:/app/detector/static/index.html"
 ```
 
 Web UI: `http://<rpi_ip>:8080`
 
 Key architectural notes:
+- **Modular design**: detector is a Python package with replaceable layers (engine, transport, integrations). See `detector/engine/interface.py` for the engine contract.
+- **EventBus** (`detector/bus.py`) is the single shared object between engine, server, and integrations. Thread-safe via `call_soon_threadsafe`.
 - **WebSocket** uses `await ws.receive()` (not `receive_text()`) — handles ping frames correctly; `receive_text()` causes silent client drop
 - **Feedback flow**: confirmed clip saved to `/clips/` → user clicks label button → `POST /feedback` copies WAV to `/dataset/{label}/` on RPi → ready for retraining
-- `_feedback` dict is in-memory only — labels are lost on container restart; history replay includes current labels so UI restores correctly after browser reload
+- `feedback` dict is in-memory only (on `EventBus`) — labels are lost on container restart; history replay includes current labels so UI restores correctly after browser reload
 - **Volumes**: `clips` (named, for WAV clips), `../dataset` (bind mount for feedback copies), `../ml/results` (read-only, classifier weights)
-- Thresholds: `POSSIBLE_TRIGGERS=4`, `CONFIRMED_TRIGGERS=8`, `SIREN_THRESHOLD=0.10`, `COOLDOWN_SECONDS=60`
+- Thresholds are dynamic settings, defaults: `possible_triggers=4`, `confirmed_triggers=8`, `siren_threshold=0.10`, `cooldown_seconds=60`
 
 ## Retraining workflow
 
