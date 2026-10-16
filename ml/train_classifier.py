@@ -49,6 +49,7 @@ VAL_SPLIT = 0.2
 MAX_WINDOWS_PER_FILE = 300          # cap long files so one recording doesn't dominate
 MAX_BG_TRAIN_WINDOWS = 2000         # undersample background: cap at 2-3× avg of other classes
 RANDOM_SEED = 42
+MIXUP_ALPHA = 0.1                    # Beta(α, α) for mixup; 0 disables mixup
 # read at most this many seconds from any single file to avoid OOM on long recordings
 MAX_SECONDS_PER_FILE = MAX_WINDOWS_PER_FILE * 0.5 + 5.0
 
@@ -527,9 +528,72 @@ def main() -> None:
     model = build_model(num_classes)
     model.summary()
 
+    # ── mixup on embeddings ────────────────────────────────────────────────
+    # Convert labels to one-hot (required for soft labels after mixing)
+    y_train_oh = tf.one_hot(y_train.astype(np.int32), num_classes).numpy().astype(np.float32)
+    y_val_oh = tf.one_hot(y_val.astype(np.int32), num_classes).numpy().astype(np.float32)
+
+    batch_size = 256
+
+    X_train_f = X_train.astype(np.float32)
+
+    if MIXUP_ALPHA > 0:
+        print(f"\nMixup enabled: α={MIXUP_ALPHA} (re-shuffled each epoch)")
+
+        def apply_mixup(X, y_oh, weights, alpha, rng):
+            """Mix pairs of samples with λ ~ Beta(α, α)."""
+            n = len(X)
+            idx2 = rng.permutation(n)
+            lam = rng.beta(alpha, alpha, size=n).astype(np.float32)
+            lam = np.maximum(lam, 1.0 - lam)  # keep dominant sample
+            lam_col = lam[:, None]
+            X_m = (lam_col * X + (1 - lam_col) * X[idx2]).astype(np.float32)
+            y_m = (lam_col * y_oh + (1 - lam_col) * y_oh[idx2]).astype(np.float32)
+            w_m = (lam * weights + (1 - lam) * weights[idx2]).astype(np.float32)
+            return X_m, y_m, w_m
+
+        class MixupCallback(tf.keras.callbacks.Callback):
+            """Re-generate mixup pairs at the start of each epoch."""
+            def __init__(self):
+                super().__init__()
+                self.rng = np.random.RandomState(RANDOM_SEED)
+                self.X_mixed = None
+                self.y_mixed = None
+                self.w_mixed = None
+
+            def on_epoch_begin(self, epoch, logs=None):
+                self.X_mixed, self.y_mixed, self.w_mixed = apply_mixup(
+                    X_train_f, y_train_oh, sample_weights, MIXUP_ALPHA, self.rng,
+                )
+
+        mixup_cb = MixupCallback()
+        mixup_cb.on_epoch_begin(0)  # prepare first epoch
+
+        def train_generator():
+            while True:
+                X_m, y_m, w_m = mixup_cb.X_mixed, mixup_cb.y_mixed, mixup_cb.w_mixed
+                indices = np.random.permutation(len(X_m))
+                for start in range(0, len(X_m), batch_size):
+                    idx = indices[start:start + batch_size]
+                    yield X_m[idx], y_m[idx], w_m[idx]
+
+        steps_per_epoch = len(X_train) // batch_size
+        train_ds = tf.data.Dataset.from_generator(
+            train_generator,
+            output_signature=(
+                tf.TensorSpec(shape=(None, 1024), dtype=tf.float32),
+                tf.TensorSpec(shape=(None, num_classes), dtype=tf.float32),
+                tf.TensorSpec(shape=(None,), dtype=tf.float32),
+            ),
+        ).prefetch(tf.data.AUTOTUNE)
+    else:
+        print("\nMixup disabled")
+        mixup_cb = None
+        train_ds = None
+
     model.compile(
         optimizer=tf.keras.optimizers.Adam(1e-3),
-        loss="sparse_categorical_crossentropy",
+        loss="categorical_crossentropy",
         metrics=["accuracy"],
     )
 
@@ -541,17 +605,29 @@ def main() -> None:
             monitor="val_loss", factor=0.5, patience=5, verbose=1
         ),
     ]
+    if mixup_cb:
+        callbacks.append(mixup_cb)
 
     print("\nTraining:")
-    model.fit(
-        X_train, y_train,
-        validation_data=(X_val, y_val),
-        epochs=100,
-        batch_size=256,
-        sample_weight=sample_weights,
-        callbacks=callbacks,
-        verbose=1,
-    )
+    if train_ds is not None:
+        model.fit(
+            train_ds,
+            validation_data=(X_val.astype(np.float32), y_val_oh),
+            epochs=100,
+            steps_per_epoch=steps_per_epoch,
+            callbacks=callbacks,
+            verbose=1,
+        )
+    else:
+        model.fit(
+            X_train_f, y_train_oh,
+            validation_data=(X_val.astype(np.float32), y_val_oh),
+            epochs=100,
+            batch_size=batch_size,
+            sample_weight=sample_weights,
+            callbacks=callbacks,
+            verbose=1,
+        )
 
     # evaluate
     print("\nEvaluation on val set:")

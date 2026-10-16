@@ -209,6 +209,7 @@
 аудита и сравнения — в [`ml/AUDIT.md`](ml/AUDIT.md).
 
 Итерация 1 (2026-10-13): siren 76→80%, motorcycle 57→66%, data leakage устранён.
+Итерация 2 (2026-10-16): mixup α=0.1 → siren 81.8%, explosion 73.3% (+2.8%).
 
 - [x] **Аудит aug/real соотношения**: создан `ml/audit.py` + `make audit`.
 - [x] **Уменьшить количество aug**: siren 792→166 (2×), motorcycle 936→160 (2×).
@@ -220,8 +221,9 @@
 - [x] **Проверить val split**: `source_name()` теперь strip'ит `aug_` prefix +
   hash suffix → aug файлы попадают в тот же split. Data leakage = 0.
 - [x] **Переобучить и сравнить**: `make audit-compare` показывает дельты.
-- [ ] **Mixup на embeddings**: реализовать в train_classifier.py —
-  смешивание двух embeddings, λ ~ Beta(0.2, 0.2).
+- [x] **Mixup на embeddings**: реализован в train_classifier.py —
+  смешивание двух embeddings, λ ~ Beta(0.1, 0.1), re-shuffle каждую эпоху.
+  Результат: siren +1%, explosion +2.8%, background +0.9%.
 
 ## 10. Поддержка нескольких микрофонов — впереди
 
@@ -245,7 +247,7 @@
 
 1. **Набрать реальных данных motorcycle и explosion**: воспроизведение через
    колонку + recorder на INMP441. Цель: motorcycle 80→150+ real файлов.
-2. **Mixup на embeddings**: реализовать в train_classifier.py (+1-3% accuracy).
+2. ~~**Mixup на embeddings**~~: готово (α=0.1, siren +1%, explosion +2.8%).
 3. **Накопить данные + снизить FP**: слушать события через UI, лейблить; добавить
    уличный фон из реальной локации (INMP441).
 4. **Noise profile**: записать 2-3 мин тишины с INMP441 для `--noise-profile`.
