@@ -3,11 +3,17 @@
 To create a custom detection engine:
 
 1. Implement a class with a ``start(bus, settings, args)`` method.
-2. Pass its dotted path via ``--engine``, e.g.::
+2. Optionally add ``add_arguments(parser)`` staticmethod to register
+   engine-specific CLI arguments (e.g. model paths).
+3. Pass its dotted path via ``--engine``, e.g.::
 
        python -m detector.main --engine mypackage.my_engine.MyEngine
 
    Or register it in ``main.py``'s ``ENGINE_REGISTRY``.
+
+MQTT and other integrations subscribe to the EventBus automatically —
+your engine only needs to call ``bus.broadcast()`` with the right
+message format. No need to import or call integration modules directly.
 
 Message formats
 ---------------
@@ -47,7 +53,7 @@ Where ``<name>`` is each key in ``config.DETECTORS`` (siren, explosion, motorcyc
     {
         "type": "event",
         "event": "siren",                 # detector name
-        "state": "confirmed",             # "possible" | "confirmed"
+        "state": "confirmed",             # "idle" | "possible" | "confirmed"
         "confidence": 0.87,               # peak effective score
         "timestamp": "2026-10-16T12:00:00+00:00",
         "source": "siren-detector-01",    # --source arg
