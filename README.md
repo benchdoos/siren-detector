@@ -1,19 +1,19 @@
 # Sound Detector
 
-Масштабируемая open-source платформа для обнаружения звуковых событий с упором на дешёвые edge-устройства, локальную обработку и возможность подключения внешних движков распознавания.
+Open-source детектор опасных звуковых событий на базе ESP32 + Raspberry Pi. Распознаёт сирены гражданского оповещения, взрывы и приближение мотоциклов — звуки, на которые важно среагировать вовремя.
 
 ## 1. Концепция проекта
 
 ### Идея
 
-Сделать не отдельный «детектор сирены», а универсальную платформу **Audio Event Detection**.
+Автономный детектор звуков, представляющих опасность или требующих внимания. Не универсальный классификатор всех звуков мира, а система с конкретной задачей — предупредить, когда рядом происходит что-то, на что стоит обратить внимание.
 
-Первичные классы для проекта:
+Целевые классы:
 
-- 🚨 `siren` — сирены, в первую очередь системы гражданского оповещения;
-- 💥 `explosion` — взрывы и похожие импульсные события;
-- 🛵 `motorcycle` — мопеды/мотоциклы;
-- 🔇 `background` / `unknown` — обычные и неуверенно классифицируемые звуки.
+- 🚨 `siren` — сирены гражданского оповещения (воздушная тревога);
+- 💥 `explosion` — взрывы и резкие импульсные звуки;
+- 🛵 `motorcycle` — мопеды;
+- 🔇 `background` / `unknown` — обычный фон и неуверенные классификации.
 
 Ключевой принцип:
 
@@ -130,13 +130,36 @@
 
 Ни один из этих компонентов не должен быть жёстко связан с конкретным производителем железа.
 
+### Модульная архитектура detector
+
+Detection Engine реализован как Python-пакет `detector/` с атомарными слоями,
+связанными через in-process **EventBus** (`detector/bus.py`):
+
+```
+detector/
+├── main.py               # точка входа: собирает bus, engine, server, integrations
+├── config.py             # константы, определения детекторов, настройки по умолчанию
+├── bus.py                # EventBus — единственный shared object между слоями
+├── transport/udp.py      # UDP-приёмник (SDR1-протокол)
+├── engine/
+│   ├── interface.py      # EngineInterface Protocol — контракт для замены движка
+│   ├── smoother.py       # TemporalSmoother (idle → possible → confirmed)
+│   └── yamnet_engine.py  # YAMNet + MLP (текущая реализация)
+├── server/               # FastAPI: WebSocket, clips, feedback, settings
+└── integrations/mqtt.py  # MQTT, Home Assistant discovery
+```
+
+Чтобы подключить свой движок, реализуйте класс с методом
+`start(bus, settings, args)` по контракту `detector/engine/interface.py`
+и подключите его в `main.py`.
+
 ### Interchangeable Engine
 
 ESP32 не должен знать, какая именно нейросеть находится на сервере.
 
 Возможные движки:
 
-- YAMNet;
+- YAMNet + MLP (текущий, `detector/engine/yamnet_engine.py`);
 - собственная TensorFlow/TFLite-модель;
 - LiteRT/TensorFlow Lite Micro;
 - ONNX Runtime;
@@ -1165,11 +1188,77 @@ Offset  Size   Type         Description
 
 Чтобы подключить свой inference engine, достаточно слушать UDP-порт Hub'а
 и парсить пакеты по этой спецификации. Примеры реализации:
-`recorder/recorder-files/udp_recorder.py` и `detector/detector.py`.
+`recorder/recorder-files/udp_recorder.py` и `detector/transport/udp.py`.
 
 ---
 
-# 13. Долгосрочная цель
+# 13. Web & WebSocket API
+
+Detection Engine предоставляет HTTP и WebSocket API на порту 8080.
+
+## HTTP endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/` | — | Web UI (single-page) |
+| `GET` | `/api/auth/status` | — | `{"auth_enabled": true}` |
+| `POST` | `/api/auth/check` | — | Проверка токена: `{"token": "..."}` → `{"ok": true}` |
+| `GET` | `/api/settings` | viewer | Текущие настройки + defaults |
+| `POST` | `/api/settings` | admin | Обновить настройки (partial update) |
+| `POST` | `/api/settings/reset` | admin | Сбросить к defaults |
+| `GET` | `/api/metrics` | viewer | Метрики последней валидации модели |
+| `GET` | `/api/audits` | viewer | Последние 5 аудитов модели |
+| `POST` | `/feedback` | admin | Присвоить лейбл клипу: `{"filename": "...", "label": "siren"}` |
+| `POST` | `/api/manual-event` | admin | Сохранить текущий буфер как ручное событие |
+| `GET` | `/clips/{name}` | viewer | Скачать WAV-клип |
+| `GET` | `/clips/{name}/spectrogram` | — | Спектрограмма клипа (JSON: width, height, data) |
+
+Auth: `Authorization: Bearer <ADMIN_TOKEN>` header. Viewer и admin используют один токен.
+
+## WebSocket endpoints
+
+### `/ws` — события и scores
+
+Подключение: `ws://<host>:8080/ws?token=<ADMIN_TOKEN>`
+
+При подключении сервер отправляет:
+1. Последний score message
+2. Историю событий (до 100)
+
+Затем в реальном времени:
+
+**Score** (~каждые 0.5с):
+```json
+{
+  "type": "score",
+  "top": "Speech",
+  "siren_score": 0.42, "siren_state": "possible", "siren_triggers": 5,
+  "explosion_score": 0.0, "explosion_state": "idle",
+  "audio_alive": true, "audio_pps": 31.2
+}
+```
+
+**Event** (при смене состояния):
+```json
+{
+  "type": "event",
+  "event": "siren", "state": "confirmed",
+  "confidence": 0.87, "timestamp": "2026-10-16T12:00:00+00:00",
+  "clip_url": "/clips/20261016-120000.wav",
+  "engine": "yamnet+mlp"
+}
+```
+
+### `/ws/audio` — live PCM stream
+
+Подключение: `ws://<host>:8080/ws/audio?token=<ADMIN_TOKEN>`
+
+Бинарные сообщения: raw float32 PCM, 16 kHz, mono. Для воспроизведения
+в браузере — декодировать в AudioWorklet.
+
+---
+
+# 14. Долгосрочная цель
 
 Сделать доступную и расширяемую платформу:
 

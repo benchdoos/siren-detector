@@ -12,7 +12,7 @@ LABELS      = siren background motorcycle explosion unknown
 
 ## Full rebuild: copy detector + compose + rebuild Docker container on RPi
 deploy:
-	scp -r detector/ $(RPI):$(RPI_BASE)/
+	rsync -av --delete --exclude='__pycache__' detector/ $(RPI):$(RPI_BASE)/detector/
 	scp hub/docker-compose.yml $(RPI):$(RPI_BASE)/hub/
 	@test -f hub/.env && scp hub/.env $(RPI):$(RPI_BASE)/hub/.env || true
 	ssh $(RPI) "cd $(RPI_BASE)/hub && docker compose up --build -d detector && docker image prune -f"
@@ -20,7 +20,7 @@ deploy:
 ## Deploy only frontend (no rebuild needed)
 deploy-ui:
 	scp detector/static/index.html $(RPI):$(RPI_BASE)/detector/static/
-	ssh $(RPI) "docker cp $(RPI_BASE)/detector/static/index.html $(CONTAINER):/app/static/index.html"
+	ssh $(RPI) "docker cp $(RPI_BASE)/detector/static/index.html $(CONTAINER):/app/detector/static/index.html"
 
 ## Deploy docker-compose.yml to RPi
 deploy-compose:
