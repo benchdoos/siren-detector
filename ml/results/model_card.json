@@ -1,6 +1,6 @@
 {
-  "audit_timestamp": "2026-10-16T17:40:47+00:00",
-  "model_trained_at": "2026-10-16T17:40:44+00:00",
+  "audit_timestamp": "2026-10-16T18:19:16+00:00",
+  "model_trained_at": "2026-10-16T18:19:12+00:00",
   "labels": [
     "siren",
     "background",
@@ -9,83 +9,83 @@
   ],
   "val_accuracy": {
     "siren": {
-      "accuracy": 0.822,
-      "windows": 3709
+      "accuracy": 0.802,
+      "windows": 3689
     },
     "background": {
-      "accuracy": 0.809,
+      "accuracy": 0.78,
       "windows": 8700
     },
     "explosion": {
-      "accuracy": 0.719,
-      "windows": 947
+      "accuracy": 0.79,
+      "windows": 937
     },
     "motorcycle": {
-      "accuracy": 0.63,
-      "windows": 598
+      "accuracy": 0.72,
+      "windows": 628
     }
   },
   "confusion_matrix": [
     [
-      3050,
-      303,
-      131,
-      225
+      2960,
+      281,
+      179,
+      269
     ],
     [
-      990,
-      7041,
-      482,
-      187
+      750,
+      6787,
+      903,
+      260
     ],
     [
-      86,
-      157,
-      681,
-      23
+      46,
+      125,
+      740,
+      26
     ],
     [
-      110,
-      45,
-      66,
-      377
+      69,
+      34,
+      73,
+      452
     ]
   ],
   "file_counts": {
     "siren": {
-      "total": 263,
-      "real": 91,
+      "total": 264,
+      "real": 92,
       "aug": 172,
-      "aug_pct": 65.4,
+      "aug_pct": 65.2,
       "aug_real_ratio": 1.9,
-      "max_recommended_aug": 182
+      "max_recommended_aug": 184
     },
     "background": {
-      "total": 773,
-      "real": 773,
+      "total": 783,
+      "real": 783,
       "aug": 0,
       "aug_pct": 0.0,
       "aug_real_ratio": 0.0,
-      "max_recommended_aug": 1546
+      "max_recommended_aug": 1566
     },
     "explosion": {
-      "total": 413,
-      "real": 263,
+      "total": 416,
+      "real": 266,
       "aug": 150,
-      "aug_pct": 36.3,
+      "aug_pct": 36.1,
       "aug_real_ratio": 0.6,
-      "max_recommended_aug": 526
+      "max_recommended_aug": 532
     },
     "motorcycle": {
-      "total": 256,
-      "real": 96,
+      "total": 277,
+      "real": 117,
       "aug": 160,
-      "aug_pct": 62.5,
-      "aug_real_ratio": 1.7,
-      "max_recommended_aug": 192
+      "aug_pct": 57.8,
+      "aug_real_ratio": 1.4,
+      "max_recommended_aug": 234
     }
   },
   "issues": [
-    "background: 14.5× more windows than smallest class"
+    "background: 13.9× more windows than smallest class"
   ]
 }
