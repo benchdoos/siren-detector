@@ -187,9 +187,11 @@
   (git filter-repo / BFG).
 - [ ] Добавить `mosquitto/` в репозиторий (docker-compose.yml, .env.example,
   create_passwd.sh, mosquitto.conf) — README ссылается, но директории нет.
-- [ ] Документировать UDP-протокол: формат пакетов, sequence number, byte order,
-  sample rate / bit depth — чтобы внешние пользователи могли подключить свой
-  inference engine.
+- [x] Документировать UDP-протокол: формат пакетов, sequence number, byte order,
+  sample rate / bit depth — задокументировано в README.md секция 12.
+- [x] Модуляризация detector: разбить монолитный `detector.py` на атомарные
+  архитектурные слои (engine, transport, server, integrations, bus).
+  См. `detector/engine/interface.py` для контракта замены engine.
 - [ ] Добавить Quick Start раздел в README: «ESP32 + INMP441 → 5 шагов
   до работающего детектора» для новых пользователей.
 - [ ] Разделить README: архитектура + quick start в README, детали установки

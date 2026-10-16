@@ -10,6 +10,8 @@ services:
       - tfhub_cache:/root/.cache/tfhub_modules
       - ../ml/results:/models:ro
       - clips:/clips
+    environment:
+      - TFHUB_CACHE_DIR=/tfhub_cache
     command:
       - --bind
       - 127.0.0.1

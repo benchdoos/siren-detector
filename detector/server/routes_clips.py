@@ -1,0 +1,171 @@
+"""Clip serving, spectrogram generation, and clip restore on startup."""
+
+from __future__ import annotations
+
+import base64
+import json
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING
+
+import numpy as np
+import soundfile as sf
+from fastapi import APIRouter, Header, HTTPException
+from fastapi.responses import FileResponse
+
+from ..auth import AUTH_ENABLED, check_token
+from ..config import CLIP_DIR, DATASET_DIR, VALID_LABELS
+
+if TYPE_CHECKING:
+    from ..bus import EventBus
+
+router = APIRouter()
+
+# EventBus reference, set by app.py at startup
+_bus: EventBus | None = None
+
+
+def init(bus: EventBus) -> None:
+    global _bus
+    _bus = bus
+
+
+@router.get("/clips/{filename}/spectrogram")
+async def clip_spectrogram(filename: str):
+    """Return spectrogram data for visualization (no auth required)."""
+    path = (CLIP_DIR / filename).resolve()
+    if not path.is_relative_to(CLIP_DIR.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Clip not found")
+    cache_path = path.with_suffix(".spec")
+    if cache_path.exists():
+        try:
+            return json.loads(cache_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    audio_data, sr = sf.read(str(path), dtype="float32")
+    if audio_data.ndim > 1:
+        audio_data = audio_data[:, 0]
+    duration = len(audio_data) / sr
+    n_fft = 512
+    hop_len = 256
+    window = np.hanning(n_fft).astype(np.float32)
+    n_frames = max(1, (len(audio_data) - n_fft) // hop_len)
+    spec = np.zeros((n_frames, n_fft // 2 + 1), dtype=np.float32)
+    for i in range(n_frames):
+        start = i * hop_len
+        frame = audio_data[start : start + n_fft]
+        if len(frame) < n_fft:
+            frame = np.pad(frame, (0, n_fft - len(frame)))
+        spec[i] = np.abs(np.fft.rfft(frame * window))
+    spec = 20.0 * np.log10(np.maximum(spec, 1e-10))
+    vmin, vmax = float(spec.min()), float(spec.max())
+    if vmax > vmin:
+        spec = (spec - vmin) / (vmax - vmin) * 255.0
+    else:
+        spec[:] = 0
+    target_w = min(n_frames, 400)
+    target_h = min(spec.shape[1], 80)
+    if n_frames > target_w:
+        blk = n_frames // target_w
+        spec = spec[: blk * target_w].reshape(target_w, blk, -1).mean(axis=1)
+    if spec.shape[1] > target_h:
+        blk = spec.shape[1] // target_h
+        spec = spec[:, : blk * target_h].reshape(spec.shape[0], target_h, blk).mean(axis=2)
+    spec_out = np.ascontiguousarray(np.flip(spec, axis=1).T).astype(np.uint8)
+    result = {
+        "width": int(spec_out.shape[1]),
+        "height": int(spec_out.shape[0]),
+        "duration": round(duration, 3),
+        "data": base64.b64encode(spec_out.tobytes()).decode("ascii"),
+    }
+    try:
+        cache_path.write_text(json.dumps(result), encoding="utf-8")
+    except Exception:
+        pass
+    return result
+
+
+@router.get("/clips/{filename}")
+async def serve_clip(filename: str, token: str = "", authorization: str = Header("")):
+    if AUTH_ENABLED:
+        hdr_token = authorization.removeprefix("Bearer ").strip()
+        if not ((hdr_token and check_token(hdr_token)) or (token and check_token(token))):
+            raise HTTPException(status_code=401, detail="Authentication required")
+    path = (CLIP_DIR / filename).resolve()
+    if not path.is_relative_to(CLIP_DIR.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Clip not found")
+    return FileResponse(str(path), media_type="audio/wav")
+
+
+def save_clip_meta(clip_name: str, meta: dict) -> None:
+    """Save event metadata as JSON sidecar next to the WAV clip."""
+    meta_path = CLIP_DIR / (clip_name.rsplit(".", 1)[0] + ".json")
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+
+def _load_clip_meta(clip_name: str) -> dict | None:
+    meta_path = CLIP_DIR / (clip_name.rsplit(".", 1)[0] + ".json")
+    if not meta_path.exists():
+        return None
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+async def restore_clips(bus: EventBus) -> None:
+    """Scan /clips on startup to restore event history from surviving WAV files."""
+    if not CLIP_DIR.exists():
+        return
+    wavs = sorted(CLIP_DIR.glob("*.wav"))
+    for path in wavs:
+        name = path.name
+        meta = _load_clip_meta(name)
+        if meta:
+            event_type = meta["event"]
+            ts = meta["timestamp"]
+        else:
+            if name.startswith("exp-"):
+                event_type = "explosion"
+                date_part = name[4:].replace(".wav", "")
+            elif name.startswith("moto-"):
+                event_type = "motorcycle"
+                date_part = name[5:].replace(".wav", "")
+            elif name.startswith("manual-"):
+                event_type = "unknown"
+                date_part = name[7:].replace(".wav", "")
+            else:
+                event_type = "siren"
+                date_part = name.replace(".wav", "")
+            try:
+                ts = datetime.strptime(date_part, "%Y%m%d-%H%M%S").replace(
+                    tzinfo=timezone.utc
+                ).isoformat(timespec="seconds")
+            except ValueError:
+                ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        for label in VALID_LABELS:
+            if (DATASET_DIR / label / name).exists():
+                bus.feedback[name] = label
+                break
+        ev = {
+            "type": "event", "event": event_type, "state": "confirmed",
+            "confidence": meta.get("confidence", 0.0) if meta else 0.0,
+            "timestamp": ts,
+            "source": meta.get("source", "restored") if meta else "restored",
+            "engine": meta.get("engine", "unknown") if meta else "unknown",
+            "clip_url": f"/clips/{name}",
+            "yamnet": meta.get("yamnet", 0.0) if meta else 0.0,
+            "mlp": meta.get("mlp") if meta else None,
+            "yamnet_top": meta.get("yamnet_top", "") if meta else "",
+            "yamnet_top3": meta.get("yamnet_top3", []) if meta else [],
+            "mlp_top3": meta.get("mlp_top3", []) if meta else [],
+            "threshold": meta.get("threshold") if meta else None,
+            "triggers": meta.get("triggers") if meta else None,
+            "triggers_needed": meta.get("triggers_needed") if meta else None,
+        }
+        bus.event_history.append(ev)
+    if wavs:
+        print(f"Restored {len(wavs)} clips from /clips/", flush=True)
