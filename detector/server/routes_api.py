@@ -309,6 +309,13 @@ async def feedback_segments(body: dict):
             # No segments left — restore full copy
             shutil.copy2(str(src), str(dst_dir / src.name))
 
+    # Update in-memory event_history so WS replay includes segments
+    if _bus:
+        for ev in _bus.event_history:
+            if ev.get("clip_url", "").endswith("/" + filename):
+                ev["segments"] = clean
+                break
+
     print(f"[segments] {filename} → {len(clean)} segments"
           + (f" (cleaned {removed} old files)" if removed else ""),
           flush=True)
