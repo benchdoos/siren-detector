@@ -17,7 +17,7 @@ import uvicorn
 
 from .bus import EventBus
 from .config import WEB_PORT
-from .integrations.mqtt import mqtt_connect
+from .integrations.mqtt import mqtt_connect, mqtt_subscribe
 from .server.app import create_app
 from .settings import load_settings
 
@@ -36,18 +36,26 @@ def _load_engine(name: str):
 
 
 def main() -> None:
+    # Phase 1: parse --engine first to let engine add its own args
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--engine", default="yamnet")
+    pre_args, _ = pre.parse_known_args()
+
+    engine_cls = _load_engine(pre_args.engine)
+
+    # Phase 2: full parser with shared + engine-specific args
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bind", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=9000)
     parser.add_argument("--source", default="siren-detector-01")
-    parser.add_argument("--classifier-weights", default="/models/classifier_weights.npz")
-    parser.add_argument("--classifier-labels", default="/models/classifier_labels.json")
     parser.add_argument("--web-port", type=int, default=WEB_PORT)
     parser.add_argument(
         "--engine", default="yamnet",
         help="Engine name (from registry) or dotted path to Engine class, "
              "e.g. 'yamnet' or 'mypackage.engine.MyEngine'",
     )
+    if hasattr(engine_cls, "add_arguments"):
+        engine_cls.add_arguments(parser)
     args = parser.parse_args()
 
     bus = EventBus()
@@ -55,9 +63,9 @@ def main() -> None:
 
     # MQTT (non-blocking, works without broker)
     mqtt_connect()
+    mqtt_subscribe(bus)
 
     # Engine in background thread
-    engine_cls = _load_engine(args.engine)
     engine = engine_cls()
     threading.Thread(target=engine.start, args=(bus, settings, args), daemon=True).start()
 

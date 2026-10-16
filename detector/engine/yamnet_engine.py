@@ -29,7 +29,6 @@ from ..config import (
     MODEL_URL,
     SAMPLE_RATE,
 )
-from ..integrations.mqtt import mqtt_publish_event
 from ..server.routes_clips import save_clip_meta
 from ..transport.udp import udp_receiver, udp_stats_snapshot
 from .smoother import TemporalSmoother
@@ -38,6 +37,14 @@ from .. import settings as settings_mod
 
 class YAMNetEngine:
     """YAMNet + optional MLP classifier engine."""
+
+    @staticmethod
+    def add_arguments(parser: argparse.ArgumentParser) -> None:
+        """Register YAMNet-specific CLI arguments."""
+        parser.add_argument("--classifier-weights", default="/models/classifier_weights.npz",
+                            help="Path to MLP classifier weights (.npz)")
+        parser.add_argument("--classifier-labels", default="/models/classifier_labels.json",
+                            help="Path to MLP classifier labels (.json)")
 
     def start(self, bus: EventBus, settings: dict, args: argparse.Namespace) -> None:
         settings_mod.settings.update(settings)
@@ -56,13 +63,13 @@ class YAMNetEngine:
             print(f"Detector '{name}' YAMNet classes: {[class_names[i] for i in indices]}", flush=True)
 
         clf = None
-        engine = "yamnet"
+        det_engine = "yamnet"
         weights_path = Path(args.classifier_weights)
         labels_path = Path(args.classifier_labels)
         if weights_path.exists() and labels_path.exists():
             from ..classifier_infer import SirenClassifier
             clf = SirenClassifier(weights_path, labels_path)
-            engine = "yamnet+mlp"
+            det_engine = "yamnet+mlp"
             print(f"Classifier loaded: {clf.labels}", flush=True)
         else:
             print("No classifier weights — using raw YAMNet siren score.", flush=True)
@@ -224,14 +231,12 @@ class YAMNetEngine:
 
             for name, (_, _, prefix) in DETECTORS.items():
                 new_state = state_changes[name]
-                if new_state == "idle":
-                    mqtt_publish_event(name, "idle", 0.0)
-                if new_state not in ("possible", "confirmed"):
+                if new_state not in ("idle", "possible", "confirmed"):
                     continue
-                clip_url = None
                 pk = peaks[name]
-                det_engine = engine if (name == "siren" and clf is not None) else "yamnet"
+                engine_name = det_engine if (name == "siren" and clf is not None) else "yamnet"
                 thr_key = f"{name}_threshold"
+                clip_url = None
                 if new_state == "confirmed":
                     clip_name = f"{prefix}{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.wav"
                     clip_duration = None
@@ -244,7 +249,7 @@ class YAMNetEngine:
                     print(f"[{ts}] {name} clip saved: {clip_url}", flush=True)
                     meta = {
                         "event": name, "confidence": round(pk["score"], 3),
-                        "timestamp": ts, "source": args.source, "engine": det_engine,
+                        "timestamp": ts, "source": args.source, "engine": engine_name,
                         "yamnet": round(pk["yamnet"], 3),
                         "mlp": round(pk["mlp"], 3) if pk["mlp"] is not None else None,
                         "yamnet_top": pk["top"],
@@ -263,7 +268,7 @@ class YAMNetEngine:
                 event = {
                     "type": "event", "event": name, "state": new_state,
                     "confidence": round(pk["score"], 3), "timestamp": ts,
-                    "source": args.source, "engine": det_engine, "clip_url": clip_url,
+                    "source": args.source, "engine": engine_name, "clip_url": clip_url,
                     "yamnet": round(pk["yamnet"], 3),
                     "mlp": round(pk["mlp"], 3) if pk["mlp"] is not None else None,
                     "yamnet_top": pk["top"],
@@ -274,7 +279,6 @@ class YAMNetEngine:
                     "triggers_needed": settings_mod.settings["confirmed_triggers"] if new_state == "confirmed" else settings_mod.settings["possible_triggers"],
                 }
                 bus.broadcast(event)
-                mqtt_publish_event(name, new_state, pk["score"])
                 print(f"EVENT {json.dumps(event)}", flush=True)
                 if new_state == "confirmed":
                     peaks[name] = dict(_empty_peak)

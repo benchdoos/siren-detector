@@ -1192,7 +1192,73 @@ Offset  Size   Type         Description
 
 ---
 
-# 13. Долгосрочная цель
+# 13. Web & WebSocket API
+
+Detection Engine предоставляет HTTP и WebSocket API на порту 8080.
+
+## HTTP endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/` | — | Web UI (single-page) |
+| `GET` | `/api/auth/status` | — | `{"auth_enabled": true}` |
+| `POST` | `/api/auth/check` | — | Проверка токена: `{"token": "..."}` → `{"ok": true}` |
+| `GET` | `/api/settings` | viewer | Текущие настройки + defaults |
+| `POST` | `/api/settings` | admin | Обновить настройки (partial update) |
+| `POST` | `/api/settings/reset` | admin | Сбросить к defaults |
+| `GET` | `/api/metrics` | viewer | Метрики последней валидации модели |
+| `GET` | `/api/audits` | viewer | Последние 5 аудитов модели |
+| `POST` | `/feedback` | admin | Присвоить лейбл клипу: `{"filename": "...", "label": "siren"}` |
+| `POST` | `/api/manual-event` | admin | Сохранить текущий буфер как ручное событие |
+| `GET` | `/clips/{name}` | viewer | Скачать WAV-клип |
+| `GET` | `/clips/{name}/spectrogram` | — | Спектрограмма клипа (JSON: width, height, data) |
+
+Auth: `Authorization: Bearer <ADMIN_TOKEN>` header. Viewer и admin используют один токен.
+
+## WebSocket endpoints
+
+### `/ws` — события и scores
+
+Подключение: `ws://<host>:8080/ws?token=<ADMIN_TOKEN>`
+
+При подключении сервер отправляет:
+1. Последний score message
+2. Историю событий (до 100)
+
+Затем в реальном времени:
+
+**Score** (~каждые 0.5с):
+```json
+{
+  "type": "score",
+  "top": "Speech",
+  "siren_score": 0.42, "siren_state": "possible", "siren_triggers": 5,
+  "explosion_score": 0.0, "explosion_state": "idle",
+  "audio_alive": true, "audio_pps": 31.2
+}
+```
+
+**Event** (при смене состояния):
+```json
+{
+  "type": "event",
+  "event": "siren", "state": "confirmed",
+  "confidence": 0.87, "timestamp": "2026-10-16T12:00:00+00:00",
+  "clip_url": "/clips/20261016-120000.wav",
+  "engine": "yamnet+mlp"
+}
+```
+
+### `/ws/audio` — live PCM stream
+
+Подключение: `ws://<host>:8080/ws/audio?token=<ADMIN_TOKEN>`
+
+Бинарные сообщения: raw float32 PCM, 16 kHz, mono. Для воспроизведения
+в браузере — декодировать в AudioWorklet.
+
+---
+
+# 14. Долгосрочная цель
 
 Сделать доступную и расширяемую платформу:
 

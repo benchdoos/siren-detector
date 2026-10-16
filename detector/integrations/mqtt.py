@@ -4,12 +4,9 @@ from __future__ import annotations
 
 import json
 import os
-from typing import TYPE_CHECKING
 
+from ..bus import EventBus
 from ..config import DETECTORS
-
-if TYPE_CHECKING:
-    from ..bus import EventBus
 
 MQTT_HOST = os.environ.get("MQTT_HOST", "")
 MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
@@ -120,7 +117,7 @@ def _publish_discovery(client) -> None:
     print("MQTT discovery configs published.", flush=True)
 
 
-def mqtt_publish_event(name: str, state: str, confidence: float) -> None:
+def _mqtt_publish_event(name: str, state: str, confidence: float) -> None:
     """Publish detector state change to MQTT."""
     if _mqtt_client is None:
         return
@@ -131,3 +128,19 @@ def mqtt_publish_event(name: str, state: str, confidence: float) -> None:
     elif state == "idle":
         _mqtt_client.publish(f"sound_detector/{name}/state", "OFF", retain=True)
         _mqtt_client.publish(f"sound_detector/{name}/confidence", "0", retain=True)
+
+
+def _on_bus_message(msg: dict) -> None:
+    """Bus subscriber callback: forward events to MQTT."""
+    if msg.get("type") != "event":
+        return
+    name = msg.get("event", "")
+    state = msg.get("state", "")
+    confidence = msg.get("confidence", 0.0)
+    if state in ("idle", "possible", "confirmed"):
+        _mqtt_publish_event(name, state, confidence)
+
+
+def mqtt_subscribe(bus: EventBus) -> None:
+    """Subscribe to EventBus so all engines get MQTT publishing for free."""
+    bus.subscribe(_on_bus_message)
