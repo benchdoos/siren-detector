@@ -1,6 +1,6 @@
 {
-  "audit_timestamp": "2026-10-16T17:32:18+00:00",
-  "model_trained_at": "2026-10-16T17:32:15+00:00",
+  "audit_timestamp": "2026-10-16T17:40:47+00:00",
+  "model_trained_at": "2026-10-16T17:40:44+00:00",
   "labels": [
     "siren",
     "background",
@@ -9,46 +9,46 @@
   ],
   "val_accuracy": {
     "siren": {
-      "accuracy": 0.811,
+      "accuracy": 0.822,
       "windows": 3709
     },
     "background": {
-      "accuracy": 0.78,
+      "accuracy": 0.809,
       "windows": 8700
     },
     "explosion": {
-      "accuracy": 0.776,
-      "windows": 967
+      "accuracy": 0.719,
+      "windows": 947
     },
     "motorcycle": {
-      "accuracy": 0.692,
-      "windows": 478
+      "accuracy": 0.63,
+      "windows": 598
     }
   },
   "confusion_matrix": [
     [
-      3009,
-      281,
-      154,
-      265
+      3050,
+      303,
+      131,
+      225
     ],
     [
-      840,
-      6782,
-      839,
-      239
+      990,
+      7041,
+      482,
+      187
     ],
     [
-      55,
-      144,
-      750,
-      18
+      86,
+      157,
+      681,
+      23
     ],
     [
-      72,
-      29,
-      46,
-      331
+      110,
+      45,
+      66,
+      377
     ]
   ],
   "file_counts": {
@@ -61,31 +61,31 @@
       "max_recommended_aug": 182
     },
     "background": {
-      "total": 771,
-      "real": 771,
+      "total": 773,
+      "real": 773,
       "aug": 0,
       "aug_pct": 0.0,
       "aug_real_ratio": 0.0,
-      "max_recommended_aug": 1542
+      "max_recommended_aug": 1546
     },
     "explosion": {
-      "total": 412,
-      "real": 262,
+      "total": 413,
+      "real": 263,
       "aug": 150,
-      "aug_pct": 36.4,
+      "aug_pct": 36.3,
       "aug_real_ratio": 0.6,
-      "max_recommended_aug": 524
+      "max_recommended_aug": 526
     },
     "motorcycle": {
-      "total": 251,
-      "real": 91,
+      "total": 256,
+      "real": 96,
       "aug": 160,
-      "aug_pct": 63.7,
-      "aug_real_ratio": 1.8,
-      "max_recommended_aug": 182
+      "aug_pct": 62.5,
+      "aug_real_ratio": 1.7,
+      "max_recommended_aug": 192
     }
   },
   "issues": [
-    "background: 18.2× more windows than smallest class"
+    "background: 14.5× more windows than smallest class"
   ]
 }
