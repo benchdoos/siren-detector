@@ -97,7 +97,15 @@
   .event-conf { font-size: 14px; color: #888; }
   .event-engine { font-size: 13px; color: #444; }
   .event-breakdown { font-size: 13px; color: #555; margin-bottom: 8px; }
-  audio { width: 100%; height: 36px; filter: invert(1) hue-rotate(180deg) brightness(0.8); }
+  .clip-player { margin-top: 4px; position: relative; }
+  .spec-canvas { width: 100%; height: 60px; border-radius: 4px; cursor: pointer; display: block; background: #111; }
+  .player-controls { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .player-controls audio { flex: 1; min-width: 180px; height: 36px; filter: invert(1) hue-rotate(180deg) brightness(0.8); }
+  .pc-btn { font-size: 12px; padding: 3px 8px; border-radius: 4px; border: 1px solid #333; background: none; color: #888; cursor: pointer; white-space: nowrap; }
+  .pc-btn:hover { color: #ccc; border-color: #555; }
+  .pc-speed { font-variant-numeric: tabular-nums; width: 38px; text-align: center; }
+  .player-controls audio::-webkit-media-controls-seek-back-button,
+  .player-controls audio::-webkit-media-controls-seek-forward-button { display: none; }
   .no-clip { font-size: 14px; color: #444; font-style: italic; }
   .empty { text-align: center; padding: 40px; color: #444; font-size: 16px; }
   .label-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
@@ -582,7 +590,15 @@ function addEvent(ev) {
     </div>
     ${breakdown ? `<div class="event-breakdown">${breakdown}</div>` : ''}
     <div class="ev-details">${detailsHtml}</div>
-    <audio controls src="${esc(ev.clip_url)}${_adminToken ? '?token=' + encodeURIComponent(_adminToken) : ''}"></audio>
+    <div class="clip-player" data-clip-url="${esc(ev.clip_url)}">
+      <canvas class="spec-canvas"></canvas>
+      <div class="player-controls"${isAdmin() ? '' : ' style="display:none"'}>
+        <button class="pc-btn pc-skip-back" onclick="pcSkip(this,-1)">&#9664; 5s</button>
+        <button class="pc-btn pc-skip-fwd" onclick="pcSkip(this,1)">5s &#9654;</button>
+        <button class="pc-btn pc-speed" onclick="pcSpeed(this)">1&times;</button>
+        <audio controls preload="metadata"${isAdmin() ? ` src="${esc(ev.clip_url)}${_adminToken ? '?token=' + encodeURIComponent(_adminToken) : ''}"` : ''}></audio>
+      </div>
+    </div>
     <div class="label-row">
       <span>Label:</span>
       ${VALID_LABELS.map(l =>
@@ -600,10 +616,7 @@ function addEvent(ev) {
     card.dataset.tagged = 'false';
     card.style.display = cardMatchesFilter(card, activeFilter) ? '' : 'none';
   }
-  card.querySelector('audio').addEventListener('play', function() {
-    if (currentAudio && currentAudio !== this) { currentAudio.pause(); currentAudio.currentTime = 0; }
-    currentAudio = this;
-  });
+  initClipPlayer(card);
   const authed = isAdmin();
   card.querySelectorAll('.ev-check').forEach(el => el.classList.toggle('visible', authed));
   card.querySelectorAll('.label-row').forEach(el => el.classList.toggle('visible', authed));
@@ -754,6 +767,23 @@ function updateAdminUI() {
   // show/hide label rows and checkboxes in event cards
   document.querySelectorAll('.label-row').forEach(el => el.classList.toggle('visible', authed));
   document.querySelectorAll('.ev-check').forEach(el => el.classList.toggle('visible', authed));
+  // update clip players: show/hide controls, set/remove audio src
+  document.querySelectorAll('.clip-player').forEach(player => {
+    const controls = player.querySelector('.player-controls');
+    if (controls) controls.style.display = authed ? '' : 'none';
+    const audio = player.querySelector('audio');
+    const url = player.dataset.clipUrl;
+    if (audio && url) {
+      if (authed) {
+        const newSrc = url + (_adminToken ? '?token=' + encodeURIComponent(_adminToken) : '');
+        if (!audio.src || !audio.src.includes(url.split('/').pop())) {
+          audio.src = newSrc;
+        }
+      } else {
+        if (audio.src) { audio.pause(); audio.removeAttribute('src'); audio.load(); }
+      }
+    }
+  });
 }
 
 function toggleAdmin() {
@@ -1140,6 +1170,187 @@ async function saveSettings() {
     status.textContent = 'Network error';
     status.style.color = '#ef5350';
   }
+}
+
+/* ── Spectrogram colormap ────────────────────────── */
+const SPEC_CMAP = new Uint8Array(256 * 3);
+(function() {
+  const stops = [
+    [0.00,   0,   0,   4],
+    [0.15,  10,   8,  80],
+    [0.30,  50,  10, 130],
+    [0.45, 120,  28, 110],
+    [0.60, 180,  50,  58],
+    [0.75, 230, 130,  20],
+    [0.90, 250, 210,  50],
+    [1.00, 252, 255, 164],
+  ];
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255;
+    let j = 0;
+    while (j < stops.length - 2 && stops[j + 1][0] < t) j++;
+    const [t0, r0, g0, b0] = stops[j];
+    const [t1, r1, g1, b1] = stops[j + 1];
+    const f = t1 > t0 ? (t - t0) / (t1 - t0) : 0;
+    SPEC_CMAP[i * 3]     = Math.round(r0 + (r1 - r0) * f);
+    SPEC_CMAP[i * 3 + 1] = Math.round(g0 + (g1 - g0) * f);
+    SPEC_CMAP[i * 3 + 2] = Math.round(b0 + (b1 - b0) * f);
+  }
+})();
+
+function loadSpectrogram(player) {
+  const url = player.dataset.clipUrl;
+  if (!url) return;
+  const canvas = player.querySelector('.spec-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(0, 0, canvas.width || 300, canvas.height || 60);
+  ctx.fillStyle = '#333';
+  ctx.font = '12px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('loading...', (canvas.width || 300) / 2, 35);
+
+  fetch(url + '/spectrogram')
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(spec => {
+      // Decode base64 to Uint8Array
+      const raw = atob(spec.data);
+      const arr = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+
+      // Create offscreen canvas with spectrogram image
+      const off = document.createElement('canvas');
+      off.width = spec.width;
+      off.height = spec.height;
+      const octx = off.getContext('2d');
+      const img = octx.createImageData(spec.width, spec.height);
+      for (let i = 0; i < arr.length; i++) {
+        const v = arr[i];
+        img.data[i * 4]     = SPEC_CMAP[v * 3];
+        img.data[i * 4 + 1] = SPEC_CMAP[v * 3 + 1];
+        img.data[i * 4 + 2] = SPEC_CMAP[v * 3 + 2];
+        img.data[i * 4 + 3] = 255;
+      }
+      octx.putImageData(img, 0, 0);
+
+      player._specImage = off;
+      player._specDuration = spec.duration;
+      drawSpecFrame(canvas, off, 0, spec.duration);
+    })
+    .catch(() => {
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(0, 0, canvas.width || 300, canvas.height || 60);
+      ctx.fillStyle = '#444';
+      ctx.font = '12px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('no spectrogram', (canvas.width || 300) / 2, 35);
+    });
+}
+
+function drawSpecFrame(canvas, offscreen, currentTime, duration) {
+  const w = canvas.clientWidth || 300;
+  const h = canvas.clientHeight || 60;
+  if (canvas.width !== w * devicePixelRatio || canvas.height !== h * devicePixelRatio) {
+    canvas.width = w * devicePixelRatio;
+    canvas.height = h * devicePixelRatio;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height);
+  // Progress line
+  if (currentTime > 0 && duration > 0) {
+    const xPos = Math.round(currentTime / duration * canvas.width);
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 2 * devicePixelRatio;
+    ctx.beginPath();
+    ctx.moveTo(xPos, 0);
+    ctx.lineTo(xPos, canvas.height);
+    ctx.stroke();
+    // Dim played region
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(0, 0, xPos, canvas.height);
+  }
+}
+
+function initClipPlayer(card) {
+  const player = card.querySelector('.clip-player');
+  if (!player) return;
+
+  // Load spectrogram
+  loadSpectrogram(player);
+
+  // Canvas click to seek
+  const canvas = player.querySelector('.spec-canvas');
+  canvas.addEventListener('click', function(e) {
+    const audio = player.querySelector('audio');
+    if (!audio || !audio.duration || !isAdmin()) return;
+    const rect = this.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    audio.currentTime = Math.max(0, Math.min(audio.duration, x * audio.duration));
+    if (player._specImage) drawSpecFrame(canvas, player._specImage, audio.currentTime, player._specDuration);
+  });
+
+  const audio = player.querySelector('audio');
+  if (!audio) return;
+
+  audio.addEventListener('loadedmetadata', function() {
+    const skip = Math.max(1, Math.round(this.duration / 3));
+    const back = player.querySelector('.pc-skip-back');
+    const fwd = player.querySelector('.pc-skip-fwd');
+    if (back) back.textContent = '\u25C0 ' + skip + 's';
+    if (fwd) fwd.textContent = skip + 's \u25B6';
+    player._skipSec = skip;
+  });
+  audio.addEventListener('play', function() {
+    if (currentAudio && currentAudio !== this) { currentAudio.pause(); currentAudio.currentTime = 0; }
+    currentAudio = this;
+    _startSpecTick();
+  });
+  audio.addEventListener('pause', function() {
+    if (player._specImage) drawSpecFrame(canvas, player._specImage, this.currentTime, player._specDuration);
+  });
+  audio.addEventListener('ended', function() {
+    if (player._specImage) drawSpecFrame(canvas, player._specImage, 0, player._specDuration);
+  });
+  audio.addEventListener('seeked', function() {
+    if (player._specImage) drawSpecFrame(canvas, player._specImage, this.currentTime, player._specDuration);
+  });
+}
+
+/* ── Spectrogram progress animation ───────────── */
+let _specRaf = 0;
+function _tickSpec() {
+  let anyPlaying = false;
+  document.querySelectorAll('.clip-player').forEach(player => {
+    const audio = player.querySelector('audio');
+    if (!audio || audio.paused || !player._specImage) return;
+    anyPlaying = true;
+    drawSpecFrame(player.querySelector('.spec-canvas'), player._specImage, audio.currentTime, player._specDuration);
+  });
+  if (anyPlaying) { _specRaf = requestAnimationFrame(_tickSpec); }
+  else { _specRaf = 0; }
+}
+function _startSpecTick() { if (!_specRaf) _specRaf = requestAnimationFrame(_tickSpec); }
+
+/* ── Player controls ──────────────────────────── */
+function pcSkip(btn, dir) {
+  const player = btn.closest('.clip-player');
+  const audio = player.querySelector('audio');
+  if (!audio || !audio.duration) return;
+  const skip = player._skipSec || Math.max(1, Math.round(audio.duration / 3));
+  audio.currentTime = Math.max(0, Math.min(audio.duration, audio.currentTime + dir * skip));
+}
+
+const SPEED_STEPS = [1, 1.5, 2, 0.5];
+function pcSpeed(btn) {
+  const player = btn.closest('.clip-player');
+  const audio = player.querySelector('audio');
+  if (!audio) return;
+  const cur = audio.playbackRate;
+  let idx = SPEED_STEPS.indexOf(cur);
+  idx = (idx + 1) % SPEED_STEPS.length;
+  audio.playbackRate = SPEED_STEPS[idx];
+  btn.textContent = SPEED_STEPS[idx] + '\u00D7';
 }
 
 async function resetSettings() {

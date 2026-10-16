@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import collections
 import csv
 import hashlib
@@ -530,6 +531,67 @@ app.mount("/static", StaticFiles(directory=str(_static)), name="static")
 @app.get("/")
 async def index():
     return FileResponse(_static / "index.html")
+
+
+@app.get("/clips/{filename}/spectrogram")
+async def clip_spectrogram(filename: str):
+    """Return spectrogram data for visualization (no auth required)."""
+    path = (CLIP_DIR / filename).resolve()
+    if not path.is_relative_to(CLIP_DIR.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Clip not found")
+    # Check cache
+    cache_path = path.with_suffix(".spec")
+    if cache_path.exists():
+        try:
+            return json.loads(cache_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    audio_data, sr = sf.read(str(path), dtype="float32")
+    if audio_data.ndim > 1:
+        audio_data = audio_data[:, 0]
+    duration = len(audio_data) / sr
+    n_fft = 512
+    hop_len = 256
+    window = np.hanning(n_fft).astype(np.float32)
+    n_frames = max(1, (len(audio_data) - n_fft) // hop_len)
+    spec = np.zeros((n_frames, n_fft // 2 + 1), dtype=np.float32)
+    for i in range(n_frames):
+        start = i * hop_len
+        frame = audio_data[start : start + n_fft]
+        if len(frame) < n_fft:
+            frame = np.pad(frame, (0, n_fft - len(frame)))
+        spec[i] = np.abs(np.fft.rfft(frame * window))
+    # Log scale dB
+    spec = 20.0 * np.log10(np.maximum(spec, 1e-10))
+    vmin, vmax = float(spec.min()), float(spec.max())
+    if vmax > vmin:
+        spec = (spec - vmin) / (vmax - vmin) * 255.0
+    else:
+        spec[:] = 0
+    # Downsample for display
+    target_w = min(n_frames, 400)
+    target_h = min(spec.shape[1], 80)
+    if n_frames > target_w:
+        blk = n_frames // target_w
+        spec = spec[: blk * target_w].reshape(target_w, blk, -1).mean(axis=1)
+    if spec.shape[1] > target_h:
+        blk = spec.shape[1] // target_h
+        spec = spec[:, : blk * target_h].reshape(spec.shape[0], target_h, blk).mean(axis=2)
+    # Flip freq axis (high freq at top), transpose to (freq, time) for row-major layout
+    spec_out = np.ascontiguousarray(np.flip(spec, axis=1).T).astype(np.uint8)
+    result = {
+        "width": int(spec_out.shape[1]),
+        "height": int(spec_out.shape[0]),
+        "duration": round(duration, 3),
+        "data": base64.b64encode(spec_out.tobytes()).decode("ascii"),
+    }
+    try:
+        cache_path.write_text(json.dumps(result), encoding="utf-8")
+    except Exception:
+        pass
+    return result
 
 
 @app.get("/clips/{filename}")
