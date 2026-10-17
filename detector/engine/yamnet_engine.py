@@ -154,6 +154,7 @@ class YAMNetEngine:
                 s = _create_source(source_id, name)
                 sources[source_id] = s
                 bus.clip_bufs[source_id] = s.clip_buf
+                bus.source_names[source_id] = name
                 _sync_smoothers()
                 print(f"[multi-source] source {source_id} ({name}) registered", flush=True)
             return s.inference_buf, s.clip_buf

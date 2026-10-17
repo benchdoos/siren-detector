@@ -246,7 +246,9 @@
 - [x] MQTT: публикует `source` в топик при confirmed-событии.
 - [x] Docker Compose: `audio-source` сервис с профилем `usb-mic`.
 - [x] CLI: `--source-name 0=esp32-main --source-name 1=rpi-usb` для именования источников.
-- [ ] Web UI: отображать source_id в событиях и score bar.
+- [x] Web UI: отображать source_id в событиях и score bar (+ client-side агрегация worst-case).
+- [x] Per-source background calibration: кнопка Calibrate в Web UI записывает фон с выбранного
+  источника, сохраняет в `dataset/background/{source_name}/`, `make retrain` подхватывает.
 - [ ] Проверить задержку и нагрузку на RPi при двух параллельных потоках.
 
 ## Ближайшие действия
