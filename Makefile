@@ -37,6 +37,10 @@ deploy-firmware:
 	ssh $(RPI) "cd $(RPI_BASE) && docker compose run --rm esphome compile /config/siren-detector.yaml"
 	ssh $(RPI) "cd $(RPI_BASE) && docker compose run --rm esphome upload /config/siren-detector.yaml --device $(ESP_DEVICE)"
 
+## Stream ESP32 logs via ESPHome
+logs-esp:
+	ssh $(RPI) "cd $(RPI_BASE) && docker compose run --rm esphome logs /config/siren-detector.yaml --device $(ESP_DEVICE)"
+
 ## Deploy docker-compose.yml to RPi
 deploy-compose:
 	scp hub/docker-compose.yml $(RPI):$(RPI_BASE)/hub/
@@ -182,6 +186,7 @@ help:
 	@echo "    make deploy-audio    Deploy audio_source to RPi"
 	@echo "    make deploy-ui       Frontend only (no rebuild)"
 	@echo "    make deploy-firmware Validate + compile + flash ESP32 OTA"
+	@echo "    make logs-esp        Stream ESP32 logs"
 	@echo "    make deploy-compose  Push docker-compose.yml"
 	@echo "    make restart         Restart container"
 	@echo "    make logs            Tail container logs"
@@ -207,7 +212,7 @@ help:
 	@echo "    make audit-compare   Compare latest vs previous audit"
 	@echo ""
 
-.PHONY: deploy deploy-audio deploy-ui deploy-firmware deploy-compose restart logs \
+.PHONY: deploy deploy-audio deploy-ui deploy-firmware logs-esp deploy-compose restart logs \
         sync-dataset train deploy-model retrain _merge-recorder _clean-trained \
         clean-clips clean-dataset clean-docker \
         augment augment-siren augment-explosion augment-motorcycle \
