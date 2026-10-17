@@ -93,7 +93,12 @@ def annotate(
     except ZoneInfoNotFoundError as error:
         raise ValueError(f"Unknown timezone: {timezone_name}") from error
 
-    started_at = recording_start(source, timezone)
+    all_relative = all(s.startswith("@") and e.startswith("@") for _, s, e in segments)
+    if all_relative:
+        # File-relative mode: no sidecar needed, use epoch as dummy anchor
+        started_at = datetime(2000, 1, 1, tzinfo=timezone)
+    else:
+        started_at = recording_start(source, timezone)
     dataset_root = dataset_root or Path(__file__).resolve().parent
     dataset_root = dataset_root.resolve()
     manifest_path = dataset_root / "annotations.csv"
