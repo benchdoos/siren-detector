@@ -30,8 +30,11 @@ async def ws_audio_endpoint(ws: WebSocket):
         await ws.close(code=4401, reason="Authentication required")
         return
     await ws.accept()
+    # Optional source_id filter: /ws/audio?source_id=1
+    sid_raw = ws.query_params.get("source_id")
+    sid_filter: int | None = int(sid_raw) if sid_raw is not None else None
     queue: asyncio.Queue = asyncio.Queue()
-    _bus.audio_queues[ws] = queue
+    _bus.audio_queues[ws] = (queue, sid_filter)
     try:
         async def sender():
             while True:

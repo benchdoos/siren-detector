@@ -153,6 +153,10 @@
   .metrics-btn { font-size: 13px; padding: 3px 10px; border-radius: 4px; border: 1px solid #333; background: none; color: #888; cursor: pointer; }
   .metrics-btn:hover { color: #ccc; border-color: #555; }
   .metrics-btn.listening { background: #1a3a1a; border-color: #4caf50; color: #4caf50; }
+  .listen-picker { display: none; position: absolute; top: calc(100% + 4px); right: 0; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 4px 0; min-width: 160px; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .listen-picker.open { display: block; }
+  .listen-picker-item { display: block; width: 100%; text-align: left; padding: 8px 14px; font-size: 13px; color: #ccc; background: none; border: none; cursor: pointer; white-space: nowrap; }
+  .listen-picker-item:hover { background: #222; color: #fff; }
 
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200; justify-content: center; align-items: center; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px 0; }
   .modal-overlay.open { display: flex; }
@@ -241,7 +245,10 @@
     <span id="audio-status">audio: —</span>
   </span>
   <span class="header-actions">
-    <button class="metrics-btn" id="listen-btn" onclick="toggleListen()">Listen</button>
+    <span style="position:relative;display:inline-block">
+      <button class="metrics-btn" id="listen-btn" onclick="toggleListen()" style="min-width:72px;font-family:monospace;text-align:center">Listen</button>
+      <div class="listen-picker" id="listen-picker"></div>
+    </span>
     <button class="metrics-btn" onclick="showMetrics()">Metrics</button>
     <button class="metrics-btn admin-only-btn" id="settings-btn" onclick="showSettings()">Settings</button>
     <button class="admin-btn" id="admin-btn" onclick="toggleAdmin()">Admin</button>
@@ -1037,23 +1044,44 @@ document.getElementById('detector-help-overlay').addEventListener('click', e => 
 let _audioWs = null;
 let _audioCtx = null;
 let _audioNextTime = 0;
+let _listenDotTimer = null;
+const _DOT_FRAMES = ['...', '\u00a0..', '.\u00a0.', '..\u00a0'];
+let _dotIdx = 0;
 
 function toggleListen() {
-  if (_audioWs) {
-    stopListen();
+  if (_audioWs) { stopListen(); return; }
+  const sourceIds = Object.keys(_knownSources);
+  if (sourceIds.length > 1) {
+    // Show source picker
+    const picker = document.getElementById('listen-picker');
+    if (picker.classList.contains('open')) { picker.classList.remove('open'); return; }
+    picker.innerHTML = sourceIds.map(sid =>
+      `<button class="listen-picker-item" onclick="startListen(${sid})">${esc(_knownSources[sid])} <span style="color:#666">(id: ${sid})</span></button>`
+    ).join('');
+    picker.classList.add('open');
   } else {
-    startListen();
+    startListen(sourceIds.length === 1 ? parseInt(sourceIds[0]) : null);
   }
 }
 
-function startListen() {
+function startListen(sourceId) {
+  document.getElementById('listen-picker').classList.remove('open');
   _audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
   _audioNextTime = 0;
-  _audioWs = new WebSocket(_wsUrl('/ws/audio'));
+  let url = _wsUrl('/ws/audio');
+  if (sourceId != null) {
+    url += (url.includes('?') ? '&' : '?') + 'source_id=' + sourceId;
+  }
+  _audioWs = new WebSocket(url);
   _audioWs.binaryType = 'arraybuffer';
   _audioWs.onopen = () => {
-    document.getElementById('listen-btn').classList.add('listening');
-    document.getElementById('listen-btn').textContent = 'Listening…';
+    const btn = document.getElementById('listen-btn');
+    btn.classList.add('listening');
+    _dotIdx = 0;
+    _listenDotTimer = setInterval(() => {
+      btn.textContent = _DOT_FRAMES[_dotIdx % _DOT_FRAMES.length];
+      _dotIdx++;
+    }, 300);
   };
   _audioWs.onclose = () => stopListen();
   _audioWs.onmessage = ({ data }) => {
@@ -1072,12 +1100,21 @@ function startListen() {
 }
 
 function stopListen() {
+  if (_listenDotTimer) { clearInterval(_listenDotTimer); _listenDotTimer = null; }
   if (_audioWs) { _audioWs.close(); _audioWs = null; }
   if (_audioCtx) { _audioCtx.close(); _audioCtx = null; }
   const btn = document.getElementById('listen-btn');
   btn.classList.remove('listening');
   btn.textContent = 'Listen';
 }
+
+// Close picker on click outside
+document.addEventListener('click', e => {
+  const picker = document.getElementById('listen-picker');
+  if (picker && !e.target.closest('#listen-btn') && !e.target.closest('.listen-picker')) {
+    picker.classList.remove('open');
+  }
+});
 
 /* ── Manual event ────────────────────────────────── */
 async function createManualEvent() {
