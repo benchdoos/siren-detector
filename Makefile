@@ -17,6 +17,11 @@ deploy:
 	@test -f hub/.env && scp hub/.env $(RPI):$(RPI_BASE)/hub/.env || true
 	ssh $(RPI) "cd $(RPI_BASE)/hub && docker compose up --build -d detector && docker image prune -f"
 
+## Deploy audio_source to RPi and rebuild
+deploy-audio:
+	rsync -av --delete --exclude='__pycache__' audio_source/ $(RPI):$(RPI_BASE)/audio_source/
+	ssh $(RPI) "cd $(RPI_BASE)/audio_source && docker compose up --build -d"
+
 ## Deploy only frontend (no rebuild needed)
 deploy-ui:
 	scp detector/static/index.html $(RPI):$(RPI_BASE)/detector/static/
@@ -164,6 +169,7 @@ help:
 	@echo ""
 	@echo "  Deploy"
 	@echo "    make deploy          Full rebuild on RPi"
+	@echo "    make deploy-audio    Deploy audio_source to RPi"
 	@echo "    make deploy-ui       Frontend only (no rebuild)"
 	@echo "    make deploy-compose  Push docker-compose.yml"
 	@echo "    make restart         Restart container"
@@ -190,7 +196,7 @@ help:
 	@echo "    make audit-compare   Compare latest vs previous audit"
 	@echo ""
 
-.PHONY: deploy deploy-ui deploy-compose restart logs \
+.PHONY: deploy deploy-audio deploy-ui deploy-compose restart logs \
         sync-dataset train deploy-model retrain _merge-recorder _clean-trained \
         clean-clips clean-dataset clean-docker \
         augment augment-siren augment-explosion augment-motorcycle \

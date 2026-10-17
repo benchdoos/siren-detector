@@ -101,6 +101,7 @@
   .event-time { font-size: 14px; color: #666; }
   .event-conf { font-size: 14px; color: #888; }
   .event-engine { font-size: 13px; color: #444; }
+  .event-source { font-size: 11px; padding: 2px 7px; border-radius: 4px; background: #222; color: #666; margin-left: auto; white-space: nowrap; }
   .event-breakdown { font-size: 13px; color: #555; margin-bottom: 8px; }
   .clip-player { margin-top: 4px; position: relative; }
   .spec-canvas { width: 100%; height: 60px; border-radius: 4px; cursor: pointer; display: block; background: #111; touch-action: none; }
@@ -470,6 +471,7 @@ const DETECTOR_NAMES = ['siren', 'explosion', 'motorcycle'];
 const DETECTOR_THRESHOLDS = { siren: 0.10, explosion: 0.15, motorcycle: 0.15 };
 const _cooldownStart = {};  // track when cooldown first began per detector
 const VALID_LABELS = ['siren', 'background', 'motorcycle', 'explosion', 'unknown'];
+const _knownSources = {};  // source_id → source name (populated from score messages)
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 function cardMatchesFilter(card, filter) {
@@ -548,13 +550,23 @@ function updateScores(msg) {
   const audioEl = document.getElementById('audio-status');
   if (msg.audio_alive != null) {
     if (msg.audio_alive) {
-      audioEl.textContent = `audio: ${msg.audio_pps} pps`;
+      let text = `audio: ${msg.audio_pps} pps`;
+      if (msg.audio_sources) {
+        const count = Object.values(msg.audio_sources).filter(s => s.alive).length;
+        const total = Object.keys(msg.audio_sources).length;
+        text = `audio: ${count}/${total} src · ${msg.audio_pps} pps`;
+      }
+      audioEl.textContent = text;
       audioEl.className = 'alive';
     } else {
       const ago = msg.audio_ago;
       audioEl.textContent = ago < 0 ? 'audio: no signal' : `audio: lost ${ago.toFixed(0)}s ago`;
       audioEl.className = 'dead';
     }
+  }
+  // track source name from score messages
+  if (msg.source && msg.source_id != null) {
+    _knownSources[msg.source_id] = msg.source;
   }
 }
 
@@ -584,6 +596,7 @@ function buildDetailsHtml(ev) {
     html += `<div class="detail-row"><span class="detail-label">Triggers</span><span class="detail-val">${ev.triggers} / ${ev.triggers_needed || '?'} in window</span></div>`;
   }
   html += `<div class="detail-row"><span class="detail-label">Engine</span><span class="detail-val">${esc(ev.engine || 'unknown')}</span></div>`;
+  if (ev.source) html += `<div class="detail-row"><span class="detail-label">Source</span><span class="detail-val">${esc(ev.source)}${ev.source_id != null ? ' (id: ' + ev.source_id + ')' : ''}</span></div>`;
   // YAMNet
   if (ev.yamnet != null || (ev.yamnet_top3 && ev.yamnet_top3.length)) {
     html += '<hr><div class="detail-section">YAMNet (at peak)</div>';
@@ -641,6 +654,7 @@ function addEvent(ev) {
       <span class="event-conf">${(ev.confidence * 100).toFixed(1)}%</span>
       <span class="event-engine">${esc(ev.engine)}</span>
       <button class="ev-details-toggle" onclick="toggleDetails(this)">details ▸</button>
+      ${ev.source && ev.source !== 'manual' && ev.source !== 'restored' ? `<span class="event-source">${esc(ev.source)}</span>` : ''}
     </div>
     ${breakdown ? `<div class="event-breakdown">${breakdown}</div>` : ''}
     <div class="ev-details">${detailsHtml}</div>
