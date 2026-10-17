@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from ..auth import AUTH_ENABLED, check_token, require_admin, require_viewer
 from ..config import CLIP_DIR, DATASET_DIR, DEFAULT_SETTINGS, VALID_LABELS, SAMPLE_RATE
@@ -323,27 +323,37 @@ async def feedback_segments(body: dict):
 
 
 @router.post("/api/manual-event", dependencies=[Depends(require_admin)])
-async def manual_event():
-    """Save the current clip buffer as a manual (user-triggered) event."""
-    if _bus is None or _bus.clip_buf is None:
+async def manual_event(body: dict | None = Body(None)):
+    """Save the current clip buffer as a manual (user-triggered) event.
+
+    Optionally accepts ``{"source_id": N}`` to pick a specific source.
+    Defaults to source 0.
+    """
+    if _bus is None or not _bus.clip_bufs:
         raise HTTPException(status_code=503, detail="Detector not ready")
+    source_id = (body or {}).get("source_id", 0)
+    clip_buf = _bus.clip_bufs.get(source_id)
+    if clip_buf is None:
+        raise HTTPException(status_code=404, detail=f"Source {source_id} not found")
     ts = datetime.now(timezone.utc)
     clip_name = f"manual-{ts.strftime('%Y%m%d-%H%M%S')}.wav"
-    _bus.clip_buf.save(CLIP_DIR / clip_name)
+    clip_buf.save(CLIP_DIR / clip_name)
     clip_url = f"/clips/{clip_name}"
     ts_iso = ts.isoformat(timespec="seconds")
     meta = {
         "event": "unknown", "confidence": 0.0,
         "timestamp": ts_iso, "source": "manual", "engine": "user",
+        "source_id": source_id,
     }
     save_clip_meta(clip_name, meta)
     ev = {
         "type": "event", "event": "unknown", "state": "confirmed",
         "confidence": 0.0, "timestamp": ts_iso,
         "source": "manual", "engine": "user", "clip_url": clip_url,
+        "source_id": source_id,
         "yamnet": 0.0, "mlp": None, "yamnet_top": "",
         "yamnet_top3": [], "mlp_top3": [],
     }
     _bus.broadcast(ev)
-    print(f"[{ts_iso}] manual event saved: {clip_url}", flush=True)
+    print(f"[{ts_iso}] manual event saved: {clip_url} (source: {source_id})", flush=True)
     return {"ok": True, "clip_url": clip_url}

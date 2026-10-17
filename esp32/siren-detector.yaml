@@ -3,6 +3,9 @@ substitutions:
   # Override in secrets.yaml or set here directly.
   udp_target_ip: !secret udp_target_ip
   udp_target_port: !secret udp_target_port
+  # SDR1 source_id for this microphone (0 = default, 1+ for additional mics).
+  # See docs/MULTI_MIC.md for multi-microphone setup.
+  source_id: "0"
 
 esphome:
   name: siren-detector
@@ -89,7 +92,7 @@ microphone:
               const uint32_t sequence_number = udp_sequence++;
               const uint32_t sequence = htonl(sequence_number);
               const uint16_t payload_size = htons(static_cast<uint16_t>(x.size()));
-              const uint16_t reserved = 0;
+              const uint16_t reserved = htons(${source_id});
               memcpy(packet + 0, &magic, sizeof(magic));
               memcpy(packet + 4, &sequence, sizeof(sequence));
               memcpy(packet + 8, &payload_size, sizeof(payload_size));

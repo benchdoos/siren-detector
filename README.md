@@ -1174,7 +1174,7 @@ Offset  Size   Type         Description
 0       4      uint32 BE    Magic: 0x53445231 ("SDR1")
 4       4      uint32 BE    Sequence number (monotonically increasing)
 8       2      uint16 BE    Payload size (bytes)
-10      2      uint16 BE    Reserved (0)
+10      2      uint16 BE    Source ID (0 = default; see docs/MULTI_MIC.md)
 12      N      bytes        Audio payload: signed 32-bit I2S samples (little-endian)
 ```
 
@@ -1189,6 +1189,9 @@ Offset  Size   Type         Description
 Чтобы подключить свой inference engine, достаточно слушать UDP-порт Hub'а
 и парсить пакеты по этой спецификации. Примеры реализации:
 `recorder/recorder-files/udp_recorder.py` и `detector/transport/udp.py`.
+
+Для подключения нескольких микрофонов (ESP32 stereo, USB mic на RPi и т.д.)
+используйте поле Source ID — см. **[Multi-Microphone Setup](docs/MULTI_MIC.md)**.
 
 ---
 

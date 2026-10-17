@@ -31,10 +31,24 @@ class EventBus:
         self.event_history: collections.deque = collections.deque(maxlen=100)
         self.last_score: dict = {"type": "score", "top": ""}
         self.feedback: dict[str, str] = {}  # filename → label
-        self.clip_buf: ClipBuffer | None = None
+
+        # Per-source clip buffers (source_id → ClipBuffer)
+        self.clip_bufs: dict[int, ClipBuffer] = {}
 
         # Integration subscribers (called from asyncio loop context)
         self._subscribers: list[Callable[[dict], None]] = []
+
+    @property
+    def clip_buf(self) -> ClipBuffer | None:
+        """Default clip buffer (source 0) for backwards compatibility."""
+        return self.clip_bufs.get(0)
+
+    @clip_buf.setter
+    def clip_buf(self, value: ClipBuffer | None) -> None:
+        if value is not None:
+            self.clip_bufs[0] = value
+        else:
+            self.clip_bufs.pop(0, None)
 
     def subscribe(self, callback: Callable[[dict], None]) -> None:
         """Register a callback for all broadcast messages (events + scores)."""
@@ -69,7 +83,7 @@ class EventBus:
         if self.loop and not self.loop.is_closed():
             self.loop.call_soon_threadsafe(self._enqueue_all, msg)
 
-    def broadcast_audio(self, samples: np.ndarray) -> None:
+    def broadcast_audio(self, samples: np.ndarray, source_id: int = 0) -> None:
         """Send raw float32 PCM to all listening audio WebSocket clients."""
         if not self.audio_queues or not self.loop or self.loop.is_closed():
             return

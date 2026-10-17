@@ -1,0 +1,39 @@
+# Standalone audio source: captures from a local microphone (USB, built-in)
+# and streams SDR1 packets to the Hub (or directly to the detector).
+#
+# Usage:
+#   docker compose up -d
+#
+# Configure via .env or environment variables.
+# See docs/MULTI_MIC.md for setup instructions.
+
+services:
+  audio-source:
+    build: .
+    container_name: siren-audio-source
+    restart: unless-stopped
+    network_mode: host
+    # PipeWire/PulseAudio socket: shares mic with other apps (no exclusive lock).
+    # Falls back to ALSA (/dev/snd) if neither is available.
+    volumes:
+      - ${XDG_RUNTIME_DIR:-/run/user/${HOST_UID:-1000}}/pipewire-0:/run/user/1000/pipewire-0:ro
+      - ${XDG_RUNTIME_DIR:-/run/user/${HOST_UID:-1000}}/pulse:/run/user/1000/pulse:ro
+    environment:
+      - PULSE_SERVER=unix:/run/user/1000/pulse/native
+      - PIPEWIRE_RUNTIME_DIR=/run/user/1000
+    devices:
+      - /dev/snd:/dev/snd
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    command:
+      - --source-id
+      - "${AUDIO_SOURCE_ID:-1}"
+      - --target
+      - "${AUDIO_TARGET:-127.0.0.1:9000}"
+      - --gain
+      - "${AUDIO_SOURCE_GAIN:-1.0}"
+      - --device
+      - "${AUDIO_DEVICE:-default}"
