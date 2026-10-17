@@ -1,6 +1,6 @@
 {
-  "audit_timestamp": "2026-10-17T06:58:18+00:00",
-  "model_trained_at": "2026-10-17T06:58:14+00:00",
+  "audit_timestamp": "2026-10-17T10:07:01+00:00",
+  "model_trained_at": "2026-10-17T10:06:57+00:00",
   "labels": [
     "siren",
     "background",
@@ -9,46 +9,46 @@
   ],
   "val_accuracy": {
     "siren": {
-      "accuracy": 0.806,
-      "windows": 3619
+      "accuracy": 0.805,
+      "windows": 3649
     },
     "background": {
-      "accuracy": 0.827,
+      "accuracy": 0.784,
       "windows": 8700
     },
     "explosion": {
-      "accuracy": 0.706,
-      "windows": 947
+      "accuracy": 0.71,
+      "windows": 997
     },
     "motorcycle": {
-      "accuracy": 0.731,
-      "windows": 468
+      "accuracy": 0.66,
+      "windows": 538
     }
   },
   "confusion_matrix": [
     [
-      2916,
-      340,
-      102,
-      261
-    ],
-    [
-      763,
-      7191,
-      484,
+      2936,
+      295,
+      156,
       262
     ],
     [
-      61,
-      185,
-      669,
-      32
+      770,
+      6819,
+      814,
+      297
     ],
     [
-      58,
-      21,
-      47,
-      342
+      73,
+      171,
+      708,
+      45
+    ],
+    [
+      71,
+      51,
+      61,
+      355
     ]
   ],
   "file_counts": {
@@ -61,12 +61,12 @@
       "max_recommended_aug": 186
     },
     "background": {
-      "total": 792,
-      "real": 792,
+      "total": 799,
+      "real": 799,
       "aug": 0,
       "aug_pct": 0.0,
       "aug_real_ratio": 0.0,
-      "max_recommended_aug": 1584
+      "max_recommended_aug": 1598
     },
     "explosion": {
       "total": 416,
@@ -86,6 +86,6 @@
     }
   },
   "issues": [
-    "background: 18.6× more windows than smallest class"
+    "background: 16.2× more windows than smallest class"
   ]
 }
