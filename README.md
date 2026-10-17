@@ -1103,6 +1103,8 @@ make sync-dataset    # Синхронизировать размеченные W
 make train           # Обучить MLP-классификатор
 make deploy-model    # Отправить веса на RPi + перезапуск
 make retrain         # Полный цикл: sync → train → deploy → clean
+# Калибровка фона: Web UI → Calibrate → выбрать источник → Start Recording
+# Файл сохраняется в dataset/background/{source_name}/ → make retrain
 make clean-clips     # Удалить сохранённые клипы на RPi
 make clean-dataset   # Удалить размеченные WAV на RPi (сначала sync!)
 make clean-docker    # Очистить Docker-кеш на RPi (volumes не трогает)

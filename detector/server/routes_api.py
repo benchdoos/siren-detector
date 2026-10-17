@@ -322,6 +322,76 @@ async def feedback_segments(body: dict):
     return {"ok": True, "count": len(clean)}
 
 
+@router.get("/api/sources", dependencies=[Depends(require_viewer)])
+async def get_sources():
+    """List known audio sources."""
+    if _bus is None:
+        return {"sources": []}
+    return {
+        "sources": [
+            {"source_id": sid, "name": name}
+            for sid, name in sorted(_bus.source_names.items())
+        ]
+    }
+
+
+@router.post("/api/calibrate", dependencies=[Depends(require_admin)])
+async def start_calibration(body: dict):
+    """Start background calibration recording for a source.
+
+    Body: ``{"source_id": 0, "duration": 120}``
+    """
+    if _bus is None:
+        raise HTTPException(status_code=503, detail="Detector not ready")
+    source_id = body.get("source_id", 0)
+    duration = body.get("duration", 120)
+    if not isinstance(duration, int) or not 10 <= duration <= 900:
+        raise HTTPException(status_code=400, detail="duration must be 10-600 seconds")
+    if source_id not in _bus.source_names:
+        raise HTTPException(status_code=404, detail=f"Source {source_id} not found")
+    if not _bus.start_calibration(source_id, duration):
+        raise HTTPException(status_code=409, detail="Calibration already in progress")
+    return {"ok": True, "source_id": source_id, "duration": duration}
+
+
+@router.get("/api/calibrate", dependencies=[Depends(require_viewer)])
+async def calibration_status():
+    """Check calibration progress."""
+    if _bus is None:
+        return {"active": False}
+    status = _bus.calibration_status()
+    if status is None:
+        return {"active": False}
+    return {"active": True, **status}
+
+
+@router.post("/api/calibrate/stop", dependencies=[Depends(require_admin)])
+async def stop_calibration():
+    """Stop calibration and save recorded audio as background."""
+    if _bus is None:
+        raise HTTPException(status_code=503, detail="Detector not ready")
+    status = _bus.calibration_status()
+    if status is None:
+        raise HTTPException(status_code=404, detail="No calibration in progress")
+    source_name = _bus.source_names.get(status["source_id"], f"source-{status['source_id']}")
+    path = _bus.finish_calibration(source_name)
+    if path is None:
+        raise HTTPException(status_code=400, detail="Not enough audio recorded (need at least 1s)")
+    return {"ok": True, "path": path, "source": source_name}
+
+
+@router.post("/api/calibrate/cancel", dependencies=[Depends(require_admin)])
+async def cancel_calibration():
+    """Cancel calibration and discard recorded audio."""
+    if _bus is None:
+        raise HTTPException(status_code=503, detail="Detector not ready")
+    status = _bus.calibration_status()
+    if status is None:
+        raise HTTPException(status_code=404, detail="No calibration in progress")
+    _bus.cancel_calibration()
+    return {"ok": True}
+
+
 @router.post("/api/manual-event", dependencies=[Depends(require_admin)])
 async def manual_event(body: dict | None = Body(None)):
     """Save the current clip buffer as a manual (user-triggered) event.
