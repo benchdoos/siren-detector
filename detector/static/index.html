@@ -472,6 +472,8 @@ const DETECTOR_THRESHOLDS = { siren: 0.10, explosion: 0.15, motorcycle: 0.15 };
 const _cooldownStart = {};  // track when cooldown first began per detector
 const VALID_LABELS = ['siren', 'background', 'motorcycle', 'explosion', 'unknown'];
 const _knownSources = {};  // source_id → source name (populated from score messages)
+const _sourceScores = {};  // source_id → last score message (for multi-source aggregation)
+const _STATE_PRIORITY = { idle: 0, possible: 1, confirmed: 2 };
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 function cardMatchesFilter(card, filter) {
@@ -532,19 +534,54 @@ function toggleDropdown(e) {
 document.addEventListener('click', () => document.getElementById('top-dropdown').classList.remove('open'));
 
 function updateScores(msg) {
+  // Store per-source score and aggregate across all sources
+  const sid = msg.source_id != null ? msg.source_id : 0;
+  _sourceScores[sid] = msg;
+  if (msg.source && msg.source_id != null) {
+    _knownSources[msg.source_id] = msg.source;
+  }
+
+  const sources = Object.values(_sourceScores);
+
+  // Aggregate per detector: worst state, max score, max triggers
   for (const name of DETECTOR_NAMES) {
-    updateDetector(name, msg[name + '_score'] || 0, msg[name + '_state'] || 'idle',
-      msg[name + '_triggers'], msg[name + '_possible_needed'], msg[name + '_confirmed_needed'],
-      msg[name + '_cooldown'] || 0, msg[name + '_refractory'] || 0);
+    let bestScore = 0, bestState = 'idle', bestTriggers = 0;
+    let possNeeded = 4, confNeeded = 8, maxCooldown = 0, maxRefractory = 0;
+    for (const s of sources) {
+      const sc = s[name + '_score'] || 0;
+      const st = s[name + '_state'] || 'idle';
+      const tr = s[name + '_triggers'] || 0;
+      if (sc > bestScore) bestScore = sc;
+      if ((_STATE_PRIORITY[st] || 0) > (_STATE_PRIORITY[bestState] || 0)) bestState = st;
+      if (tr > bestTriggers) bestTriggers = tr;
+      if (s[name + '_possible_needed'] != null) possNeeded = s[name + '_possible_needed'];
+      if (s[name + '_confirmed_needed'] != null) confNeeded = s[name + '_confirmed_needed'];
+      const cd = s[name + '_cooldown'] || 0;
+      const rf = s[name + '_refractory'] || 0;
+      if (cd > maxCooldown) maxCooldown = cd;
+      if (rf > maxRefractory) maxRefractory = rf;
+    }
+    updateDetector(name, bestScore, bestState, bestTriggers, possNeeded, confNeeded, maxCooldown, maxRefractory);
+  }
+
+  // Top info: show from the source with highest siren score (most relevant)
+  let topSource = msg;
+  if (sources.length > 1) {
+    let maxSiren = -1;
+    for (const s of sources) {
+      const sc = s.siren_score || 0;
+      if (sc > maxSiren) { maxSiren = sc; topSource = s; }
+    }
   }
   const parts = [];
-  if (msg.top)            parts.push(`<span class="top-label">top:</span> ${esc(msg.top)}`);
-  if (msg.yamnet != null) parts.push(`<span class="top-label">yamnet:</span> ${(msg.yamnet * 100).toFixed(0)}%`);
-  if (msg.mlp != null)    parts.push(`<span class="top-label">mlp:</span> ${(msg.mlp * 100).toFixed(0)}%`);
+  if (topSource.top)            parts.push(`<span class="top-label">top:</span> ${esc(topSource.top)}`);
+  if (topSource.yamnet != null) parts.push(`<span class="top-label">yamnet:</span> ${(topSource.yamnet * 100).toFixed(0)}%`);
+  if (topSource.mlp != null)    parts.push(`<span class="top-label">mlp:</span> ${(topSource.mlp * 100).toFixed(0)}%`);
+  if (sources.length > 1 && topSource.source) parts.push(`<span class="top-label">src:</span> ${esc(topSource.source)}`);
   document.getElementById('top-text').innerHTML = parts.join(' &nbsp;·&nbsp; ');
 
-  if (msg.yamnet_top3) renderTop3(document.getElementById('dd-yamnet'), msg.yamnet_top3);
-  if (msg.mlp_top3) renderTop3(document.getElementById('dd-mlp'), msg.mlp_top3);
+  if (topSource.yamnet_top3) renderTop3(document.getElementById('dd-yamnet'), topSource.yamnet_top3);
+  if (topSource.mlp_top3) renderTop3(document.getElementById('dd-mlp'), topSource.mlp_top3);
 
   // audio source status
   const audioEl = document.getElementById('audio-status');
@@ -563,10 +600,6 @@ function updateScores(msg) {
       audioEl.textContent = ago < 0 ? 'audio: no signal' : `audio: lost ${ago.toFixed(0)}s ago`;
       audioEl.className = 'dead';
     }
-  }
-  // track source name from score messages
-  if (msg.source && msg.source_id != null) {
-    _knownSources[msg.source_id] = msg.source;
   }
 }
 
