@@ -207,62 +207,12 @@
     .audit-header .audit-summary { margin-left: 0; width: 100%; }
   }
 
-  .s-section { margin-bottom: 16px; }
-  .s-title { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; font-weight: 600; border-bottom: 1px solid #222; padding-bottom: 4px; }
-  .s-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-  .s-row label { width: 150px; flex-shrink: 0; font-size: 13px; color: #ccc; }
-  .s-row input[type="number"], .s-row select { width: 80px; background: #222; border: 1px solid #444; color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
-  .s-row input[type="number"]:focus, .s-row select:focus { border-color: #4caf50; outline: none; }
-  .s-row input.changed, .s-row select.changed { border-color: #ffa726; }
-  .s-row select { cursor: pointer; -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; padding-right: 24px; }
-  .s-row select option { background: #222; color: #e0e0e0; }
-  .s-default { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: #555; cursor: pointer; white-space: nowrap; user-select: none; width: 55px; }
-  .s-default:hover { color: #aaa; }
-  .s-default:hover .s-reset-icon { color: #aaa; }
-  .s-actions { display: flex; gap: 10px; align-items: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid #222; }
-  .s-save { background: #1a3a1a; border: 1px solid #4caf50; color: #4caf50; padding: 6px 20px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; }
-  .s-save:hover { background: #2a4a2a; }
-  .s-reset { background: none; border: 1px solid #333; color: #888; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; }
-  .s-reset:hover { color: #ccc; border-color: #555; }
-  .s-status { font-size: 12px; color: #4caf50; margin-left: auto; }
-  .s-help { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid #444; color: #666; font-size: 11px; cursor: pointer; flex-shrink: 0; user-select: none; line-height: 1; }
-  .s-help:hover { border-color: #888; color: #ccc; }
-  .s-help.open { border-color: #4caf50; color: #4caf50; }
-  .s-tooltip { display: none; background: #222; border: 1px solid #333; border-radius: 6px; padding: 10px 12px; margin: 2px 0 8px 0; font-size: 12px; line-height: 1.5; color: #aaa; }
-  .s-tooltip.open { display: block; }
-  .s-tooltip strong { color: #ccc; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
-  .s-tooltip hr { border: none; border-top: 1px solid #333; margin: 6px 0; }
-  .s-tooltip .s-tip-range { color: #888; }
-  .s-tooltip .s-tip-default { color: #4caf50; }
 
   .admin-btn { font-size: 13px; padding: 3px 10px; border-radius: 4px; border: 1px solid #333; background: none; color: #888; cursor: pointer; }
   .admin-btn:hover { color: #ccc; border-color: #555; }
   .admin-btn.authed { border-color: #4caf50; color: #4caf50; }
 
-  /* ── Settings page ── */
-  #settings-page { display: none; min-height: 100vh; background: #0f0f0f; }
-  #settings-page.open { display: flex; flex-direction: column; }
-  .sp-header { padding: 12px 16px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
-  .sp-header:hover { background: #151515; }
-  .sp-header h1 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-  .sp-header .sp-subtitle { font-size: 14px; color: #666; font-weight: 400; margin-left: 4px; }
-  .sp-header .sp-back { font-size: 18px; color: #666; margin-right: 4px; }
-  .sp-body { display: flex; flex: 1; min-height: 0; }
-  .sp-nav { width: 200px; flex-shrink: 0; border-right: 1px solid #222; padding: 16px 0; overflow-y: auto; }
-  .sp-nav-item { display: block; width: 100%; text-align: left; padding: 10px 20px; font-size: 14px; color: #888; background: none; border: none; cursor: pointer; border-left: 3px solid transparent; }
-  .sp-nav-item:hover { color: #ccc; background: #151515; }
-  .sp-nav-item.active { color: #4caf50; border-left-color: #4caf50; background: #111; }
-  .sp-content { flex: 1; padding: 24px 32px; overflow-y: auto; max-width: 600px; }
-  .sp-panel { display: none; }
-  .sp-panel.active { display: block; }
-  .sp-actions { position: sticky; bottom: 0; background: #0f0f0f; padding: 14px 0 0; border-top: 1px solid #222; margin-top: 20px; display: flex; gap: 10px; align-items: center; }
-  @media (max-width: 700px) {
-    .sp-body { flex-direction: column; }
-    .sp-nav { width: 100%; flex-shrink: 0; border-right: none; border-bottom: 1px solid #222; padding: 8px 12px; display: flex; gap: 4px; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
-    .sp-nav-item { width: auto; white-space: nowrap; padding: 8px 14px; border-radius: 4px; border-left: none; font-size: 13px; flex-shrink: 0; }
-    .sp-nav-item.active { background: #1a3a1a; border-left: none; border-radius: 4px; }
-    .sp-content { padding: 16px; }
-  }
+
   .admin-only { display: none !important; }
   .admin-only.visible { display: flex !important; }
   .admin-only-inline { display: none !important; }
@@ -284,7 +234,6 @@
 </head>
 <body>
 
-<div id="main-page">
 <header>
   <h1><img src="/static/img/siren-detector-logo.svg" alt="Logo" class="header-logo"> Siren Detector</h1>
   <span class="header-badges">
@@ -296,7 +245,6 @@
     <button class="metrics-btn" onclick="showMetrics()">Metrics</button>
     <button class="metrics-btn admin-only-btn" id="settings-btn" onclick="showSettings()">Settings</button>
     <button class="admin-btn" id="admin-btn" onclick="toggleAdmin()">Admin</button>
-    <button class="metrics-btn" onclick="showAbout()">About</button>
   </span>
 </header>
 
@@ -377,124 +325,6 @@
 </div>
 <div id="events"><div class="empty" id="empty">No events yet</div></div>
 
-<!-- settings modal removed — replaced by #settings-page -->
-</div><!-- /#main-page -->
-
-<div id="settings-page">
-  <div class="sp-header" onclick="backFromSettings()">
-    <span class="sp-back">&larr;</span>
-    <h1><img src="/static/img/siren-detector-logo.svg" alt="Logo" class="header-logo"> Siren Detector <span class="sp-subtitle">/ Settings</span></h1>
-  </div>
-  <div class="sp-body">
-    <nav class="sp-nav">
-      <button class="sp-nav-item active" data-panel="sp-detection" onclick="switchPanel(this)">Detection</button>
-      <button class="sp-nav-item" data-panel="sp-smoothing" onclick="switchPanel(this)">Smoothing</button>
-      <button class="sp-nav-item" data-panel="sp-clips" onclick="switchPanel(this)">Clips</button>
-      <button class="sp-nav-item" data-panel="sp-calibration" onclick="switchPanel(this)">Calibration</button>
-    </nav>
-    <div class="sp-content">
-
-      <!-- Detection -->
-      <div class="sp-panel active" id="sp-detection">
-        <div class="s-section">
-          <div class="s-title">Thresholds</div>
-          <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Minimum confidence score for each sound type. When MLP classifier is active (siren), this applies to the MLP output score.</p>
-          <div class="s-row"><label>Siren <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-siren_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="siren_threshold"></span></div>
-          <div class="s-tooltip" data-tip="siren_threshold"><strong>Siren Threshold</strong><br>MLP confidence score required for a siren detection to count as a trigger. Lower = more sensitive but more false positives.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.10</b></span></div>
-          <div class="s-row"><label>Explosion <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-explosion_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="explosion_threshold"></span></div>
-          <div class="s-tooltip" data-tip="explosion_threshold"><strong>Explosion Threshold</strong><br>YAMNet confidence for explosion/gunshot/burst. Classes: Explosion, Burst pop, Gunshot gunfire.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.15</b></span></div>
-          <div class="s-row"><label>Motorcycle <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-motorcycle_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="motorcycle_threshold"></span></div>
-          <div class="s-tooltip" data-tip="motorcycle_threshold"><strong>Motorcycle Threshold</strong><br>YAMNet confidence for motorcycle engine sounds.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.15</b></span></div>
-        </div>
-        <div class="s-section">
-          <div class="s-title">MLP Gate</div>
-          <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Controls when to trust the MLP classifier for siren detection.</p>
-          <div class="s-row"><label>YAMNet min gate <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-yamnet_min_gate" step="0.001" min="0" max="1"><span class="s-default" data-key="yamnet_min_gate"></span></div>
-          <div class="s-tooltip" data-tip="yamnet_min_gate"><strong>YAMNet Min Gate</strong><br>YAMNet must show at least this score for the MLP result to be trusted. Prevents MLP hallucinations on unfamiliar audio. Set to 0 to fully trust MLP.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.01</b></span></div>
-        </div>
-        <div class="sp-actions">
-          <button class="s-save" onclick="saveSettings()">Save</button>
-          <button class="s-reset" onclick="resetSettings()">Reset to defaults</button>
-          <span class="s-status" id="s-status"></span>
-        </div>
-      </div>
-
-      <!-- Smoothing -->
-      <div class="sp-panel" id="sp-smoothing">
-        <div class="s-section">
-          <div class="s-title">Trigger Thresholds</div>
-          <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">How many above-threshold inference windows are needed to change state.</p>
-          <div class="s-row"><label>Possible triggers <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-possible_triggers" step="1" min="1" max="60"><span class="s-default" data-key="possible_triggers"></span></div>
-          <div class="s-tooltip" data-tip="possible_triggers"><strong>Possible Triggers</strong><br>Windows needed for early warning (yellow badge). No clip saved yet.<hr><span class="s-tip-range">Range: <b>1 – 60</b></span><br><span class="s-tip-default">Default: <b>4</b></span></div>
-          <div class="s-row"><label>Confirmed triggers <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-confirmed_triggers" step="1" min="1" max="60"><span class="s-default" data-key="confirmed_triggers"></span></div>
-          <div class="s-tooltip" data-tip="confirmed_triggers"><strong>Confirmed Triggers</strong><br>Windows needed to confirm event. Saves clip, sends MQTT. Must be &gt; possible triggers.<hr><span class="s-tip-range">Range: <b>1 – 60</b></span><br><span class="s-tip-default">Default: <b>8</b></span></div>
-        </div>
-        <div class="s-section">
-          <div class="s-title">Timing</div>
-          <div class="s-row"><label>Window (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-smoothing_window_seconds" step="1" min="5" max="120"><span class="s-default" data-key="smoothing_window_seconds"></span></div>
-          <div class="s-tooltip" data-tip="smoothing_window_seconds"><strong>Smoothing Window</strong><br>Rolling time window for trigger accumulation. 30s window at 0.5s inference = up to 61 slots.<hr><span class="s-tip-range">Range: <b>5 – 120 sec</b></span><br><span class="s-tip-default">Default: <b>30</b></span></div>
-          <div class="s-row"><label>Cooldown (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-cooldown_seconds" step="1" min="0" max="600"><span class="s-default" data-key="cooldown_seconds"></span></div>
-          <div class="s-tooltip" data-tip="cooldown_seconds"><strong>Cooldown</strong><br>After confirmed event, ignore detections for this long. Prevents duplicate events from same sound. 0 = no cooldown.<hr><span class="s-tip-range">Range: <b>0 – 600 sec</b></span><br><span class="s-tip-default">Default: <b>60</b></span></div>
-          <div class="s-row"><label>Refractory (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-refractory_seconds" step="1" min="0" max="120"><span class="s-default" data-key="refractory_seconds"></span></div>
-          <div class="s-tooltip" data-tip="refractory_seconds"><strong>Refractory</strong><br>After cooldown, wait for score to drop before re-arming. If score stays high, expires by timeout. 0 = disabled.<hr><span class="s-tip-range">Range: <b>0 – 120 sec</b></span><br><span class="s-tip-default">Default: <b>15</b></span></div>
-        </div>
-        <div class="sp-actions">
-          <button class="s-save" onclick="saveSettings()">Save</button>
-          <button class="s-reset" onclick="resetSettings()">Reset to defaults</button>
-          <span class="s-status" id="s-status-sm"></span>
-        </div>
-      </div>
-
-      <!-- Clips -->
-      <div class="sp-panel" id="sp-clips">
-        <div class="s-section">
-          <div class="s-title">Audio Clips</div>
-          <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Saved when an event is confirmed. Used for review and retraining.</p>
-          <div class="s-row"><label>Clip length (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-clip_seconds" step="1" min="5" max="60"><span class="s-default" data-key="clip_seconds"></span></div>
-          <div class="s-tooltip" data-tip="clip_seconds"><strong>Clip Length</strong><br>Duration of saved audio clip. Shorter = less noise for retraining.<hr><span class="s-tip-range">Range: <b>5 – 60 sec</b></span><br><span class="s-tip-default">Default: <b>10</b></span></div>
-          <div class="s-row"><label>Clip from possible <span class="s-help" onclick="toggleTip(this)">?</span></label><select id="s-clip_from_possible"><option value="0">Off</option><option value="1">On</option></select><span class="s-default" data-key="clip_from_possible"></span></div>
-          <div class="s-tooltip" data-tip="clip_from_possible"><strong>Clip From Possible</strong><br>When On, clip captures from the moment event reaches "possible" (+ 2s pre-buffer) instead of last N seconds before "confirmed". Includes per-window scores in metadata.<hr><span class="s-tip-default">Default: <b>Off</b></span></div>
-        </div>
-        <div class="sp-actions">
-          <button class="s-save" onclick="saveSettings()">Save</button>
-          <button class="s-reset" onclick="resetSettings()">Reset to defaults</button>
-          <span class="s-status" id="s-status-cl"></span>
-        </div>
-      </div>
-
-      <!-- Calibration -->
-      <div class="sp-panel" id="sp-calibration">
-        <div class="s-section">
-          <div class="s-title">Background Calibration</div>
-          <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Record ambient background from a microphone so the model learns what is <em>not</em> a siren through this audio source.</p>
-          <div style="background:#1a1a1a;border:1px solid #222;border-radius:6px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:#888;line-height:1.6">
-            <b style="color:#ccc">How to get best results:</b><br>
-            &bull; Record 5+ minutes of your typical environment<br>
-            &bull; Include varied sounds: appliances, street noise, conversations, 3D printers, etc.<br>
-            &bull; Record multiple sessions at different times of day<br>
-            &bull; Each source (ESP32 mic, USB mic) needs its own calibration<br>
-            &bull; After recording, run <code style="background:#222;padding:1px 4px;border-radius:3px">make retrain</code> to apply
-          </div>
-          <div class="s-row"><label>Source</label><select id="cal-source" style="flex:1;background:#222;border:1px solid #444;color:#e0e0e0;padding:4px 8px;border-radius:4px;font-size:13px"></select></div>
-          <div class="s-row"><label>Duration (sec)</label><input type="number" id="cal-duration" value="300" min="10" max="900" step="10" style="width:100px;background:#222;border:1px solid #444;color:#e0e0e0;padding:4px 8px;border-radius:4px;font-size:13px"></div>
-          <div id="cal-progress" style="display:none;margin:8px 0">
-            <div style="background:#222;border-radius:4px;height:20px;overflow:hidden">
-              <div id="cal-bar" style="height:100%;width:0%;background:#4caf50;border-radius:4px;transition:width .5s"></div>
-            </div>
-            <div id="cal-text" style="font-size:12px;color:#888;margin-top:4px;text-align:center">0% (0s/300s)</div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:10px">
-            <button id="cal-start-btn" onclick="startCalibration()" class="s-save" style="flex:1">Start Recording</button>
-            <button id="cal-stop-btn" onclick="stopCalibration()" style="flex:1;display:none;background:#1a3a1a;border:1px solid #4caf50;color:#4caf50;padding:6px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600">Stop & Save</button>
-            <button id="cal-cancel-btn" onclick="cancelCalibration()" style="flex:1;display:none;background:#3a1a1a;border:1px solid #ef5350;color:#ef5350;padding:6px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600">Cancel</button>
-          </div>
-          <div id="cal-status" style="font-size:12px;color:#888;margin-top:8px;text-align:center"></div>
-        </div>
-      </div>
-
-    </div><!-- /.sp-content -->
-  </div><!-- /.sp-body -->
-</div><!-- /#settings-page -->
 
 <div class="modal-overlay" id="login-overlay">
   <div class="modal" style="max-width:360px">
@@ -530,24 +360,6 @@
   </div>
 </div>
 
-<div class="help-overlay" id="about-overlay">
-  <div class="help-modal" style="max-width:440px">
-    <button class="close-btn" onclick="closeAbout()">&times;</button>
-    <h2 style="display:flex;align-items:center;gap:8px"><img src="/static/img/siren-detector-logo.svg" alt="Logo" class="header-logo"> Siren Detector</h2>
-    <p>Universal audio event detection platform. ESP32-S3 captures audio from an INMP441 microphone and streams it to a detection engine powered by YAMNet + MLP.</p>
-    <p>Target classes: <span class="help-val">siren</span>, <span class="help-val">explosion</span>, <span class="help-val">motorcycle</span>, <span class="help-val">background</span>.</p>
-    <hr>
-    <p><span class="help-term">Repository</span><br>
-    <a href="https://github.com/benchdoos/siren-detector" target="_blank" rel="noopener" style="color:#4caf50;text-decoration:none">github.com/benchdoos/siren-detector</a></p>
-    <hr>
-    <p style="color:#ffa726;font-size:12px;line-height:1.5"><span class="help-term" style="color:#ffa726">Disclaimer</span><br>
-    This application and all its components are intended exclusively for peaceful purposes. Any use of this software for military, harmful, or destructive purposes is strictly prohibited.</p>
-    <hr>
-    <p style="font-size:12px;line-height:1.5"><span class="help-term">License</span> — CC BY-NC 4.0<br>
-    This software is provided <b>"as is"</b>, without warranty of any kind. You are free to copy, share, and adapt it for <b>non-commercial</b> purposes, provided you give appropriate credit to the original author and link to the source repository.<br>
-    <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener" style="color:#4caf50;text-decoration:none;font-size:11px">creativecommons.org/licenses/by-nc/4.0</a></p>
-  </div>
-</div>
 
 <div class="modal-overlay" id="metrics-overlay">
   <div class="modal">
@@ -1220,9 +1032,6 @@ function showDetectorHelp() { document.getElementById('detector-help-overlay').c
 function closeDetectorHelp() { document.getElementById('detector-help-overlay').classList.remove('open'); }
 document.getElementById('detector-help-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeDetectorHelp(); });
 
-function showAbout() { document.getElementById('about-overlay').classList.add('open'); }
-function closeAbout() { document.getElementById('about-overlay').classList.remove('open'); }
-document.getElementById('about-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeAbout(); });
 
 /* ── Live audio streaming ────────────────────────── */
 let _audioWs = null;
@@ -1293,249 +1102,10 @@ async function createManualEvent() {
   }
 }
 
-/* ── Calibration ─────────────────────────────────── */
-let _calPollTimer = null;
-let _calDuration = 300;
+/* ── Settings (separate page) ────────────────────── */
+function showSettings() { window.location.href = '/static/settings.html'; }
+function closeSettings() { /* noop — settings is a separate page now */ }
 
-function _calSetRecording(active) {
-  document.getElementById('cal-source').disabled = active;
-  document.getElementById('cal-duration').disabled = active;
-  document.getElementById('cal-start-btn').style.display = active ? 'none' : '';
-  document.getElementById('cal-stop-btn').style.display = active ? '' : 'none';
-  document.getElementById('cal-cancel-btn').style.display = active ? '' : 'none';
-  document.getElementById('cal-progress').style.display = active ? '' : 'none';
-}
-
-function _calReset() {
-  _calSetRecording(false);
-  document.getElementById('cal-status').textContent = '';
-  document.getElementById('cal-status').style.color = '#888';
-  document.getElementById('cal-bar').style.width = '0%';
-  document.getElementById('cal-text').textContent = '0% (0s/' + _calDuration + 's)';
-  if (_calPollTimer) { clearInterval(_calPollTimer); _calPollTimer = null; }
-}
-
-async function loadCalibrationSources() {
-  const sel = document.getElementById('cal-source');
-  sel.innerHTML = '';
-  try {
-    const res = await fetch('/api/sources', { headers: adminHeaders() });
-    const data = await res.json();
-    for (const s of data.sources || []) {
-      const opt = document.createElement('option');
-      opt.value = s.source_id;
-      opt.textContent = `${s.name} (id: ${s.source_id})`;
-      sel.appendChild(opt);
-    }
-  } catch(e) { sel.innerHTML = '<option value="0">default (0)</option>'; }
-}
-
-async function startCalibration() {
-  const sourceId = parseInt(document.getElementById('cal-source').value);
-  _calDuration = parseInt(document.getElementById('cal-duration').value) || 300;
-  try {
-    const res = await fetch('/api/calibrate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...adminHeaders() },
-      body: JSON.stringify({ source_id: sourceId, duration: _calDuration }),
-    });
-    if (res.status === 401) { closeSettings(); toggleAdmin(); return; }
-    if (!res.ok) { const err = await res.json(); alert(err.detail || 'Error'); return; }
-  } catch(e) { alert('Network error'); return; }
-
-  _calSetRecording(true);
-  document.getElementById('cal-status').textContent = 'Recording...';
-  document.getElementById('cal-status').style.color = '#888';
-  _calPollTimer = setInterval(pollCalibration, 1000);
-}
-
-async function pollCalibration() {
-  try {
-    const res = await fetch('/api/calibrate', { headers: adminHeaders() });
-    const data = await res.json();
-    if (!data.active || data.done) {
-      if (_calPollTimer) { clearInterval(_calPollTimer); _calPollTimer = null; }
-      document.getElementById('cal-bar').style.width = '100%';
-      document.getElementById('cal-text').textContent = `100% (${_calDuration}s/${_calDuration}s)`;
-      document.getElementById('cal-status').textContent = 'Done! Saving...';
-      await stopCalibration();
-      return;
-    }
-    const pct = Math.round(data.progress * 100);
-    const recorded = Math.round(data.progress * _calDuration);
-    document.getElementById('cal-bar').style.width = pct + '%';
-    document.getElementById('cal-text').textContent = `${pct}% (${recorded}s/${_calDuration}s)`;
-  } catch(e) {}
-}
-
-async function stopCalibration() {
-  if (_calPollTimer) { clearInterval(_calPollTimer); _calPollTimer = null; }
-  try {
-    const res = await fetch('/api/calibrate/stop', {
-      method: 'POST',
-      headers: adminHeaders(),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      document.getElementById('cal-status').innerHTML = `Saved for <b>${data.source}</b>. Run <code style="background:#222;padding:1px 4px;border-radius:3px">make retrain</code> to apply.`;
-      document.getElementById('cal-status').style.color = '#4caf50';
-      document.getElementById('cal-stop-btn').style.display = 'none';
-      document.getElementById('cal-cancel-btn').style.display = 'none';
-      document.getElementById('cal-source').disabled = false;
-      document.getElementById('cal-duration').disabled = false;
-      document.getElementById('cal-start-btn').style.display = '';
-    } else {
-      const err = await res.json();
-      document.getElementById('cal-status').textContent = err.detail || 'Error';
-      document.getElementById('cal-status').style.color = '#ef5350';
-    }
-  } catch(e) {
-    document.getElementById('cal-status').textContent = 'Network error';
-    document.getElementById('cal-status').style.color = '#ef5350';
-  }
-}
-
-async function cancelCalibration() {
-  if (_calPollTimer) { clearInterval(_calPollTimer); _calPollTimer = null; }
-  try {
-    await fetch('/api/calibrate/cancel', { method: 'POST', headers: adminHeaders() });
-  } catch(e) {}
-  _calReset();
-  document.getElementById('cal-status').textContent = 'Cancelled — recording discarded.';
-  document.getElementById('cal-status').style.color = '#888';
-}
-
-/* ── Settings tooltips ────────────────────────────── */
-function toggleTip(helpBtn) {
-  const row = helpBtn.closest('.s-row');
-  const tip = row.nextElementSibling;
-  if (!tip || !tip.classList.contains('s-tooltip')) return;
-  const wasOpen = tip.classList.contains('open');
-  // close all tooltips first
-  document.querySelectorAll('.s-tooltip.open').forEach(t => t.classList.remove('open'));
-  document.querySelectorAll('.s-help.open').forEach(h => h.classList.remove('open'));
-  if (!wasOpen) {
-    tip.classList.add('open');
-    helpBtn.classList.add('open');
-  }
-}
-
-/* ── Settings page ───────────────────────────────── */
-const SETTINGS_KEYS = [
-  'siren_threshold','explosion_threshold','motorcycle_threshold',
-  'possible_triggers','confirmed_triggers','smoothing_window_seconds',
-  'cooldown_seconds','refractory_seconds','yamnet_min_gate',
-  'clip_seconds',
-  'clip_from_possible'
-];
-let _settingsDefaults = {};
-let _settingsLoaded = {};
-
-function _hasUnsavedSettings() {
-  for (const k of SETTINGS_KEYS) {
-    const input = document.getElementById('s-' + k);
-    if (input && input.value !== _settingsLoaded[k]) return true;
-  }
-  return false;
-}
-
-function switchPanel(btn) {
-  document.querySelectorAll('.sp-nav-item').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.sp-panel').forEach(p => p.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById(btn.dataset.panel).classList.add('active');
-}
-
-async function showSettings() {
-  document.getElementById('main-page').style.display = 'none';
-  document.getElementById('settings-page').classList.add('open');
-  document.querySelectorAll('.s-status').forEach(s => s.textContent = '');
-  try {
-    const res = await fetch('/api/settings', { headers: adminHeaders() });
-    const data = await res.json();
-    _settingsDefaults = data.defaults || {};
-    _settingsLoaded = {};
-    for (const k of SETTINGS_KEYS) {
-      const input = document.getElementById('s-' + k);
-      if (input) {
-        input.value = data[k] ?? _settingsDefaults[k] ?? '';
-        _settingsLoaded[k] = input.value;
-        input.classList.remove('changed');
-        const evt = input.tagName === 'SELECT' ? 'onchange' : 'oninput';
-        input[evt] = () => {
-          input.classList.toggle('changed', input.value !== _settingsLoaded[k]);
-        };
-      }
-      const def = document.querySelector(`.s-default[data-key="${k}"]`);
-      if (def) {
-        const defLabel = input.tagName === 'SELECT'
-          ? (input.querySelector(`option[value="${_settingsDefaults[k]}"]`)?.textContent ?? _settingsDefaults[k])
-          : _settingsDefaults[k];
-        def.innerHTML = `<span class="s-reset-icon">↺</span>${defLabel}`;
-        def.title = 'Reset to default';
-        def.onclick = () => {
-          input.value = _settingsDefaults[k];
-          input.classList.toggle('changed', input.value !== _settingsLoaded[k]);
-        };
-      }
-    }
-  } catch(e) {
-    const s = document.getElementById('s-status');
-    if (s) { s.textContent = 'Failed to load'; s.style.color = '#ef5350'; }
-  }
-  loadCalibrationSources();
-  _calReset();
-}
-
-function closeSettings() {
-  document.getElementById('settings-page').classList.remove('open');
-  document.getElementById('main-page').style.display = '';
-}
-
-function backFromSettings() {
-  if (_hasUnsavedSettings()) {
-    if (!confirm('You have unsaved changes. Discard them?')) return;
-  }
-  closeSettings();
-}
-
-function _activeStatus() {
-  const panel = document.querySelector('.sp-panel.active');
-  return panel ? (panel.querySelector('.s-status') || document.getElementById('s-status')) : document.getElementById('s-status');
-}
-
-async function saveSettings() {
-  const body = {};
-  for (const k of SETTINGS_KEYS) {
-    const input = document.getElementById('s-' + k);
-    if (input) body[k] = parseFloat(input.value);
-  }
-  const status = _activeStatus();
-  try {
-    const res = await fetch('/api/settings', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', ...adminHeaders()},
-      body: JSON.stringify(body),
-    });
-    if (res.status === 401) { closeSettings(); toggleAdmin(); return; }
-    if (res.ok) {
-      if (status) { status.textContent = 'Saved'; status.style.color = '#4caf50'; }
-      for (const k of SETTINGS_KEYS) {
-        const input = document.getElementById('s-' + k);
-        if (input) { _settingsLoaded[k] = input.value; input.classList.remove('changed'); }
-      }
-      const data = await res.json();
-      DETECTOR_THRESHOLDS.siren = data.siren_threshold;
-      DETECTOR_THRESHOLDS.explosion = data.explosion_threshold;
-      DETECTOR_THRESHOLDS.motorcycle = data.motorcycle_threshold;
-    } else {
-      const err = await res.json();
-      if (status) { status.textContent = err.detail || 'Error'; status.style.color = '#ef5350'; }
-    }
-  } catch(e) {
-    if (status) { status.textContent = 'Network error'; status.style.color = '#ef5350'; }
-  }
-}
 
 /* ── Spectrogram colormap ────────────────────────── */
 const SPEC_CMAP = new Uint8Array(256 * 3);
@@ -1883,19 +1453,6 @@ async function saveSegments(card) {
   }
 }
 
-async function resetSettings() {
-  const status = _activeStatus();
-  try {
-    const res = await fetch('/api/settings/reset', { method: 'POST', headers: adminHeaders() });
-    if (res.status === 401) { closeSettings(); toggleAdmin(); return; }
-    if (res.ok) {
-      if (status) { status.textContent = 'Reset to defaults'; status.style.color = '#ffa726'; }
-      showSettings();
-    }
-  } catch(e) {
-    if (status) { status.textContent = 'Network error'; status.style.color = '#ef5350'; }
-  }
-}
 </script>
 
 </body>

@@ -160,6 +160,7 @@ class EventBus:
             "source_id": cal.source_id,
             "progress": round(cal.progress, 2),
             "done": cal.done,
+            "duration": cal.max_samples // SAMPLE_RATE if SAMPLE_RATE else 0,
         }
 
     def cancel_calibration(self) -> None:
