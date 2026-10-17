@@ -238,6 +238,31 @@
   .admin-btn { font-size: 13px; padding: 3px 10px; border-radius: 4px; border: 1px solid #333; background: none; color: #888; cursor: pointer; }
   .admin-btn:hover { color: #ccc; border-color: #555; }
   .admin-btn.authed { border-color: #4caf50; color: #4caf50; }
+
+  /* ── Settings page ── */
+  #settings-page { display: none; min-height: 100vh; background: #0f0f0f; }
+  #settings-page.open { display: flex; flex-direction: column; }
+  .sp-header { padding: 12px 16px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+  .sp-header:hover { background: #151515; }
+  .sp-header h1 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .sp-header .sp-subtitle { font-size: 14px; color: #666; font-weight: 400; margin-left: 4px; }
+  .sp-header .sp-back { font-size: 18px; color: #666; margin-right: 4px; }
+  .sp-body { display: flex; flex: 1; min-height: 0; }
+  .sp-nav { width: 200px; flex-shrink: 0; border-right: 1px solid #222; padding: 16px 0; overflow-y: auto; }
+  .sp-nav-item { display: block; width: 100%; text-align: left; padding: 10px 20px; font-size: 14px; color: #888; background: none; border: none; cursor: pointer; border-left: 3px solid transparent; }
+  .sp-nav-item:hover { color: #ccc; background: #151515; }
+  .sp-nav-item.active { color: #4caf50; border-left-color: #4caf50; background: #111; }
+  .sp-content { flex: 1; padding: 24px 32px; overflow-y: auto; max-width: 600px; }
+  .sp-panel { display: none; }
+  .sp-panel.active { display: block; }
+  .sp-actions { position: sticky; bottom: 0; background: #0f0f0f; padding: 14px 0 0; border-top: 1px solid #222; margin-top: 20px; display: flex; gap: 10px; align-items: center; }
+  @media (max-width: 700px) {
+    .sp-body { flex-direction: column; }
+    .sp-nav { width: 100%; flex-shrink: 0; border-right: none; border-bottom: 1px solid #222; padding: 8px 12px; display: flex; gap: 4px; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
+    .sp-nav-item { width: auto; white-space: nowrap; padding: 8px 14px; border-radius: 4px; border-left: none; font-size: 13px; flex-shrink: 0; }
+    .sp-nav-item.active { background: #1a3a1a; border-left: none; border-radius: 4px; }
+    .sp-content { padding: 16px; }
+  }
   .admin-only { display: none !important; }
   .admin-only.visible { display: flex !important; }
   .admin-only-inline { display: none !important; }
@@ -259,6 +284,7 @@
 </head>
 <body>
 
+<div id="main-page">
 <header>
   <h1><img src="/static/img/siren-detector-logo.svg" alt="Logo" class="header-logo"> Siren Detector</h1>
   <span class="header-badges">
@@ -351,71 +377,124 @@
 </div>
 <div id="events"><div class="empty" id="empty">No events yet</div></div>
 
-<div class="modal-overlay" id="settings-overlay">
-  <div class="modal" style="max-width:440px">
-    <button class="close-btn" onclick="closeSettings()">&times;</button>
-    <h2>Settings</h2>
-    <div id="settings-body" style="margin-top:12px">
-      <div class="s-section">
-        <div class="s-title">Detection Thresholds</div>
-        <div class="s-row"><label>Siren <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-siren_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="siren_threshold"></span></div>
-        <div class="s-tooltip" data-tip="siren_threshold"><strong>Detection Thresholds · Siren</strong><br>Minimum confidence score for a siren detection to count as a trigger. Lower values catch more sirens but increase false positives. When MLP is active, this applies to the MLP score (gated by YAMNet min gate).<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.10</b></span></div>
-        <div class="s-row"><label>Explosion <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-explosion_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="explosion_threshold"></span></div>
-        <div class="s-tooltip" data-tip="explosion_threshold"><strong>Detection Thresholds · Explosion</strong><br>Minimum YAMNet confidence for explosion/gunshot/burst sounds. Covers classes: Explosion, Burst pop, Gunshot gunfire.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.15</b></span></div>
-        <div class="s-row"><label>Motorcycle <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-motorcycle_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="motorcycle_threshold"></span></div>
-        <div class="s-tooltip" data-tip="motorcycle_threshold"><strong>Detection Thresholds · Motorcycle</strong><br>Minimum YAMNet confidence for motorcycle engine sounds.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.15</b></span></div>
-      </div>
-      <div class="s-section">
-        <div class="s-title">Temporal Smoothing</div>
-        <div class="s-row"><label>Possible triggers <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-possible_triggers" step="1" min="1" max="60"><span class="s-default" data-key="possible_triggers"></span></div>
-        <div class="s-tooltip" data-tip="possible_triggers"><strong>Temporal Smoothing · Possible Triggers</strong><br>Number of above-threshold windows within the smoothing window needed to enter "possible" state. This is the early warning — the UI shows a yellow badge but no clip is saved yet.<hr><span class="s-tip-range">Range: <b>1 – 60</b></span><br><span class="s-tip-default">Default: <b>4</b></span></div>
-        <div class="s-row"><label>Confirmed triggers <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-confirmed_triggers" step="1" min="1" max="60"><span class="s-default" data-key="confirmed_triggers"></span></div>
-        <div class="s-tooltip" data-tip="confirmed_triggers"><strong>Temporal Smoothing · Confirmed Triggers</strong><br>Number of above-threshold windows needed to confirm an event. A confirmed event saves an audio clip, sends MQTT notification, and shows a red badge. Must be greater than possible triggers.<hr><span class="s-tip-range">Range: <b>1 – 60</b></span><br><span class="s-tip-default">Default: <b>8</b></span></div>
-        <div class="s-row"><label>Window (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-smoothing_window_seconds" step="1" min="5" max="120"><span class="s-default" data-key="smoothing_window_seconds"></span></div>
-        <div class="s-tooltip" data-tip="smoothing_window_seconds"><strong>Temporal Smoothing · Window</strong><br>Rolling time window (in seconds) over which trigger counts are accumulated. Inference runs every 0.5s, so a 30s window holds up to 61 slots. Larger window = more tolerant to intermittent sounds, but slower to react.<hr><span class="s-tip-range">Range: <b>5 – 120 sec</b></span><br><span class="s-tip-default">Default: <b>30</b></span></div>
-        <div class="s-row"><label>Cooldown (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-cooldown_seconds" step="1" min="0" max="600"><span class="s-default" data-key="cooldown_seconds"></span></div>
-        <div class="s-tooltip" data-tip="cooldown_seconds"><strong>Temporal Smoothing · Cooldown</strong><br>After a confirmed event, ignore all detections for this many seconds. Prevents duplicate events from the same prolonged sound. Set to 0 for no cooldown (useful for testing).<hr><span class="s-tip-range">Range: <b>0 – 600 sec</b></span><br><span class="s-tip-default">Default: <b>60</b></span></div>
-        <div class="s-row"><label>Refractory (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-refractory_seconds" step="1" min="0" max="120"><span class="s-default" data-key="refractory_seconds"></span></div>
-        <div class="s-tooltip" data-tip="refractory_seconds"><strong>Temporal Smoothing · Refractory</strong><br>After cooldown ends, the detector waits up to this many seconds before allowing re-trigger. If the score drops below threshold during this period, the refractory ends immediately (the sound stopped). If the score stays high, the refractory expires by timeout — allowing re-detection of a new/ongoing event. Set to 0 to disable refractory entirely.<hr><span class="s-tip-range">Range: <b>0 – 120 sec</b></span><br><span class="s-tip-default">Default: <b>15</b></span></div>
-      </div>
-      <div class="s-section">
-        <div class="s-title">MLP Gate</div>
-        <div class="s-row"><label>YAMNet min gate <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-yamnet_min_gate" step="0.001" min="0" max="1"><span class="s-default" data-key="yamnet_min_gate"></span></div>
-        <div class="s-tooltip" data-tip="yamnet_min_gate"><strong>MLP Gate · YAMNet Min Gate</strong><br>When MLP classifier is active for siren detection, YAMNet must show at least this score for the MLP result to be trusted. Prevents MLP false positives when YAMNet sees no siren-like sound at all. Set to 0 to fully trust MLP regardless of YAMNet opinion — may increase false positives but catches sirens that YAMNet misclassifies as silence.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.01</b></span></div>
-      </div>
-      <div class="s-section">
-        <div class="s-title">Clip</div>
-        <div class="s-row"><label>Clip length (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-clip_seconds" step="1" min="5" max="60"><span class="s-default" data-key="clip_seconds"></span></div>
-        <div class="s-tooltip" data-tip="clip_seconds"><strong>Clip · Length</strong><br>Duration of audio clip (in seconds) saved when an event is confirmed. Shorter clips contain less background noise for retraining. Applies immediately.<hr><span class="s-tip-range">Range: <b>5 – 60 sec</b></span><br><span class="s-tip-default">Default: <b>10</b></span></div>
-        <div class="s-row"><label>Clip from possible <span class="s-help" onclick="toggleTip(this)">?</span></label><select id="s-clip_from_possible"><option value="0">Off</option><option value="1">On</option></select><span class="s-default" data-key="clip_from_possible"></span></div>
-        <div class="s-tooltip" data-tip="clip_from_possible"><strong>Clip · From Possible</strong><br>By default clip captures the last N seconds before <em>confirmed</em>. When <b>On</b>, clip starts from the moment event reaches <em>possible</em> (+ 2s pre-buffer), capturing the actual sound wave that triggered detection. Per-window scores are saved in clip JSON metadata for precise labeling during retraining.<hr><span class="s-tip-default">Default: <b>Off</b></span></div>
-      </div>
-      <div class="s-section">
-        <div class="s-title">Background Calibration</div>
-        <p style="font-size:12px;color:#666;margin:0 0 8px 0;line-height:1.5">Record ambient background from a microphone so the model learns what <em>not</em> a siren sounds like through this source. For best results, record 5+ minutes of your typical environment: appliances, street noise through windows, conversations, 3D printer, etc. Multiple recordings at different times improve accuracy. After recording, run <code style="background:#222;padding:1px 4px;border-radius:3px">make retrain</code>.</p>
-        <div class="s-row"><label>Source</label><select id="cal-source" style="flex:1;background:#222;border:1px solid #444;color:#e0e0e0;padding:4px 8px;border-radius:4px;font-size:13px"></select></div>
-        <div class="s-row"><label>Duration (sec)</label><input type="number" id="cal-duration" value="300" min="10" max="900" step="10" style="width:100px;background:#222;border:1px solid #444;color:#e0e0e0;padding:4px 8px;border-radius:4px;font-size:13px"></div>
-        <div id="cal-progress" style="display:none;margin:8px 0">
-          <div style="background:#222;border-radius:4px;height:20px;overflow:hidden">
-            <div id="cal-bar" style="height:100%;width:0%;background:#4caf50;border-radius:4px;transition:width .5s"></div>
-          </div>
-          <div id="cal-text" style="font-size:12px;color:#888;margin-top:4px;text-align:center">0% (0s/300s)</div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <button id="cal-start-btn" onclick="startCalibration()" class="s-save" style="flex:1">Start Recording</button>
-          <button id="cal-stop-btn" onclick="stopCalibration()" style="flex:1;display:none;background:#1a3a1a;border:1px solid #4caf50;color:#4caf50;padding:6px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600">Stop & Save</button>
-          <button id="cal-cancel-btn" onclick="cancelCalibration()" style="flex:1;display:none;background:#3a1a1a;border:1px solid #ef5350;color:#ef5350;padding:6px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600">Cancel</button>
-        </div>
-        <div id="cal-status" style="font-size:12px;color:#888;margin-top:6px;text-align:center"></div>
-      </div>
-      <div class="s-actions">
-        <button class="s-save" onclick="saveSettings()">Save</button>
-        <button class="s-reset" onclick="resetSettings()">Reset to defaults</button>
-        <span class="s-status" id="s-status"></span>
-      </div>
-    </div>
+<!-- settings modal removed — replaced by #settings-page -->
+</div><!-- /#main-page -->
+
+<div id="settings-page">
+  <div class="sp-header" onclick="backFromSettings()">
+    <span class="sp-back">&larr;</span>
+    <h1><img src="/static/img/siren-detector-logo.svg" alt="Logo" class="header-logo"> Siren Detector <span class="sp-subtitle">/ Settings</span></h1>
   </div>
-</div>
+  <div class="sp-body">
+    <nav class="sp-nav">
+      <button class="sp-nav-item active" data-panel="sp-detection" onclick="switchPanel(this)">Detection</button>
+      <button class="sp-nav-item" data-panel="sp-smoothing" onclick="switchPanel(this)">Smoothing</button>
+      <button class="sp-nav-item" data-panel="sp-clips" onclick="switchPanel(this)">Clips</button>
+      <button class="sp-nav-item" data-panel="sp-calibration" onclick="switchPanel(this)">Calibration</button>
+    </nav>
+    <div class="sp-content">
+
+      <!-- Detection -->
+      <div class="sp-panel active" id="sp-detection">
+        <div class="s-section">
+          <div class="s-title">Thresholds</div>
+          <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Minimum confidence score for each sound type. When MLP classifier is active (siren), this applies to the MLP output score.</p>
+          <div class="s-row"><label>Siren <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-siren_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="siren_threshold"></span></div>
+          <div class="s-tooltip" data-tip="siren_threshold"><strong>Siren Threshold</strong><br>MLP confidence score required for a siren detection to count as a trigger. Lower = more sensitive but more false positives.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.10</b></span></div>
+          <div class="s-row"><label>Explosion <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-explosion_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="explosion_threshold"></span></div>
+          <div class="s-tooltip" data-tip="explosion_threshold"><strong>Explosion Threshold</strong><br>YAMNet confidence for explosion/gunshot/burst. Classes: Explosion, Burst pop, Gunshot gunfire.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.15</b></span></div>
+          <div class="s-row"><label>Motorcycle <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-motorcycle_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="motorcycle_threshold"></span></div>
+          <div class="s-tooltip" data-tip="motorcycle_threshold"><strong>Motorcycle Threshold</strong><br>YAMNet confidence for motorcycle engine sounds.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.15</b></span></div>
+        </div>
+        <div class="s-section">
+          <div class="s-title">MLP Gate</div>
+          <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Controls when to trust the MLP classifier for siren detection.</p>
+          <div class="s-row"><label>YAMNet min gate <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-yamnet_min_gate" step="0.001" min="0" max="1"><span class="s-default" data-key="yamnet_min_gate"></span></div>
+          <div class="s-tooltip" data-tip="yamnet_min_gate"><strong>YAMNet Min Gate</strong><br>YAMNet must show at least this score for the MLP result to be trusted. Prevents MLP hallucinations on unfamiliar audio. Set to 0 to fully trust MLP.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.01</b></span></div>
+        </div>
+        <div class="sp-actions">
+          <button class="s-save" onclick="saveSettings()">Save</button>
+          <button class="s-reset" onclick="resetSettings()">Reset to defaults</button>
+          <span class="s-status" id="s-status"></span>
+        </div>
+      </div>
+
+      <!-- Smoothing -->
+      <div class="sp-panel" id="sp-smoothing">
+        <div class="s-section">
+          <div class="s-title">Trigger Thresholds</div>
+          <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">How many above-threshold inference windows are needed to change state.</p>
+          <div class="s-row"><label>Possible triggers <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-possible_triggers" step="1" min="1" max="60"><span class="s-default" data-key="possible_triggers"></span></div>
+          <div class="s-tooltip" data-tip="possible_triggers"><strong>Possible Triggers</strong><br>Windows needed for early warning (yellow badge). No clip saved yet.<hr><span class="s-tip-range">Range: <b>1 – 60</b></span><br><span class="s-tip-default">Default: <b>4</b></span></div>
+          <div class="s-row"><label>Confirmed triggers <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-confirmed_triggers" step="1" min="1" max="60"><span class="s-default" data-key="confirmed_triggers"></span></div>
+          <div class="s-tooltip" data-tip="confirmed_triggers"><strong>Confirmed Triggers</strong><br>Windows needed to confirm event. Saves clip, sends MQTT. Must be &gt; possible triggers.<hr><span class="s-tip-range">Range: <b>1 – 60</b></span><br><span class="s-tip-default">Default: <b>8</b></span></div>
+        </div>
+        <div class="s-section">
+          <div class="s-title">Timing</div>
+          <div class="s-row"><label>Window (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-smoothing_window_seconds" step="1" min="5" max="120"><span class="s-default" data-key="smoothing_window_seconds"></span></div>
+          <div class="s-tooltip" data-tip="smoothing_window_seconds"><strong>Smoothing Window</strong><br>Rolling time window for trigger accumulation. 30s window at 0.5s inference = up to 61 slots.<hr><span class="s-tip-range">Range: <b>5 – 120 sec</b></span><br><span class="s-tip-default">Default: <b>30</b></span></div>
+          <div class="s-row"><label>Cooldown (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-cooldown_seconds" step="1" min="0" max="600"><span class="s-default" data-key="cooldown_seconds"></span></div>
+          <div class="s-tooltip" data-tip="cooldown_seconds"><strong>Cooldown</strong><br>After confirmed event, ignore detections for this long. Prevents duplicate events from same sound. 0 = no cooldown.<hr><span class="s-tip-range">Range: <b>0 – 600 sec</b></span><br><span class="s-tip-default">Default: <b>60</b></span></div>
+          <div class="s-row"><label>Refractory (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-refractory_seconds" step="1" min="0" max="120"><span class="s-default" data-key="refractory_seconds"></span></div>
+          <div class="s-tooltip" data-tip="refractory_seconds"><strong>Refractory</strong><br>After cooldown, wait for score to drop before re-arming. If score stays high, expires by timeout. 0 = disabled.<hr><span class="s-tip-range">Range: <b>0 – 120 sec</b></span><br><span class="s-tip-default">Default: <b>15</b></span></div>
+        </div>
+        <div class="sp-actions">
+          <button class="s-save" onclick="saveSettings()">Save</button>
+          <button class="s-reset" onclick="resetSettings()">Reset to defaults</button>
+          <span class="s-status" id="s-status-sm"></span>
+        </div>
+      </div>
+
+      <!-- Clips -->
+      <div class="sp-panel" id="sp-clips">
+        <div class="s-section">
+          <div class="s-title">Audio Clips</div>
+          <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Saved when an event is confirmed. Used for review and retraining.</p>
+          <div class="s-row"><label>Clip length (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-clip_seconds" step="1" min="5" max="60"><span class="s-default" data-key="clip_seconds"></span></div>
+          <div class="s-tooltip" data-tip="clip_seconds"><strong>Clip Length</strong><br>Duration of saved audio clip. Shorter = less noise for retraining.<hr><span class="s-tip-range">Range: <b>5 – 60 sec</b></span><br><span class="s-tip-default">Default: <b>10</b></span></div>
+          <div class="s-row"><label>Clip from possible <span class="s-help" onclick="toggleTip(this)">?</span></label><select id="s-clip_from_possible"><option value="0">Off</option><option value="1">On</option></select><span class="s-default" data-key="clip_from_possible"></span></div>
+          <div class="s-tooltip" data-tip="clip_from_possible"><strong>Clip From Possible</strong><br>When On, clip captures from the moment event reaches "possible" (+ 2s pre-buffer) instead of last N seconds before "confirmed". Includes per-window scores in metadata.<hr><span class="s-tip-default">Default: <b>Off</b></span></div>
+        </div>
+        <div class="sp-actions">
+          <button class="s-save" onclick="saveSettings()">Save</button>
+          <button class="s-reset" onclick="resetSettings()">Reset to defaults</button>
+          <span class="s-status" id="s-status-cl"></span>
+        </div>
+      </div>
+
+      <!-- Calibration -->
+      <div class="sp-panel" id="sp-calibration">
+        <div class="s-section">
+          <div class="s-title">Background Calibration</div>
+          <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Record ambient background from a microphone so the model learns what is <em>not</em> a siren through this audio source.</p>
+          <div style="background:#1a1a1a;border:1px solid #222;border-radius:6px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:#888;line-height:1.6">
+            <b style="color:#ccc">How to get best results:</b><br>
+            &bull; Record 5+ minutes of your typical environment<br>
+            &bull; Include varied sounds: appliances, street noise, conversations, 3D printers, etc.<br>
+            &bull; Record multiple sessions at different times of day<br>
+            &bull; Each source (ESP32 mic, USB mic) needs its own calibration<br>
+            &bull; After recording, run <code style="background:#222;padding:1px 4px;border-radius:3px">make retrain</code> to apply
+          </div>
+          <div class="s-row"><label>Source</label><select id="cal-source" style="flex:1;background:#222;border:1px solid #444;color:#e0e0e0;padding:4px 8px;border-radius:4px;font-size:13px"></select></div>
+          <div class="s-row"><label>Duration (sec)</label><input type="number" id="cal-duration" value="300" min="10" max="900" step="10" style="width:100px;background:#222;border:1px solid #444;color:#e0e0e0;padding:4px 8px;border-radius:4px;font-size:13px"></div>
+          <div id="cal-progress" style="display:none;margin:8px 0">
+            <div style="background:#222;border-radius:4px;height:20px;overflow:hidden">
+              <div id="cal-bar" style="height:100%;width:0%;background:#4caf50;border-radius:4px;transition:width .5s"></div>
+            </div>
+            <div id="cal-text" style="font-size:12px;color:#888;margin-top:4px;text-align:center">0% (0s/300s)</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button id="cal-start-btn" onclick="startCalibration()" class="s-save" style="flex:1">Start Recording</button>
+            <button id="cal-stop-btn" onclick="stopCalibration()" style="flex:1;display:none;background:#1a3a1a;border:1px solid #4caf50;color:#4caf50;padding:6px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600">Stop & Save</button>
+            <button id="cal-cancel-btn" onclick="cancelCalibration()" style="flex:1;display:none;background:#3a1a1a;border:1px solid #ef5350;color:#ef5350;padding:6px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600">Cancel</button>
+          </div>
+          <div id="cal-status" style="font-size:12px;color:#888;margin-top:8px;text-align:center"></div>
+        </div>
+      </div>
+
+    </div><!-- /.sp-content -->
+  </div><!-- /.sp-body -->
+</div><!-- /#settings-page -->
 
 <div class="modal-overlay" id="login-overlay">
   <div class="modal" style="max-width:360px">
@@ -1341,7 +1420,7 @@ function toggleTip(helpBtn) {
   }
 }
 
-/* ── Settings modal ──────────────────────────────── */
+/* ── Settings page ───────────────────────────────── */
 const SETTINGS_KEYS = [
   'siren_threshold','explosion_threshold','motorcycle_threshold',
   'possible_triggers','confirmed_triggers','smoothing_window_seconds',
@@ -1352,10 +1431,25 @@ const SETTINGS_KEYS = [
 let _settingsDefaults = {};
 let _settingsLoaded = {};
 
+function _hasUnsavedSettings() {
+  for (const k of SETTINGS_KEYS) {
+    const input = document.getElementById('s-' + k);
+    if (input && input.value !== _settingsLoaded[k]) return true;
+  }
+  return false;
+}
+
+function switchPanel(btn) {
+  document.querySelectorAll('.sp-nav-item').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.sp-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(btn.dataset.panel).classList.add('active');
+}
+
 async function showSettings() {
-  const overlay = document.getElementById('settings-overlay');
-  overlay.classList.add('open');
-  document.getElementById('s-status').textContent = '';
+  document.getElementById('main-page').style.display = 'none';
+  document.getElementById('settings-page').classList.add('open');
+  document.querySelectorAll('.s-status').forEach(s => s.textContent = '');
   try {
     const res = await fetch('/api/settings', { headers: adminHeaders() });
     const data = await res.json();
@@ -1386,15 +1480,29 @@ async function showSettings() {
       }
     }
   } catch(e) {
-    document.getElementById('s-status').textContent = 'Failed to load';
-    document.getElementById('s-status').style.color = '#ef5350';
+    const s = document.getElementById('s-status');
+    if (s) { s.textContent = 'Failed to load'; s.style.color = '#ef5350'; }
   }
   loadCalibrationSources();
   _calReset();
 }
 
-function closeSettings() { document.getElementById('settings-overlay').classList.remove('open'); }
-document.getElementById('settings-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeSettings(); });
+function closeSettings() {
+  document.getElementById('settings-page').classList.remove('open');
+  document.getElementById('main-page').style.display = '';
+}
+
+function backFromSettings() {
+  if (_hasUnsavedSettings()) {
+    if (!confirm('You have unsaved changes. Discard them?')) return;
+  }
+  closeSettings();
+}
+
+function _activeStatus() {
+  const panel = document.querySelector('.sp-panel.active');
+  return panel ? (panel.querySelector('.s-status') || document.getElementById('s-status')) : document.getElementById('s-status');
+}
 
 async function saveSettings() {
   const body = {};
@@ -1402,7 +1510,7 @@ async function saveSettings() {
     const input = document.getElementById('s-' + k);
     if (input) body[k] = parseFloat(input.value);
   }
-  const status = document.getElementById('s-status');
+  const status = _activeStatus();
   try {
     const res = await fetch('/api/settings', {
       method: 'POST',
@@ -1411,26 +1519,21 @@ async function saveSettings() {
     });
     if (res.status === 401) { closeSettings(); toggleAdmin(); return; }
     if (res.ok) {
-      status.textContent = 'Saved';
-      status.style.color = '#4caf50';
-      // update loaded values so change indicators reset
+      if (status) { status.textContent = 'Saved'; status.style.color = '#4caf50'; }
       for (const k of SETTINGS_KEYS) {
         const input = document.getElementById('s-' + k);
         if (input) { _settingsLoaded[k] = input.value; input.classList.remove('changed'); }
       }
-      // update detector thresholds used by score bars
       const data = await res.json();
       DETECTOR_THRESHOLDS.siren = data.siren_threshold;
       DETECTOR_THRESHOLDS.explosion = data.explosion_threshold;
       DETECTOR_THRESHOLDS.motorcycle = data.motorcycle_threshold;
     } else {
       const err = await res.json();
-      status.textContent = err.detail || 'Error';
-      status.style.color = '#ef5350';
+      if (status) { status.textContent = err.detail || 'Error'; status.style.color = '#ef5350'; }
     }
   } catch(e) {
-    status.textContent = 'Network error';
-    status.style.color = '#ef5350';
+    if (status) { status.textContent = 'Network error'; status.style.color = '#ef5350'; }
   }
 }
 
@@ -1781,18 +1884,16 @@ async function saveSegments(card) {
 }
 
 async function resetSettings() {
-  const status = document.getElementById('s-status');
+  const status = _activeStatus();
   try {
     const res = await fetch('/api/settings/reset', { method: 'POST', headers: adminHeaders() });
     if (res.status === 401) { closeSettings(); toggleAdmin(); return; }
     if (res.ok) {
-      status.textContent = 'Reset to defaults';
-      status.style.color = '#ffa726';
+      if (status) { status.textContent = 'Reset to defaults'; status.style.color = '#ffa726'; }
       showSettings();
     }
   } catch(e) {
-    status.textContent = 'Network error';
-    status.style.color = '#ef5350';
+    if (status) { status.textContent = 'Network error'; status.style.color = '#ef5350'; }
   }
 }
 </script>
