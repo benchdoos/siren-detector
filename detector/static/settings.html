@@ -64,6 +64,9 @@
   .src-card.disabled { opacity: 0.5; }
   .src-name { font-size: 14px; color: #ccc; font-weight: 500; }
   .src-id { font-size: 11px; color: #666; margin-left: 4px; }
+  .src-listen { font-size: 12px; padding: 4px 12px; border-radius: 4px; border: 1px solid #333; background: none; color: #888; cursor: pointer; white-space: nowrap; min-width: 62px; text-align: center; font-family: monospace; }
+  .src-listen:hover { color: #ccc; border-color: #555; }
+  .src-listen.active { background: #1a3a1a; border-color: #4caf50; color: #4caf50; }
   .src-toggle { margin-left: auto; position: relative; width: 40px; height: 22px; flex-shrink: 0; }
   .src-toggle input { opacity: 0; width: 0; height: 0; }
   .src-toggle .slider { position: absolute; inset: 0; background: #333; border-radius: 11px; cursor: pointer; transition: background .2s; }
@@ -422,6 +425,7 @@ async function loadSources() {
       card.className = 'src-card' + (enabled ? '' : ' disabled');
       card.innerHTML = `
         <div><span class="src-name">${esc(s.name)}</span><span class="src-id">id: ${s.source_id}</span></div>
+        <button class="src-listen" data-sid="${s.source_id}" onclick="toggleSourceListen(this, ${s.source_id})">Listen</button>
         <label class="src-toggle">
           <input type="checkbox" ${enabled ? 'checked' : ''} data-sid="${s.source_id}">
           <span class="slider"></span>
@@ -568,6 +572,69 @@ async function cancelCalibration() {
   _calReset();
   document.getElementById('cal-status').textContent = 'Cancelled — recording discarded.';
   document.getElementById('cal-status').style.color = '#888';
+}
+
+/* ── Listen (per-source audio) ── */
+let _listenWs = null;
+let _listenCtx = null;
+let _listenNextTime = 0;
+let _listenSid = null;
+let _listenBtn = null;
+let _listenDotTimer = null;
+const _DOT_FRAMES = ['...', '\u00a0..', '.\u00a0.', '..\u00a0'];
+let _dotIdx = 0;
+
+function _wsUrl(path) {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const q = _adminToken ? `?token=${encodeURIComponent(_adminToken)}` : '';
+  return `${proto}//${location.host}${path}${q}`;
+}
+
+function toggleSourceListen(btn, sourceId) {
+  if (_listenSid === sourceId && _listenWs) {
+    stopSourceListen();
+    return;
+  }
+  // Stop any active listen first
+  if (_listenWs) stopSourceListen();
+  _listenSid = sourceId;
+  _listenBtn = btn;
+  _listenCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+  _listenNextTime = 0;
+  const sep = _wsUrl('/ws/audio').includes('?') ? '&' : '?';
+  _listenWs = new WebSocket(_wsUrl('/ws/audio') + sep + 'source_id=' + sourceId);
+  _listenWs.binaryType = 'arraybuffer';
+  _listenWs.onopen = () => {
+    btn.classList.add('active');
+    _dotIdx = 0;
+    _listenDotTimer = setInterval(() => {
+      btn.textContent = _DOT_FRAMES[_dotIdx % _DOT_FRAMES.length];
+      _dotIdx++;
+    }, 300);
+  };
+  _listenWs.onclose = () => stopSourceListen();
+  _listenWs.onmessage = ({ data }) => {
+    if (!_listenCtx) return;
+    const f32 = new Float32Array(data);
+    const buf = _listenCtx.createBuffer(1, f32.length, 16000);
+    buf.getChannelData(0).set(f32);
+    const src = _listenCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(_listenCtx.destination);
+    const now = _listenCtx.currentTime;
+    if (_listenNextTime < now) _listenNextTime = now + 0.05;
+    src.start(_listenNextTime);
+    _listenNextTime += buf.duration;
+  };
+}
+
+function stopSourceListen() {
+  if (_listenDotTimer) { clearInterval(_listenDotTimer); _listenDotTimer = null; }
+  if (_listenWs) { _listenWs.close(); _listenWs = null; }
+  if (_listenCtx) { _listenCtx.close(); _listenCtx = null; }
+  if (_listenBtn) { _listenBtn.classList.remove('active'); _listenBtn.textContent = 'Listen'; }
+  _listenSid = null;
+  _listenBtn = null;
 }
 
 /* ── Init ── */

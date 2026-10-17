@@ -58,7 +58,8 @@ class EventBus:
 
         # WebSocket client queues
         self.client_queues: dict[WebSocket, asyncio.Queue] = {}
-        self.audio_queues: dict[WebSocket, asyncio.Queue] = {}
+        # (queue, source_id filter or None for all)
+        self.audio_queues: dict[WebSocket, tuple[asyncio.Queue, int | None]] = {}
 
         # State
         self.event_history: collections.deque = collections.deque(maxlen=100)
@@ -105,9 +106,11 @@ class EventBus:
             except Exception:
                 pass
 
-    def _enqueue_audio(self, data: bytes) -> None:
+    def _enqueue_audio(self, data: bytes, source_id: int) -> None:
         dead = []
-        for ws, q in self.audio_queues.items():
+        for ws, (q, sid_filter) in self.audio_queues.items():
+            if sid_filter is not None and sid_filter != source_id:
+                continue
             if q.qsize() < 50:
                 q.put_nowait(data)
             else:
@@ -133,7 +136,7 @@ class EventBus:
         if not self.audio_queues or not self.loop or self.loop.is_closed():
             return
         data = samples.astype(np.float32).tobytes()
-        self.loop.call_soon_threadsafe(self._enqueue_audio, data)
+        self.loop.call_soon_threadsafe(self._enqueue_audio, data, source_id)
 
     # ── calibration ─────────────────────────────────────────────────────────
 
