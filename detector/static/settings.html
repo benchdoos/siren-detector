@@ -59,6 +59,18 @@
   .sp-panel-footer { margin-top: 20px; padding-top: 12px; border-top: 1px solid #222; display: flex; align-items: center; gap: 10px; }
   .sp-status { font-size: 12px; margin-left: auto; }
 
+  /* ── Source toggles ── */
+  .src-card { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #1a1a1a; border: 1px solid #222; border-radius: 6px; }
+  .src-card.disabled { opacity: 0.5; }
+  .src-name { font-size: 14px; color: #ccc; font-weight: 500; }
+  .src-id { font-size: 11px; color: #666; margin-left: 4px; }
+  .src-toggle { margin-left: auto; position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+  .src-toggle input { opacity: 0; width: 0; height: 0; }
+  .src-toggle .slider { position: absolute; inset: 0; background: #333; border-radius: 11px; cursor: pointer; transition: background .2s; }
+  .src-toggle .slider::before { content: ''; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; background: #888; border-radius: 50%; transition: transform .2s, background .2s; }
+  .src-toggle input:checked + .slider { background: #1a3a1a; }
+  .src-toggle input:checked + .slider::before { transform: translateX(18px); background: #4caf50; }
+
   /* ── Mobile ── */
   @media (max-width: 700px) {
     .sp-body { flex-direction: column; }
@@ -82,9 +94,10 @@
 
 <div class="sp-body">
   <nav class="sp-nav">
-    <button class="sp-nav-item active" data-panel="sp-detection" onclick="switchPanel(this)">Detection</button>
+    <button class="sp-nav-item" id="nav-detection" data-panel="sp-detection" onclick="switchPanel(this)">Detection</button>
     <button class="sp-nav-item" data-panel="sp-smoothing" onclick="switchPanel(this)">Smoothing</button>
     <button class="sp-nav-item" data-panel="sp-clips" onclick="switchPanel(this)">Clips</button>
+    <button class="sp-nav-item" data-panel="sp-sources" onclick="switchPanel(this)">Sources</button>
     <button class="sp-nav-item" data-panel="sp-calibration" onclick="switchPanel(this)">Calibration</button>
     <button class="sp-nav-item" data-panel="sp-about" onclick="switchPanel(this)">About</button>
     <div class="sp-nav-spacer"></div>
@@ -97,7 +110,7 @@
   <div class="sp-content">
 
     <!-- Detection -->
-    <div class="sp-panel active" id="sp-detection">
+    <div class="sp-panel" id="sp-detection">
       <div class="s-section">
         <div class="s-title">Thresholds</div>
         <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Minimum confidence score for each sound type. When MLP classifier is active (siren), this applies to the MLP output score.</p>
@@ -161,6 +174,20 @@
       </div>
     </div>
 
+    <!-- Sources -->
+    <div class="sp-panel" id="sp-sources">
+      <div class="s-section">
+        <div class="s-title">Audio Sources</div>
+        <p style="font-size:12px;color:#555;margin:0 0 12px 0;line-height:1.5">Enable or disable detection for each microphone. Disabled sources still receive audio (available for calibration) but their events are discarded.</p>
+        <div id="sources-list" style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:13px;color:#666">Loading sources...</div>
+        </div>
+      </div>
+      <div class="sp-panel-footer">
+        <span class="sp-status" id="status-sources"></span>
+      </div>
+    </div>
+
     <!-- Calibration -->
     <div class="sp-panel" id="sp-calibration">
       <div class="s-section">
@@ -197,15 +224,15 @@
         <img src="/static/img/siren-detector-logo.svg" alt="Logo" class="header-logo" style="width:32px;height:32px">
         <h2 style="font-size:18px;font-weight:600">Siren Detector</h2>
       </div>
+      <div style="border-top:1px solid #222;padding-top:12px;margin-bottom:12px">
+        <p style="color:#ffa726;font-size:12px;line-height:1.5"><span style="color:#ffa726;font-weight:600">Disclaimer</span><br>
+          This application and all its components are intended exclusively for peaceful purposes. Any use of this software for military, harmful, or destructive purposes is strictly prohibited.</p>
+      </div>
       <p style="font-size:13px;color:#aaa;line-height:1.6;margin-bottom:12px">Universal audio event detection platform. ESP32-S3 captures audio from an INMP441 microphone and streams it to a detection engine powered by YAMNet + MLP.</p>
       <p style="font-size:13px;color:#aaa;line-height:1.6;margin-bottom:16px">Target classes: <span style="color:#ef5350;font-weight:600">siren</span>, <span style="color:#ff7043;font-weight:600">explosion</span>, <span style="color:#ffd54f;font-weight:600">motorcycle</span>, <span style="color:#4caf50;font-weight:600">background</span>.</p>
       <div style="border-top:1px solid #222;padding-top:12px;margin-bottom:12px">
         <div style="font-size:12px;color:#888;font-weight:600;margin-bottom:4px">Repository</div>
         <a href="https://github.com/benchdoos/siren-detector" target="_blank" rel="noopener" style="color:#4caf50;text-decoration:none;font-size:13px">github.com/benchdoos/siren-detector</a>
-      </div>
-      <div style="border-top:1px solid #222;padding-top:12px;margin-bottom:12px">
-        <p style="color:#ffa726;font-size:12px;line-height:1.5"><span style="color:#ffa726;font-weight:600">Disclaimer</span><br>
-        This application and all its components are intended exclusively for peaceful purposes. Any use of this software for military, harmful, or destructive purposes is strictly prohibited.</p>
       </div>
       <div style="border-top:1px solid #222;padding-top:12px">
         <p style="font-size:12px;line-height:1.5;color:#aaa"><span style="color:#ccc;font-weight:600">License</span> — CC BY-NC 4.0<br>
@@ -372,6 +399,71 @@ function showStatus(msg, color) {
   if (el) { el.textContent = msg; el.style.color = color; setTimeout(() => el.textContent = '', 4000); }
 }
 
+/* ── Sources ── */
+async function loadSources() {
+  const list = document.getElementById('sources-list');
+  try {
+    const [srcRes, setRes] = await Promise.all([
+      fetch('/api/sources', { headers: adminHeaders() }),
+      fetch('/api/settings', { headers: adminHeaders() }),
+    ]);
+    const srcData = await srcRes.json();
+    const setData = await setRes.json();
+    const disabled = setData.disabled_sources || [];
+    const sources = srcData.sources || [];
+    if (sources.length === 0) {
+      list.innerHTML = '<div style="font-size:13px;color:#666">No sources connected yet.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    for (const s of sources) {
+      const enabled = !disabled.includes(s.source_id);
+      const card = document.createElement('div');
+      card.className = 'src-card' + (enabled ? '' : ' disabled');
+      card.innerHTML = `
+        <div><span class="src-name">${esc(s.name)}</span><span class="src-id">id: ${s.source_id}</span></div>
+        <label class="src-toggle">
+          <input type="checkbox" ${enabled ? 'checked' : ''} data-sid="${s.source_id}">
+          <span class="slider"></span>
+        </label>`;
+      card.querySelector('input').addEventListener('change', (e) => toggleSource(s.source_id, e.target.checked, card));
+      list.appendChild(card);
+    }
+  } catch(e) {
+    list.innerHTML = '<div style="font-size:13px;color:#ef5350">Failed to load sources.</div>';
+  }
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+async function toggleSource(sourceId, enabled, card) {
+  // Read current disabled list, modify, save
+  try {
+    const res = await fetch('/api/settings', { headers: adminHeaders() });
+    const data = await res.json();
+    let disabled = data.disabled_sources || [];
+    if (enabled) {
+      disabled = disabled.filter(id => id !== sourceId);
+    } else {
+      if (!disabled.includes(sourceId)) disabled.push(sourceId);
+    }
+    const saveRes = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify({ disabled_sources: disabled }),
+    });
+    if (saveRes.status === 401) { alert('Auth required.'); return; }
+    if (saveRes.ok) {
+      card.classList.toggle('disabled', !enabled);
+      const el = document.getElementById('status-sources');
+      if (el) { el.textContent = enabled ? 'Source enabled' : 'Source disabled'; el.style.color = '#4caf50'; setTimeout(() => el.textContent = '', 3000); }
+    }
+  } catch(e) {
+    const el = document.getElementById('status-sources');
+    if (el) { el.textContent = 'Network error'; el.style.color = '#ef5350'; }
+  }
+}
+
 /* ── Calibration ── */
 let _calPollTimer = null;
 let _calDuration = 300;
@@ -481,25 +573,23 @@ async function cancelCalibration() {
 /* ── Init ── */
 loadSettings();
 loadCalibrationSources();
+loadSources();
 
-// Resume calibration if one is already in progress (e.g. navigated away and back)
-(async function checkActiveCalibration() {
+(async function init() {
+  // Check if calibration is in progress — if so, open Calibration panel
+  let openCalibration = false;
   try {
     const res = await fetch('/api/calibrate', { headers: adminHeaders() });
     const data = await res.json();
     if (data.active && !data.done) {
-      // Switch to calibration panel
-      const calBtn = document.querySelector('[data-panel="sp-calibration"]');
-      if (calBtn) switchPanel(calBtn);
+      openCalibration = true;
       _calDuration = data.duration || 300;
       document.getElementById('cal-duration').value = _calDuration;
       _calSetRecording(true);
       document.getElementById('cal-status').textContent = 'Recording in progress...';
       document.getElementById('cal-status').style.color = '#888';
-      // Set source selector to current source
       const srcSel = document.getElementById('cal-source');
       if (srcSel) srcSel.value = data.source_id;
-      // Start polling
       const pct = Math.round(data.progress * 100);
       const recorded = Math.round(data.progress * _calDuration);
       document.getElementById('cal-bar').style.width = pct + '%';
@@ -507,6 +597,11 @@ loadCalibrationSources();
       _calPollTimer = setInterval(pollCalibration, 1000);
     }
   } catch(e) {}
+
+  // Activate the right panel
+  const panelId = openCalibration ? 'sp-calibration' : 'sp-detection';
+  const btn = document.querySelector(`[data-panel="${panelId}"]`);
+  if (btn) switchPanel(btn);
 })();
 </script>
 </body>

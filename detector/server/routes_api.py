@@ -67,6 +67,12 @@ async def post_settings(body: dict):
     updated = {}
     for k, default_val in DEFAULT_SETTINGS.items():
         if k in body:
+            # list-type settings (e.g. disabled_sources)
+            if isinstance(default_val, list):
+                if not isinstance(body[k], list):
+                    raise HTTPException(status_code=400, detail=f"{k} must be a list")
+                updated[k] = body[k]
+                continue
             try:
                 val = type(default_val)(body[k])
             except (ValueError, TypeError):

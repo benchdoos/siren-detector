@@ -177,11 +177,14 @@ class YAMNetEngine:
 
         while True:
             any_data = False
+            disabled = settings_mod.settings.get("disabled_sources", [])
             for source in list(sources.values()):
                 waveform = source.inference_buf.consume(INFERENCE_HOP_SAMPLES)
                 if waveform is None:
                     continue
                 any_data = True
+                if source.source_id in disabled:
+                    continue  # audio still buffered (for calibration), skip inference
                 self._process_source(
                     source, waveform, yamnet, class_names, detector_indices,
                     clf, det_engine, bus, args,

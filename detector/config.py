@@ -42,4 +42,5 @@ DEFAULT_SETTINGS = {
     "yamnet_min_gate": 0.01,
     "clip_seconds": 10,
     "clip_from_possible": 0,
+    "disabled_sources": [],
 }
