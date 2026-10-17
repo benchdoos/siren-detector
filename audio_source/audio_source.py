@@ -18,6 +18,7 @@ import socket
 import struct
 import sys
 import time
+import wave
 
 import numpy as np
 import sounddevice as sd
@@ -129,6 +130,69 @@ def run(
         sock.close()
 
 
+def record(
+    device: int | str | None,
+    output_path: str,
+    duration: int | None,
+    gain: float,
+) -> None:
+    """Record audio from microphone to WAV file (16 kHz, 16-bit mono)."""
+    native_rate = _query_native_rate(device)
+    resample = _build_resampler(native_rate, TARGET_RATE)
+    chunk_samples = int(CHUNK_DURATION * native_rate)
+
+    wf = wave.open(output_path, "wb")
+    wf.setnchannels(1)
+    wf.setsampwidth(2)  # 16-bit
+    wf.setframerate(TARGET_RATE)
+
+    total_samples = 0
+    start = time.monotonic()
+
+    print(f"Recording: device={device}, output={output_path}, gain={gain}", flush=True)
+    print(f"Device rate: {native_rate} Hz → WAV: {TARGET_RATE} Hz", flush=True)
+    if duration:
+        print(f"Duration: {duration}s (Ctrl+C to stop early)", flush=True)
+    else:
+        print("Duration: unlimited (Ctrl+C to stop)", flush=True)
+
+    def audio_callback(indata: np.ndarray, frames: int, time_info, status):
+        nonlocal total_samples
+        if status:
+            print(f"Audio status: {status}", file=sys.stderr, flush=True)
+
+        audio = indata[:, 0] if indata.ndim > 1 else indata.ravel()
+        audio = audio.astype(np.float32) * gain
+
+        if resample is not None:
+            audio = resample(audio)
+
+        pcm16 = (audio * 32767.0).clip(-32768, 32767).astype(np.int16)
+        wf.writeframes(pcm16.tobytes())
+        total_samples += len(pcm16)
+
+    try:
+        with sd.InputStream(
+            device=device,
+            samplerate=native_rate,
+            channels=1,
+            dtype="float32",
+            blocksize=chunk_samples,
+            callback=audio_callback,
+        ):
+            while True:
+                time.sleep(1.0)
+                elapsed = time.monotonic() - start
+                if duration and elapsed >= duration:
+                    break
+    except KeyboardInterrupt:
+        pass
+    finally:
+        wf.close()
+        secs = total_samples / TARGET_RATE
+        print(f"\nSaved {output_path} ({secs:.1f}s, {total_samples} samples)", flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Stream audio from a local microphone as SDR1 packets.",
@@ -153,15 +217,19 @@ def main() -> None:
         "--list-devices", action="store_true",
         help="List available audio devices and exit.",
     )
+    parser.add_argument(
+        "--record", metavar="FILE",
+        help="Record to WAV file instead of streaming UDP.",
+    )
+    parser.add_argument(
+        "--duration", type=int, default=None,
+        help="Recording duration in seconds (with --record). Default: unlimited.",
+    )
     args = parser.parse_args()
 
     if args.list_devices:
         list_devices()
         return
-
-    host, _, port_str = args.target.rpartition(":")
-    target_host = host or "127.0.0.1"
-    target_port = int(port_str) if port_str else 9000
 
     # Parse device: "default" → None, integer index, or string name
     device = args.device
@@ -172,6 +240,14 @@ def main() -> None:
             device = int(device)
         except ValueError:
             pass  # Keep as string (name substring match)
+
+    if args.record:
+        record(device, args.record, args.duration, args.gain)
+        return
+
+    host, _, port_str = args.target.rpartition(":")
+    target_host = host or "127.0.0.1"
+    target_port = int(port_str) if port_str else 9000
 
     run(device, args.source_id, target_host, target_port, args.gain)
 
