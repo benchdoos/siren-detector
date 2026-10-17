@@ -136,79 +136,56 @@ command:
 
 ---
 
-## Option 2: Second INMP441 on ESP32 (Stereo)
+## Option 2: Second INMP441 on ESP32 (Separate I2S Bus)
 
-Two INMP441 microphones can share a single I2S bus by using the left and
-right channels.
+Two INMP441 microphones use **separate I2S peripherals** on the ESP32-S3.
+Each mic has its own GPIO pins — just dupont wires, no breadboard or
+soldering needed.
+
+> **Why not stereo (L/R)?** ESPHome validates GPIO pin uniqueness and
+> does not allow two microphone components to share the same `i2s_din_pin`.
 
 ### Wiring
 
-| Pin       | Mic 1 (Left) | Mic 2 (Right) |
-|-----------|-------------|---------------|
-| SCK/BCLK  | GPIO4       | GPIO4         |
-| WS/LRCLK  | GPIO5       | GPIO5         |
-| SD/DOUT   | GPIO6       | GPIO6         |
-| L/R       | **GND**     | **VDD**       |
-| VDD       | 3.3V        | 3.3V          |
-| GND       | GND         | GND           |
+| Mic pin   | Mic 1 → ESP32 | Mic 2 → ESP32 (optional) |
+|-----------|---------------|--------------------------|
+| SCK/BCLK  | GPIO4         | GPIO15                   |
+| WS/LRCLK  | GPIO5         | GPIO16                   |
+| SD/DOUT   | GPIO6         | GPIO17                   |
+| L/R       | GND           | GND                      |
+| VDD       | 3.3V          | 3.3V                     |
+| GND       | GND           | GND                      |
 
-Both mics share the same clock and data lines.  The L/R pin determines
-which channel each mic responds on: GND = left, VDD = right.
+Each mic connects with dupont wires directly to its own set of GPIO
+pins on the ESP32 dev board.  No shared signal lines.
+
+Add a **100 nF ceramic capacitor** between VDD and GND on each mic to
+reduce power supply noise.
 
 ### Firmware
 
-The base `esp32/siren-detector.yaml` captures the **left channel**
-(source_id=0).  To add the right channel as a second source:
+The base `esp32/siren-detector.yaml` already includes both microphones.
+The second mic is **optional** — if not physically connected, the I2S bus
+reads silence and the firmware skips sending UDP packets (RMS below noise
+floor threshold).  The ESP32 will not crash or reboot.
 
-1. Copy the `microphone:` and related sections or create a second YAML
-   that extends the base via `packages:`.
+```yaml
+substitutions:
+  source_id: "0"           # primary mic (GPIO4/5/6)
+  second_source_id: "1"    # secondary mic (GPIO15/16/17, optional)
+```
 
-2. Add a second microphone component for the right channel:
+To use different GPIO pins, edit the `i2s_bus_2` and `inmp441_2`
+sections in the YAML.
 
-   ```yaml
-   substitutions:
-     source_id: "0"
-     second_source_id: "1"
+Update the detector to name both sources:
+```bash
+--source-name 0=esp32-main --source-name 1=esp32-aux
+```
 
-   microphone:
-     # Primary mic (left channel, source_id=0)
-     - platform: i2s_audio
-       id: inmp441_left
-       adc_type: external
-       i2s_din_pin: GPIO6
-       i2s_audio_id: i2s_bus
-       channel: left
-       sample_rate: 16000
-       bits_per_sample: 32bit
-       use_apll: true
-       on_data:
-         - lambda: |-
-             // ... (same as base, source_id = ${source_id})
-
-     # Secondary mic (right channel, source_id=1)
-     - platform: i2s_audio
-       id: inmp441_right
-       adc_type: external
-       i2s_din_pin: GPIO6
-       i2s_audio_id: i2s_bus
-       channel: right
-       sample_rate: 16000
-       bits_per_sample: 32bit
-       use_apll: true
-       on_data:
-         - lambda: |-
-             // Same packet-sending code, but with:
-             const uint16_t reserved = htons(${second_source_id});
-   ```
-
-3. Update the detector to name both sources:
-   ```bash
-   --source-name 0=esp32-left --source-name 1=esp32-right
-   ```
-
-> **Note:** If only one INMP441 is connected, the unused channel will
-> produce silence.  The detector will register it but won't generate events
-> (scores stay at 0).
+> **Note:** If only one INMP441 is connected, the second I2S bus reads
+> silence.  The firmware detects this (RMS < 0.0001) and skips sending
+> packets, so the detector won't register a phantom source.
 
 ---
 
