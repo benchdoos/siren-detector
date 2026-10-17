@@ -1,6 +1,28 @@
-# Sound Detector
+<h1 align="center">
+  <a href="https://github.com/benchdoos/siren-detector"><img src=".github/images/siren-detector-logo.png" alt="Siren Detector" width="200"></a>
+  <br>
+  Siren Detector
+</h1>
 
-Open-source детектор опасных звуковых событий на базе ESP32 + Raspberry Pi. Распознаёт сирены гражданского оповещения, взрывы и приближение мотоциклов — звуки, на которые важно среагировать вовремя.
+<p align="right">
+  <b>English</b> •
+  <a href="README.ru.md">Русский</a>
+</p>
+
+Open-source detector of dangerous sound events based on ESP32 + Raspberry Pi. It recognizes civil alert sirens, explosions, and approaching UAVs — sounds that it is important to react to in time.
+
+---
+
+> [!WARNING]
+> **This application and all its components are intended exclusively for peaceful purposes. Any use of this software for military, harmful, or destructive purposes is strictly prohibited.**
+
+## License
+
+This project is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/).
+
+You are free to copy, share, and adapt it for **non-commercial** purposes, provided you give appropriate credit and link to the [original repository](https://github.com/benchdoos/siren-detector). The software is provided **"as is"**, without warranty of any kind.
+
+---
 
 ## 1. Концепция проекта
 
@@ -12,7 +34,7 @@ Open-source детектор опасных звуковых событий на
 
 - 🚨 `siren` — сирены гражданского оповещения (воздушная тревога);
 - 💥 `explosion` — взрывы и резкие импульсные звуки;
-- 🛵 `motorcycle` — мопеды;
+- 🛵 `motorcycle` — БПЛА;
 - 🔇 `background` / `unknown` — обычный фон и неуверенные классификации.
 
 Ключевой принцип:
@@ -1291,13 +1313,3 @@ Real-world data.
 Safety over hype.**
 
 ---
-
-## Disclaimer
-
-This application and all its components are intended exclusively for peaceful purposes. Any use of this software for military, harmful, or destructive purposes is strictly prohibited.
-
-## License
-
-This project is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/).
-
-You are free to copy, share, and adapt it for **non-commercial** purposes, provided you give appropriate credit and link to the [original repository](https://github.com/benchdoos/siren-detector). The software is provided **"as is"**, without warranty of any kind.
