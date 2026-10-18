@@ -47,6 +47,8 @@ DEFAULT_SETTINGS = {
     "inference_interval_seconds": 0.5,
     "dsp_enabled": 1,
     "dsp_bg_threshold": 0.85,
+    "dsp_bg_release_threshold": 0.85,
+    "dsp_bg_confirm_windows": 2,
 }
 
 # DSP pre-filter model paths (defaults for Docker volume mount)

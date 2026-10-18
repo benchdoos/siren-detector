@@ -340,9 +340,15 @@ class YAMNetEngine:
 
             if dsp_result["ready"]:
                 bg_threshold = settings_mod.settings.get("dsp_bg_threshold", 0.85)
+                bg_release_threshold = settings_mod.settings.get("dsp_bg_release_threshold", 0.85)
+                bg_confirm_windows = settings_mod.settings.get("dsp_bg_confirm_windows", 2)
                 dsp_label = dsp_result["label"]
                 dsp_conf = dsp_result["confidence"]
-                skip_yamnet = dsp_label == "background" and dsp_conf >= bg_threshold
+                bg_conf = dsp_result["probs"].get("background", 0.0)
+                skip_yamnet = dsp.should_skip_yamnet(
+                    source.source_id, dsp_label, bg_conf, bg_threshold,
+                    bg_release_threshold, bg_confirm_windows,
+                )
                 dsp.record_decision(source.source_id, dsp_result["probs"], skip_yamnet)
 
                 if skip_yamnet:
