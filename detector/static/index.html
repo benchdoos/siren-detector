@@ -599,14 +599,23 @@ function toggleAudioDropdown(e) {
   document.getElementById('audio-dropdown').classList.toggle('open');
 }
 
+function _fmtPkts(n) {
+  if (n < 1000) return `${n} pkts`;
+  const k = Math.floor(n / 1000);
+  if (k < 1000) return `${k}k pkts`;
+  const m = Math.floor(k / 1000);
+  const rk = k % 1000;
+  return rk ? `${m}m${rk}k pkts` : `${m}m pkts`;
+}
+
 function _updateAudioDropdown() {
   const dd = document.getElementById('audio-dropdown');
   if (!_lastAudioSources || Object.keys(_lastAudioSources).length < 2) { dd.classList.remove('open'); dd.innerHTML = ''; return; }
   let html = '';
-  for (const [name, s] of Object.entries(_lastAudioSources)) {
+  for (const [id, s] of Object.entries(_lastAudioSources)) {
     const dot = `<span class="alive-dot ${s.alive ? 'on' : 'off'}"></span>`;
-    const label = s.name || name;
-    const stats = s.alive ? `${s.pps || 0} pps · ${(s.packets || 0).toLocaleString()} pkts` : (s.ago != null ? `lost ${s.ago.toFixed(0)}s ago` : 'no signal');
+    const label = s.name ? `${id}: ${s.name}` : id;
+    const stats = s.alive ? `${s.pps || 0} pps · ${_fmtPkts(s.packets || 0)}` : (s.ago != null ? `lost ${s.ago.toFixed(0)}s ago` : 'no signal');
     html += `<div class="audio-src-row"><span class="audio-src-name">${esc(label)}</span><span class="audio-src-stats">${dot}${stats}</span></div>`;
   }
   dd.innerHTML = html;
