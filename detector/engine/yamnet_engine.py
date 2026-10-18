@@ -235,7 +235,7 @@ class YAMNetEngine:
                 now = time.monotonic()
                 if now - _last_heartbeat >= 1.0:
                     heartbeat = self._build_heartbeat(sources)
-                    heartbeat.update(udp_stats_snapshot())
+                    heartbeat.update(udp_stats_snapshot(bus.source_names))
                     bus.broadcast(heartbeat)
                     _last_heartbeat = now
                 time.sleep(0.5)
@@ -260,7 +260,7 @@ class YAMNetEngine:
                     time.sleep(0.05)
                     if now - _last_heartbeat >= 1.0:
                         heartbeat = self._build_heartbeat(sources)
-                        heartbeat.update(udp_stats_snapshot())
+                        heartbeat.update(udp_stats_snapshot(bus.source_names))
                         bus.broadcast(heartbeat)
                         _last_heartbeat = now
                 else:
@@ -382,7 +382,7 @@ class YAMNetEngine:
         if cur_mlp_top3:
             score_msg["mlp_top3"] = cur_mlp_top3
 
-        score_msg.update(udp_stats_snapshot())
+        score_msg.update(udp_stats_snapshot(bus.source_names))
         if sources:
             score_msg["source_names"] = {sid: src.name for sid, src in sources.items()}
         bus.broadcast(score_msg)

@@ -41,7 +41,7 @@ def _get_tracker(source_id: int) -> _SourceTracker:
     return _source_trackers[source_id]
 
 
-def udp_stats_snapshot() -> dict:
+def udp_stats_snapshot(source_names: dict[int, str] | None = None) -> dict:
     """Return aggregated + per-source UDP stats for broadcasting to UI."""
     now = time.monotonic()
     with _stats_lock:
@@ -50,6 +50,7 @@ def udp_stats_snapshot() -> dict:
     if not trackers:
         return {"audio_alive": False, "audio_ago": -1, "audio_pps": 0.0}
 
+    names = source_names or {}
     total_pps = 0.0
     best_ago = -1.0
     any_alive = False
@@ -69,7 +70,9 @@ def udp_stats_snapshot() -> dict:
         if ago >= 0 and (best_ago < 0 or ago < best_ago):
             best_ago = ago
         per_source[sid] = {
+            "name": names.get(sid, f"source-{sid}"),
             "alive": alive, "ago": ago, "pps": round(t.pps, 1),
+            "packets": t.packet_count,
         }
 
     result: dict = {
