@@ -13,7 +13,16 @@ from fastapi import APIRouter, Body, Depends, Header, HTTPException
 from fastapi.responses import FileResponse
 
 from ..auth import AUTH_ENABLED, check_token, require_admin, require_viewer
-from ..config import CLIP_DIR, DATASET_DIR, DEFAULT_SETTINGS, VALID_LABELS, SAMPLE_RATE
+from ..config import (
+    CLIP_DIR,
+    DATASET_DIR,
+    DEFAULT_SETTINGS,
+    DSP_LABELS_PATH,
+    DSP_MODEL_PATH,
+    DSP_NORM_STATS_PATH,
+    VALID_LABELS,
+    SAMPLE_RATE,
+)
 from .. import settings as settings_mod
 from .routes_clips import save_clip_meta, _load_clip_meta
 
@@ -32,7 +41,14 @@ def init(bus: EventBus) -> None:
 
 @router.get("/api/settings", dependencies=[Depends(require_viewer)])
 async def get_settings():
-    return {**settings_mod.settings, "defaults": DEFAULT_SETTINGS}
+    dsp_paths = (DSP_MODEL_PATH, DSP_NORM_STATS_PATH, DSP_LABELS_PATH)
+    missing_dsp_files = [Path(path).name for path in dsp_paths if not Path(path).is_file()]
+    return {
+        **settings_mod.settings,
+        "defaults": DEFAULT_SETTINGS,
+        "dsp_available": not missing_dsp_files,
+        "dsp_missing_files": missing_dsp_files,
+    }
 
 
 @router.get("/api/auth/status")
