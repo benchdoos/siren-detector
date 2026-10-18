@@ -68,7 +68,13 @@
   .top-dropdown .src-stats { color: #666; font-variant-numeric: tabular-nums; }
   .top-dropdown .src-detail { display: none; margin-top: 8px; padding-top: 6px; border-top: 1px solid #2a2a2a; }
   .top-dropdown .src-detail.open { display: block; }
-  .top-dropdown .dsp-summary { font-size: 13px; color: #aaa; font-variant-numeric: tabular-nums; padding-bottom: 10px; margin-bottom: 4px; border-bottom: 1px solid #222; }
+  .top-dropdown .dsp-summary { padding-bottom: 10px; margin-bottom: 4px; border-bottom: 1px solid #222; }
+  .top-dropdown .dsp-summary-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .top-dropdown .dsp-summary-title { color: #ccc; font-weight: 600; }
+  .top-dropdown .dsp-summary-header:hover .dsp-summary-title { color: #fff; }
+  .top-dropdown .dsp-summary-detail { display: none; padding-top: 10px; }
+  .top-dropdown .dsp-summary-detail.open { display: block; }
+  .top-dropdown .dsp-bg-confidence { color: #888; font-size: 12px; margin-bottom: 10px; }
 
   .score-panel { padding: 20px 24px; border-bottom: 1px solid #222; }
   .score-label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
@@ -470,6 +476,23 @@ function _updateSourcesDropdown() {
     summary = document.createElement('div');
     summary.className = 'dsp-summary';
     summary.dataset.dspSummary = '';
+    summary.innerHTML = '<div class="dsp-summary-header" role="button" tabindex="0" aria-expanded="false"><span class="dsp-summary-title"></span></div>'
+      + '<div class="dsp-summary-detail"><div class="dsp-bg-confidence"></div><h3>Classes (top 3)</h3><div class="dsp-classes"></div></div>';
+    const header = summary.querySelector('.dsp-summary-header');
+    summary.querySelector('.dsp-summary-detail').onclick = (event) => event.stopPropagation();
+    const toggleDetails = (event) => {
+      event.stopPropagation();
+      const detail = summary.querySelector('.dsp-summary-detail');
+      const open = detail.classList.toggle('open');
+      header.setAttribute('aria-expanded', String(open));
+    };
+    header.onclick = toggleDetails;
+    header.onkeydown = (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggleDetails(event);
+      }
+    };
     container.prepend(summary);
   }
   if (_dspStats && _dspStats.checks > 0) {
@@ -477,14 +500,15 @@ function _updateSourcesDropdown() {
     const skips = _dspStats.yamnet_skips;
     const pct = Math.round(skips / checks * 100);
     const bgAvg = _dspStats.background_confidence_avg;
-    const bgMax = _dspStats.background_confidence_max;
-    const bgInfo = bgAvg == null ? ''
-      : ` · background confidence avg/max: ${Math.round(bgAvg * 100)}%/${Math.round(bgMax * 100)}%`;
-    const classes = Object.entries(_dspStats.prediction_counts || {})
-      .sort((a, b) => b[1] - a[1])
-      .map(([label, count]) => `${label} ${count}`)
-      .join(', ');
-    summary.textContent = `DSP skipped YAMNet: ${pct}% (${skips}/${checks})${bgInfo}${classes ? ` · classes: ${classes}` : ''}`;
+    summary.querySelector('.dsp-summary-title').textContent = `DSP skipped YAMNet: ${pct}%`;
+    summary.querySelector('.dsp-bg-confidence').textContent = bgAvg == null
+      ? 'background confidence (avg): —'
+      : `background confidence (avg): ${Math.round(bgAvg * 100)}%`;
+    const topClasses = Object.entries(_dspStats.class_avg_probs || {})
+      .map(([name, score]) => ({ name, score }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
+    summary.querySelector('.dsp-classes').innerHTML = _renderTop3Html(topClasses, true);
     summary.hidden = false;
   } else {
     summary.hidden = true;
@@ -534,10 +558,12 @@ function _updateSourcesDropdown() {
   }
 }
 
-function _renderTop3Html(items) {
+function _renderTop3Html(items, precise = false) {
   return items.map(it => {
-    const pct = Math.round(it.score * 100);
-    return `<div class="row"><span class="row-name">${esc(it.name)}</span><div class="row-bar"><div class="row-fill" style="width:${pct}%"></div></div><span class="row-pct">${pct}%</span></div>`;
+    const rawPct = it.score * 100;
+    const pct = Math.round(rawPct);
+    const label = precise && rawPct < 10 ? rawPct.toFixed(1) : String(pct);
+    return `<div class="row"><span class="row-name">${esc(it.name)}</span><div class="row-bar"><div class="row-fill" style="width:${pct}%"></div></div><span class="row-pct">${label}%</span></div>`;
   }).join('');
 }
 
@@ -591,7 +617,13 @@ function updateScores(msg) {
 
   // Top info: average across all sources
   const parts = [];
-  if (sourceCount <= 1) {
+  const dspAllActive = _dspStats && _dspStats.enabled
+    && _dspStats.source_count > 0
+    && _dspStats.active_sources >= _dspStats.source_count;
+  if (dspAllActive) {
+    parts.push(`<span class="top-label">DSP active</span> (${_dspStats.consecutive_yamnet_skips || 0} windows skipped)`);
+    parts.push(`<span class="top-label">src:</span> ${_dspStats.source_count}`);
+  } else if (sourceCount <= 1) {
     const s = sources[0];
     if (s.top) parts.push(`<span class="top-label">top:</span> ${esc(s.top)}`);
     if (s.yamnet != null) parts.push(`<span class="top-label">yamnet:</span> ${(s.yamnet * 100).toFixed(0)}%`);

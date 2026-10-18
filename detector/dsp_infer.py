@@ -10,6 +10,7 @@ from __future__ import annotations
 import collections
 import json
 import threading
+import time
 from pathlib import Path
 
 import numpy as np
@@ -48,9 +49,9 @@ class DspPreFilter:
         self._stats_lock = threading.Lock()
         self._checks = 0
         self._yamnet_skips = 0
-        self._prediction_counts: dict[str, int] = {}
-        self._background_confidence_sum = 0.0
-        self._background_confidence_max = 0.0
+        self._consecutive_yamnet_skips = 0
+        self._probability_sums: dict[str, float] = {}
+        self._source_skip_state: dict[int, tuple[bool, float]] = {}
         self._input_detail = self._interpreter.get_input_details()[0]
         self._output_detail = self._interpreter.get_output_details()[0]
 
@@ -115,28 +116,37 @@ class DspPreFilter:
             "probs": probs_dict,
         }
 
-    def record_decision(self, label: str, confidence: float, skipped_yamnet: bool) -> None:
+    def record_decision(
+        self, source_id: int, probabilities: dict[str, float], skipped_yamnet: bool,
+    ) -> None:
         """Count completed DSP decisions across all audio sources."""
         with self._stats_lock:
             self._checks += 1
-            self._prediction_counts[label] = self._prediction_counts.get(label, 0) + 1
-            if label == "background":
-                self._background_confidence_sum += confidence
-                self._background_confidence_max = max(self._background_confidence_max, confidence)
+            for name, probability in probabilities.items():
+                self._probability_sums[name] = self._probability_sums.get(name, 0.0) + probability
             if skipped_yamnet:
                 self._yamnet_skips += 1
+                self._consecutive_yamnet_skips += 1
+            else:
+                self._consecutive_yamnet_skips = 0
+            self._source_skip_state[source_id] = (skipped_yamnet, time.monotonic())
 
     def stats_snapshot(self) -> dict:
         with self._stats_lock:
-            bg_count = self._prediction_counts.get("background", 0)
+            now = time.monotonic()
+            class_avg_probs = {
+                name: value / self._checks for name, value in self._probability_sums.items()
+            } if self._checks else {}
             return {
                 "checks": self._checks,
                 "yamnet_skips": self._yamnet_skips,
-                "prediction_counts": dict(self._prediction_counts),
-                "background_confidence_avg": (
-                    self._background_confidence_sum / bg_count if bg_count else None
-                ),
-                "background_confidence_max": self._background_confidence_max if bg_count else None,
+                "consecutive_yamnet_skips": self._consecutive_yamnet_skips,
+                "background_confidence_avg": class_avg_probs.get("background"),
+                "class_avg_probs": class_avg_probs,
+                "skipping_source_ids": [
+                    sid for sid, (skipping, seen_at) in self._source_skip_state.items()
+                    if skipping and now - seen_at < 5.0
+                ],
             }
 
     def _infer(self, features: np.ndarray) -> np.ndarray:
