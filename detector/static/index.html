@@ -497,9 +497,9 @@ document.addEventListener('click', () => document.getElementById('top-dropdown')
 
 function updateScores(msg) {
   // Store per-source score and aggregate across all sources
-  const sid = msg.source_id != null ? msg.source_id : 0;
-  _sourceScores[sid] = msg;
-  if (msg.source && msg.source_id != null) {
+  const isHeartbeat = msg.source_id == null;
+  if (!isHeartbeat) {
+    _sourceScores[msg.source_id] = msg;
     _knownSources[msg.source_id] = msg.source;
   }
   if (msg.source_names) {
@@ -508,7 +508,9 @@ function updateScores(msg) {
     }
   }
 
-  const sources = Object.values(_sourceScores);
+  const sources = Object.keys(_sourceScores).length > 0
+    ? Object.values(_sourceScores)
+    : [msg];
 
   // Aggregate per detector: worst state, max score, max triggers
   for (const name of DETECTOR_NAMES) {
