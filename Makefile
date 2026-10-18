@@ -77,6 +77,7 @@ deploy-model:
 ## Full retrain cycle: merge recorder → sync dataset → train → audit → clean synced → deploy model (restart)
 retrain:
 	$(MAKE) _merge-recorder
+	$(MAKE) _wait-calibration
 	$(MAKE) sync-dataset
 	$(MAKE) augment
 	$(MAKE) train
@@ -95,6 +96,34 @@ _merge-recorder:
 				echo \"Moved $$label WAVs from recorder to dataset\"; \
 			fi"; \
 	done
+
+## Wait for calibration to finish (if active), then stop & save it
+_wait-calibration:
+	@_token=$${ADMIN_TOKEN:-$$(grep '^ADMIN_TOKEN=' hub/.env 2>/dev/null | cut -d= -f2)}; \
+	_url="$(WEB_UI)/api/calibrate"; \
+	_status=$$(curl -sf -H "Authorization: Bearer $$_token" "$$_url" 2>/dev/null) || { echo "Detector API unreachable, skipping calibration check"; exit 0; }; \
+	_active=$$(echo "$$_status" | python3 -c "import sys,json; print(json.load(sys.stdin).get('active',False))"); \
+	if [ "$$_active" != "True" ]; then \
+		echo "No calibration in progress"; \
+		exit 0; \
+	fi; \
+	echo "Calibration in progress — waiting for it to finish..."; \
+	while true; do \
+		_status=$$(curl -sf -H "Authorization: Bearer $$_token" "$$_url"); \
+		_done=$$(echo "$$_status" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('done',False) or not d.get('active',False))"); \
+		if [ "$$_done" = "True" ]; then break; fi; \
+		_progress=$$(echo "$$_status" | python3 -c "import sys,json; print(json.load(sys.stdin).get('progress',0))"); \
+		printf "\r  progress: %s%%" "$$_progress"; \
+		sleep 2; \
+	done; \
+	echo ""; \
+	_status=$$(curl -sf -H "Authorization: Bearer $$_token" "$$_url"); \
+	_still_active=$$(echo "$$_status" | python3 -c "import sys,json; print(json.load(sys.stdin).get('active',False))"); \
+	if [ "$$_still_active" = "True" ]; then \
+		echo "Calibration done — saving recording..."; \
+		curl -sf -X POST -H "Authorization: Bearer $$_token" "$(WEB_UI)/api/calibrate/stop" > /dev/null; \
+		echo "Calibration saved"; \
+	fi
 
 ## Clean from RPi only files we have locally (= synced + trained on). Safe for new arrivals.
 _clean-trained:
@@ -213,7 +242,7 @@ help:
 	@echo ""
 
 .PHONY: deploy deploy-audio deploy-ui deploy-firmware logs-esp deploy-compose restart logs \
-        sync-dataset train deploy-model retrain _merge-recorder _clean-trained \
+        sync-dataset train deploy-model retrain _merge-recorder _wait-calibration _clean-trained \
         clean-clips clean-dataset clean-docker \
         augment augment-siren augment-explosion augment-motorcycle \
         audit audit-compare \

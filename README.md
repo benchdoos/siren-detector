@@ -1131,6 +1131,7 @@ make sync-dataset    # Sync labeled WAVs from RPi to Mac
 make train           # Train MLP classifier
 make deploy-model    # Send weights to RPi + restart
 make retrain         # Full cycle: sync → train → deploy → clean
+# If calibration is recording, retrain waits for it to finish and saves the file
 # Background calibration: Web UI → Calibrate → select source → Start Recording
 # File is saved to dataset/background/{source_name}/ → make retrain
 make clean-clips     # Delete saved clips on RPi
