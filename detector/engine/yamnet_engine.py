@@ -37,7 +37,6 @@ from ..config import (
     DSP_LABELS_PATH,
     DSP_MODEL_PATH,
     DSP_NORM_STATS_PATH,
-    INFERENCE_HOP_SAMPLES,
     MODEL_URL,
     SAMPLE_RATE,
 )
@@ -50,6 +49,11 @@ from .. import settings as settings_mod
 _EMPTY_PEAK = {"score": 0.0, "yamnet": 0.0, "mlp": None, "top": "", "yamnet_top3": [], "mlp_top3": []}
 
 
+def _inference_hop_samples() -> int:
+    interval = float(settings_mod.settings.get("inference_interval_seconds", 0.5))
+    return int(SAMPLE_RATE * min(3.0, max(0.25, interval)))
+
+
 def _create_source(source_id: int, name: str) -> SourceState:
     """Create a fresh SourceState with buffers and smoothers from current settings."""
     s = settings_mod.settings
@@ -57,11 +61,12 @@ def _create_source(source_id: int, name: str) -> SourceState:
     clip_buf = ClipBuffer(seconds=s.get("clip_seconds", CLIP_SECONDS))
 
     smoothers: dict[str, TemporalSmoother] = {}
+    inference_interval = min(3.0, max(0.25, float(s.get("inference_interval_seconds", 0.5))))
     for det_name in DETECTORS:
         thr_key = f"{det_name}_threshold"
         smoothers[det_name] = TemporalSmoother(
             window_seconds=s["smoothing_window_seconds"],
-            hop_seconds=0.5,
+            hop_seconds=inference_interval,
             threshold=s.get(thr_key, 0.15),
             possible=s["possible_triggers"],
             confirmed=s["confirmed_triggers"],
@@ -213,7 +218,7 @@ class YAMNetEngine:
             """Inference loop for a single source (used in parallel mode)."""
             while not stop.is_set():
                 disabled = settings_mod.settings.get("disabled_sources", [])
-                waveform = source.inference_buf.consume(INFERENCE_HOP_SAMPLES)
+                waveform = source.inference_buf.consume(_inference_hop_samples())
                 if waveform is None:
                     stop.wait(0.05)
                     continue
@@ -262,6 +267,8 @@ class YAMNetEngine:
                 if now - _last_heartbeat >= 1.0:
                     heartbeat = self._build_heartbeat(sources)
                     heartbeat.update(udp_stats_snapshot(bus.source_names))
+                    if dsp is not None:
+                        heartbeat["dsp_stats"] = dsp.stats_snapshot()
                     bus.broadcast(heartbeat)
                     _last_heartbeat = now
                 time.sleep(0.5)
@@ -270,7 +277,7 @@ class YAMNetEngine:
                 any_data = False
                 disabled = settings_mod.settings.get("disabled_sources", [])
                 for source in list(sources.values()):
-                    waveform = source.inference_buf.consume(INFERENCE_HOP_SAMPLES)
+                    waveform = source.inference_buf.consume(_inference_hop_samples())
                     if waveform is None:
                         continue
                     any_data = True
@@ -287,6 +294,8 @@ class YAMNetEngine:
                     if now - _last_heartbeat >= 1.0:
                         heartbeat = self._build_heartbeat(sources)
                         heartbeat.update(udp_stats_snapshot(bus.source_names))
+                        if dsp is not None:
+                            heartbeat["dsp_stats"] = dsp.stats_snapshot()
                         bus.broadcast(heartbeat)
                         _last_heartbeat = now
                 else:
@@ -313,15 +322,17 @@ class YAMNetEngine:
         # ── DSP pre-filter: skip YAMNet for confident background ────────
         dsp_result = None
         if dsp is not None and settings_mod.settings.get("dsp_enabled", 1):
-            new_audio = waveform[-INFERENCE_HOP_SAMPLES:]
+            new_audio = waveform
             dsp_result = dsp.process(new_audio, source.dsp_feature_buf)
 
             if dsp_result["ready"]:
                 bg_threshold = settings_mod.settings.get("dsp_bg_threshold", 0.85)
                 dsp_label = dsp_result["label"]
                 dsp_conf = dsp_result["confidence"]
+                skip_yamnet = dsp_label == "background" and dsp_conf >= bg_threshold
+                dsp.record_decision(skip_yamnet)
 
-                if dsp_label == "background" and dsp_conf >= bg_threshold:
+                if skip_yamnet:
                     # Confident background — skip YAMNet, broadcast minimal score
                     score_msg: dict = {
                         "type": "score", "top": "(dsp:background)",
@@ -342,6 +353,7 @@ class YAMNetEngine:
                         # Push zero score through smoothers (decays triggers)
                         source.smoothers[name].push(0.0)
                     score_msg.update(udp_stats_snapshot(bus.source_names))
+                    score_msg["dsp_stats"] = dsp.stats_snapshot()
                     if sources:
                         score_msg["source_names"] = {sid: src.name for sid, src in sources.items()}
                     bus.broadcast(score_msg)
@@ -452,6 +464,7 @@ class YAMNetEngine:
             score_msg["dsp_label"] = dsp_result["label"]
             score_msg["dsp_confidence"] = round(dsp_result["confidence"], 3)
             score_msg["dsp_skipped_yamnet"] = False
+            score_msg["dsp_stats"] = dsp.stats_snapshot()
 
         score_msg.update(udp_stats_snapshot(bus.source_names))
         if sources:

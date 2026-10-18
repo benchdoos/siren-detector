@@ -45,6 +45,9 @@ class DspPreFilter:
         # A single interpreter is shared by all per-source inference threads.
         # TFLite's set_tensor/invoke/get_tensor sequence is not thread-safe.
         self._inference_lock = threading.Lock()
+        self._stats_lock = threading.Lock()
+        self._checks = 0
+        self._yamnet_skips = 0
         self._input_detail = self._interpreter.get_input_details()[0]
         self._output_detail = self._interpreter.get_output_details()[0]
 
@@ -108,6 +111,17 @@ class DspPreFilter:
             "confidence": confidence,
             "probs": probs_dict,
         }
+
+    def record_decision(self, skipped_yamnet: bool) -> None:
+        """Count completed DSP decisions across all audio sources."""
+        with self._stats_lock:
+            self._checks += 1
+            if skipped_yamnet:
+                self._yamnet_skips += 1
+
+    def stats_snapshot(self) -> dict[str, int]:
+        with self._stats_lock:
+            return {"checks": self._checks, "yamnet_skips": self._yamnet_skips}
 
     def _infer(self, features: np.ndarray) -> np.ndarray:
         """Run TFLite inference on normalised (250, 16) features.
