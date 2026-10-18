@@ -17,10 +17,29 @@ deploy:
 	@test -f hub/.env && scp hub/.env $(RPI):$(RPI_BASE)/hub/.env || true
 	ssh $(RPI) "cd $(RPI_BASE)/hub && docker compose up --build -d detector && docker image prune -f"
 
+## Deploy audio_source to RPi and rebuild
+deploy-audio:
+	rsync -av --delete --exclude='__pycache__' audio_source/ $(RPI):$(RPI_BASE)/audio_source/
+	ssh $(RPI) "cd $(RPI_BASE)/audio_source && docker compose up --build -d"
+
 ## Deploy only frontend (no rebuild needed)
 deploy-ui:
-	scp detector/static/index.html $(RPI):$(RPI_BASE)/detector/static/
-	ssh $(RPI) "docker cp $(RPI_BASE)/detector/static/index.html $(CONTAINER):/app/detector/static/index.html"
+	rsync -av --exclude='.DS_Store' detector/static/ $(RPI):$(RPI_BASE)/detector/static/
+	ssh $(RPI) "docker cp $(RPI_BASE)/detector/static/. $(CONTAINER):/app/detector/static/"
+
+ESP_YAML    ?= esp32/siren-detector.yaml
+ESP_DEVICE  ?= siren-detector.local
+
+## Copy, validate, compile, and flash ESP32 firmware via OTA
+deploy-firmware:
+	scp $(ESP_YAML) $(RPI):$(RPI_BASE)/esphome/siren-detector.yaml
+	ssh $(RPI) "cd $(RPI_BASE) && docker compose run --rm esphome config /config/siren-detector.yaml"
+	ssh $(RPI) "cd $(RPI_BASE) && docker compose run --rm esphome compile /config/siren-detector.yaml"
+	ssh $(RPI) "cd $(RPI_BASE) && docker compose run --rm esphome upload /config/siren-detector.yaml --device $(ESP_DEVICE)"
+
+## Stream ESP32 logs via ESPHome
+logs-esp:
+	ssh $(RPI) "cd $(RPI_BASE) && docker compose run --rm esphome logs /config/siren-detector.yaml --device $(ESP_DEVICE)"
 
 ## Deploy docker-compose.yml to RPi
 deploy-compose:
@@ -58,6 +77,7 @@ deploy-model:
 ## Full retrain cycle: merge recorder → sync dataset → train → audit → clean synced → deploy model (restart)
 retrain:
 	$(MAKE) _merge-recorder
+	$(MAKE) _wait-calibration
 	$(MAKE) sync-dataset
 	$(MAKE) augment
 	$(MAKE) train
@@ -77,6 +97,34 @@ _merge-recorder:
 			fi"; \
 	done
 
+## Wait for calibration to finish (if active), then stop & save it
+_wait-calibration:
+	@_token=$${ADMIN_TOKEN:-$$(grep '^ADMIN_TOKEN=' hub/.env 2>/dev/null | cut -d= -f2)}; \
+	_url="$(WEB_UI)/api/calibrate"; \
+	_status=$$(curl -sf -H "Authorization: Bearer $$_token" "$$_url" 2>/dev/null) || { echo "Detector API unreachable, skipping calibration check"; exit 0; }; \
+	_active=$$(echo "$$_status" | python3 -c "import sys,json; print(json.load(sys.stdin).get('active',False))"); \
+	if [ "$$_active" != "True" ]; then \
+		echo "No calibration in progress"; \
+		exit 0; \
+	fi; \
+	echo "Calibration in progress — waiting for it to finish..."; \
+	while true; do \
+		_status=$$(curl -sf -H "Authorization: Bearer $$_token" "$$_url"); \
+		_done=$$(echo "$$_status" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('done',False) or not d.get('active',False))"); \
+		if [ "$$_done" = "True" ]; then break; fi; \
+		_progress=$$(echo "$$_status" | python3 -c "import sys,json; print(json.load(sys.stdin).get('progress',0))"); \
+		printf "\r  progress: %s%%" "$$_progress"; \
+		sleep 2; \
+	done; \
+	echo ""; \
+	_status=$$(curl -sf -H "Authorization: Bearer $$_token" "$$_url"); \
+	_still_active=$$(echo "$$_status" | python3 -c "import sys,json; print(json.load(sys.stdin).get('active',False))"); \
+	if [ "$$_still_active" = "True" ]; then \
+		echo "Calibration done — saving recording..."; \
+		curl -sf -X POST -H "Authorization: Bearer $$_token" "$(WEB_UI)/api/calibrate/stop" > /dev/null; \
+		echo "Calibration saved"; \
+	fi
+
 ## Clean from RPi only files we have locally (= synced + trained on). Safe for new arrivals.
 _clean-trained:
 	@count=0; \
@@ -86,6 +134,15 @@ _clean-trained:
 			ssh $(RPI) "cd $(RPI_BASE)/dataset/$$label && rm -f $$NAMES" && \
 			count=$$((count + $$(echo $$NAMES | wc -w))); \
 		fi; \
+		for subdir in dataset/$$label/*/; do \
+			[ -d "$$subdir" ] || continue; \
+			subname=$$(basename "$$subdir"); \
+			if ls "$$subdir"*.wav >/dev/null 2>&1; then \
+				NAMES=$$(cd "$$subdir" && ls *.wav | tr '\n' ' '); \
+				ssh $(RPI) "cd $(RPI_BASE)/dataset/$$label/$$subname && rm -f $$NAMES" && \
+				count=$$((count + $$(echo $$NAMES | wc -w))); \
+			fi; \
+		done; \
 	done; \
 	ssh $(RPI) "docker exec $(CONTAINER) sh -c 'rm -f /clips/*.wav'" && \
 	echo "Cleaned $$count dataset files + all clips from RPi"
@@ -164,7 +221,10 @@ help:
 	@echo ""
 	@echo "  Deploy"
 	@echo "    make deploy          Full rebuild on RPi"
+	@echo "    make deploy-audio    Deploy audio_source to RPi"
 	@echo "    make deploy-ui       Frontend only (no rebuild)"
+	@echo "    make deploy-firmware Validate + compile + flash ESP32 OTA"
+	@echo "    make logs-esp        Stream ESP32 logs"
 	@echo "    make deploy-compose  Push docker-compose.yml"
 	@echo "    make restart         Restart container"
 	@echo "    make logs            Tail container logs"
@@ -190,8 +250,8 @@ help:
 	@echo "    make audit-compare   Compare latest vs previous audit"
 	@echo ""
 
-.PHONY: deploy deploy-ui deploy-compose restart logs \
-        sync-dataset train deploy-model retrain _merge-recorder _clean-trained \
+.PHONY: deploy deploy-audio deploy-ui deploy-firmware logs-esp deploy-compose restart logs \
+        sync-dataset train deploy-model retrain _merge-recorder _wait-calibration _clean-trained \
         clean-clips clean-dataset clean-docker \
         augment augment-siren augment-explosion augment-motorcycle \
         audit audit-compare \

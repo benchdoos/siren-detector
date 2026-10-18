@@ -117,14 +117,20 @@ def _publish_discovery(client) -> None:
     print("MQTT discovery configs published.", flush=True)
 
 
-def _mqtt_publish_event(name: str, state: str, confidence: float) -> None:
-    """Publish detector state change to MQTT."""
+def _mqtt_publish_event(name: str, state: str, confidence: float, source: str = "") -> None:
+    """Publish detector state change to MQTT.
+
+    When *source* is non-empty an additional per-source topic is published
+    so Home Assistant can distinguish which microphone triggered the event.
+    """
     if _mqtt_client is None:
         return
     _mqtt_client.publish(f"sound_detector/{name}/status", state, retain=True)
     if state == "confirmed":
         _mqtt_client.publish(f"sound_detector/{name}/state", "ON", retain=True)
         _mqtt_client.publish(f"sound_detector/{name}/confidence", str(round(confidence, 3)), retain=True)
+        if source:
+            _mqtt_client.publish(f"sound_detector/{name}/source", source, retain=True)
     elif state == "idle":
         _mqtt_client.publish(f"sound_detector/{name}/state", "OFF", retain=True)
         _mqtt_client.publish(f"sound_detector/{name}/confidence", "0", retain=True)
@@ -137,8 +143,9 @@ def _on_bus_message(msg: dict) -> None:
     name = msg.get("event", "")
     state = msg.get("state", "")
     confidence = msg.get("confidence", 0.0)
+    source = msg.get("source", "")
     if state in ("idle", "possible", "confirmed"):
-        _mqtt_publish_event(name, state, confidence)
+        _mqtt_publish_event(name, state, confidence, source)
 
 
 def mqtt_subscribe(bus: EventBus) -> None:

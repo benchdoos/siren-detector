@@ -39,20 +39,25 @@ def save_settings() -> None:
 
 
 def apply_clip_seconds(bus: EventBus) -> None:
-    """Resize ClipBuffer when clip_seconds setting changes."""
-    if bus.clip_buf is None:
-        return
+    """Resize all ClipBuffers when clip_seconds setting changes."""
     new_seconds = settings.get("clip_seconds", CLIP_SECONDS)
     new_maxlen = int(new_seconds * SAMPLE_RATE)
-    if bus.clip_buf._buf.maxlen != new_maxlen:
-        bus.clip_buf._buf = collections.deque(bus.clip_buf._buf, maxlen=new_maxlen)
-        print(f"[settings] clip buffer resized to {new_seconds}s", flush=True)
+    for source_id, clip_buf in bus.clip_bufs.items():
+        if clip_buf._buf.maxlen != new_maxlen:
+            clip_buf._buf = collections.deque(clip_buf._buf, maxlen=new_maxlen)
+            print(f"[settings] clip buffer (source {source_id}) resized to {new_seconds}s", flush=True)
 
 
 def apply_settings_to_smoothers() -> None:
-    """Push current settings into running TemporalSmoother instances."""
-    for name, smoother in smoothers.items():
-        thr_key = f"{name}_threshold"
+    """Push current settings into running TemporalSmoother instances.
+
+    Smoother keys may be plain detector names (``siren``) or
+    ``source_id/detector`` (``0/siren``) for multi-source setups.
+    """
+    for key, smoother in smoothers.items():
+        # Extract detector name: "0/siren" → "siren", "siren" → "siren"
+        det_name = key.split("/")[-1] if "/" in key else key
+        thr_key = f"{det_name}_threshold"
         if thr_key in settings:
             smoother._threshold = settings[thr_key]
         smoother._possible = settings["possible_triggers"]

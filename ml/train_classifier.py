@@ -293,7 +293,7 @@ def main() -> None:
     print("\nExtracting own-recording embeddings:")
     own_emb, own_lbl, own_src, own_aug = [], [], [], []
     for idx, label in enumerate(LABELS):
-        files = sorted((DATASET / label).glob("*.wav"))
+        files = sorted((DATASET / label).rglob("*.wav"))
         if not files:
             print(f"  {label}: no files, skipping")
             continue

@@ -38,7 +38,10 @@ detector/                 # Modular detection engine (Python package)
 │   └── routes_ws.py      #   /ws, /ws/audio WebSocket endpoints
 ├── integrations/
 │   └── mqtt.py           #   MQTT client, HA discovery
-└── static/index.html     #   Web UI (single-page)
+└── static/
+    ├── index.html          #   Web UI (single-page)
+    ├── settings.html       #   Settings page
+    └── js/audio-player.js  #   Shared spectrogram + player module
 ```
 
 ## Commands
@@ -147,6 +150,7 @@ Key architectural notes:
 - `feedback` dict is in-memory only (on `EventBus`) — labels are lost on container restart; history replay includes current labels so UI restores correctly after browser reload
 - **Volumes**: `clips` (named, for WAV clips), `../dataset` (bind mount for feedback copies), `../ml/results` (read-only, classifier weights)
 - Thresholds are dynamic settings, defaults: `possible_triggers=4`, `confirmed_triggers=8`, `siren_threshold=0.10`, `cooldown_seconds=60`
+- **Background calibration**: Web UI Calibrate button records ambient audio from a specific source → saves to `/dataset/background/{source_name}/` → `make retrain` picks it up via `rglob`. Solves domain gap when adding new microphones with different audio profiles.
 
 ## Retraining workflow
 

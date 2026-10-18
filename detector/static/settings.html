@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings — Siren Detector</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #0f0f0f; color: #e0e0e0; font-size: 15px; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  /* ── Header ── */
+  .sp-header { padding: 12px 16px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; flex-shrink: 0; }
+  .sp-header:hover { background: #151515; }
+  .sp-header h1 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .sp-subtitle { font-size: 14px; color: #666; font-weight: 400; margin-left: 4px; }
+  .sp-back { font-size: 18px; color: #666; margin-right: 4px; }
+  .header-logo { width: 24px; height: 24px; background: #e0e0e0; border-radius: 50%; padding: 2px; flex-shrink: 0; }
+
+  /* ── Layout ── */
+  .sp-body { display: flex; flex: 1; min-height: 0; }
+  .sp-nav { width: 200px; flex-shrink: 0; border-right: 1px solid #222; padding: 16px 0; overflow-y: auto; display: flex; flex-direction: column; }
+  .sp-nav-item { display: block; width: 100%; text-align: left; padding: 10px 20px; font-size: 14px; color: #888; background: none; border: none; cursor: pointer; border-left: 3px solid transparent; }
+  .sp-nav-item:hover { color: #ccc; background: #151515; }
+  .sp-nav-item.active { color: #4caf50; border-left-color: #4caf50; background: #111; }
+  .sp-nav-spacer { flex: 1; }
+  .sp-nav-actions { padding: 12px 16px; border-top: 1px solid #222; display: flex; flex-direction: column; gap: 8px; }
+  .sp-content { flex: 1; padding: 24px 32px; overflow-y: auto; max-width: 640px; }
+  .sp-panel { display: none; }
+  .sp-panel.active { display: block; }
+
+  /* ── Settings controls ── */
+  .s-section { margin-bottom: 18px; }
+  .s-title { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; font-weight: 600; border-bottom: 1px solid #222; padding-bottom: 4px; }
+  .s-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .s-row label { width: 150px; flex-shrink: 0; font-size: 13px; color: #ccc; }
+  .s-row input[type="number"], .s-row select { width: 80px; background: #222; border: 1px solid #444; color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .s-row input[type="number"]:focus, .s-row select:focus { border-color: #4caf50; outline: none; }
+  .s-row input.changed, .s-row select.changed { border-color: #ffa726; }
+  .s-row select { cursor: pointer; -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; padding-right: 24px; }
+  .s-default { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: #555; cursor: pointer; white-space: nowrap; user-select: none; width: 55px; }
+  .s-default:hover { color: #aaa; }
+  .s-help { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid #444; color: #666; font-size: 11px; cursor: pointer; flex-shrink: 0; user-select: none; line-height: 1; }
+  .s-help:hover { border-color: #888; color: #ccc; }
+  .s-help.open { border-color: #4caf50; color: #4caf50; }
+  .s-tooltip { display: none; background: #222; border: 1px solid #333; border-radius: 6px; padding: 10px 12px; margin: 2px 0 8px 0; font-size: 12px; line-height: 1.5; color: #aaa; }
+  .s-tooltip.open { display: block; }
+  .s-tooltip strong { color: #ccc; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  .s-tooltip hr { border: none; border-top: 1px solid #333; margin: 6px 0; }
+  .s-tooltip .s-tip-range { color: #888; }
+  .s-tooltip .s-tip-default { color: #4caf50; }
+
+  /* ── Buttons ── */
+  .btn-save { background: #1a3a1a; border: 1px solid #4caf50; color: #4caf50; padding: 6px 20px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; width: 100%; }
+  .btn-save:hover { background: #2a4a2a; }
+  .btn-reset-all { background: none; border: 1px solid #333; color: #888; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; width: 100%; }
+  .btn-reset-all:hover { color: #ccc; border-color: #555; }
+  .btn-reset-panel { background: none; border: 1px solid #333; color: #666; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  .btn-reset-panel:hover { color: #aaa; border-color: #555; }
+  .sp-panel-footer { margin-top: 20px; padding-top: 12px; border-top: 1px solid #222; display: flex; align-items: center; gap: 10px; }
+  .sp-status { font-size: 12px; margin-left: auto; }
+
+  /* ── Source toggles ── */
+  .src-card { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #1a1a1a; border: 1px solid #222; border-radius: 6px; }
+  .src-card.disabled { opacity: 0.5; }
+  .src-name { font-size: 14px; color: #ccc; font-weight: 500; }
+  .src-id { font-size: 11px; color: #666; margin-left: 4px; }
+  .src-listen { font-size: 12px; padding: 4px 12px; border-radius: 4px; border: 1px solid #333; background: none; color: #888; cursor: pointer; white-space: nowrap; min-width: 62px; text-align: center; font-family: monospace; }
+  .src-listen:hover { color: #ccc; border-color: #555; }
+  .src-listen.active { background: #1a3a1a; border-color: #4caf50; color: #4caf50; }
+  .src-toggle { margin-left: auto; position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+  .src-toggle input { opacity: 0; width: 0; height: 0; }
+  .src-toggle .slider { position: absolute; inset: 0; background: #333; border-radius: 11px; cursor: pointer; transition: background .2s; }
+  .src-toggle .slider::before { content: ''; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; background: #888; border-radius: 50%; transition: transform .2s, background .2s; }
+  .src-toggle input:checked + .slider { background: #1a3a1a; }
+  .src-toggle input:checked + .slider::before { transform: translateX(18px); background: #4caf50; }
+
+  /* ── Calibration recordings ── */
+  .cal-rec { background: #1a1a1a; border: 1px solid #222; border-radius: 6px; padding: 10px 12px; }
+  .cal-rec-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .cal-rec-source { font-size: 13px; color: #4caf50; font-weight: 600; }
+  .cal-rec-meta { font-size: 11px; color: #666; }
+  .cal-rec-meta span { margin-right: 10px; }
+  .cal-rec-actions { margin-left: auto; display: flex; gap: 6px; flex-shrink: 0; }
+  .cal-rec-del { background: none; border: 1px solid #333; color: #888; padding: 3px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  .cal-rec-del:hover { color: #ef5350; border-color: #ef5350; }
+  .clip-player { margin-top: 4px; position: relative; }
+  .spec-canvas { width: 100%; height: 60px; border-radius: 4px; cursor: pointer; display: block; background: #111; touch-action: none; }
+  .player-controls { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .player-controls audio { flex: 1; min-width: 180px; height: 36px; filter: invert(1) hue-rotate(180deg) brightness(0.8); }
+  .pc-buttons { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+  .pc-btn { font-size: 12px; padding: 3px 8px; border-radius: 4px; border: 1px solid #333; background: none; color: #888; cursor: pointer; white-space: nowrap; }
+  .pc-btn:hover { color: #ccc; border-color: #555; }
+  .pc-speed { font-variant-numeric: tabular-nums; width: 38px; text-align: center; }
+  .player-controls audio::-webkit-media-controls-seek-back-button,
+  .player-controls audio::-webkit-media-controls-seek-forward-button { display: none; }
+
+  /* ── Mobile ── */
+  @media (max-width: 700px) {
+    .sp-body { flex-direction: column; }
+    .sp-nav { width: 100%; flex-shrink: 0; border-right: none; border-bottom: 1px solid #222; padding: 8px 12px; flex-direction: row; gap: 4px; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
+    .sp-nav-item { width: auto; white-space: nowrap; padding: 8px 14px; border-radius: 4px; border-left: none; font-size: 13px; flex-shrink: 0; }
+    .sp-nav-item.active { background: #1a3a1a; border-left: none; }
+    .sp-nav-spacer { display: none; }
+    .sp-nav-actions { flex-direction: row; border-top: none; padding: 0; gap: 6px; flex-shrink: 0; }
+    .sp-nav-actions .btn-save, .sp-nav-actions .btn-reset-all { width: auto; padding: 8px 14px; font-size: 13px; }
+    .sp-content { padding: 16px; }
+    .s-row label { width: 120px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="sp-header" onclick="goBack()">
+  <span class="sp-back">&larr;</span>
+  <h1><img src="/static/img/siren-detector-logo.svg" alt="Logo" class="header-logo"> Siren Detector <span class="sp-subtitle">/ Settings</span></h1>
+</div>
+
+<div class="sp-body">
+  <nav class="sp-nav">
+    <button class="sp-nav-item" id="nav-detection" data-panel="sp-detection" onclick="switchPanel(this)">Detection</button>
+    <button class="sp-nav-item" data-panel="sp-smoothing" onclick="switchPanel(this)">Smoothing</button>
+    <button class="sp-nav-item" data-panel="sp-clips" onclick="switchPanel(this)">Clips</button>
+    <button class="sp-nav-item" data-panel="sp-sources" onclick="switchPanel(this)">Sources</button>
+    <button class="sp-nav-item" data-panel="sp-calibration" onclick="switchPanel(this)">Calibration</button>
+    <button class="sp-nav-item" data-panel="sp-about" onclick="switchPanel(this)">About</button>
+    <div class="sp-nav-spacer"></div>
+    <div class="sp-nav-actions">
+      <button class="btn-save" onclick="saveSettings()">Save all</button>
+      <button class="btn-reset-all" onclick="resetAllDefaults()">Reset all</button>
+    </div>
+  </nav>
+
+  <div class="sp-content">
+
+    <!-- Detection -->
+    <div class="sp-panel" id="sp-detection">
+      <div class="s-section">
+        <div class="s-title">Detection Mode</div>
+        <div class="s-row"><label>Mode <span class="s-help" onclick="toggleTip(this)">?</span></label><select id="s-detection_mode"><option value="round_robin">Round Robin</option><option value="parallel">Parallel</option></select><span class="s-default" data-key="detection_mode"></span></div>
+        <div class="s-tooltip" data-tip="detection_mode"><strong>Detection Mode</strong><br>Determines how the engine processes audio from multiple sources. Switches on the fly after Save.<hr><b style="color:#4caf50">Round Robin</b> — single thread cycles through sources one at a time (~0.5 s per source). With 2 sources each gets checked roughly once per second. Low CPU load.<br><br><b style="color:#4caf50">Parallel</b> — one inference thread per source, running simultaneously. TensorFlow releases the GIL, so threads get real parallelism. CPU load scales with source count (~2× for 2 sources).<hr><span class="s-tip-default">Default: <b>round_robin</b></span></div>
+      </div>
+      <div class="s-section">
+        <div class="s-title">Thresholds</div>
+        <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Minimum confidence score for each sound type. When MLP classifier is active (siren), this applies to the MLP output score.</p>
+        <div class="s-row"><label>Siren <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-siren_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="siren_threshold"></span></div>
+        <div class="s-tooltip" data-tip="siren_threshold"><strong>Siren Threshold</strong><br>MLP confidence score required for a siren detection to count as a trigger. Lower = more sensitive but more false positives.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.10</b></span></div>
+        <div class="s-row"><label>Explosion <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-explosion_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="explosion_threshold"></span></div>
+        <div class="s-tooltip" data-tip="explosion_threshold"><strong>Explosion Threshold</strong><br>YAMNet confidence for explosion/gunshot/burst. Classes: Explosion, Burst pop, Gunshot gunfire.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.15</b></span></div>
+        <div class="s-row"><label>Motorcycle <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-motorcycle_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="motorcycle_threshold"></span></div>
+        <div class="s-tooltip" data-tip="motorcycle_threshold"><strong>Motorcycle Threshold</strong><br>YAMNet confidence for motorcycle engine sounds.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.15</b></span></div>
+      </div>
+      <div class="s-section">
+        <div class="s-title">MLP Gate</div>
+        <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Controls when to trust the MLP classifier for siren detection.</p>
+        <div class="s-row"><label>YAMNet min gate <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-yamnet_min_gate" step="0.001" min="0" max="1"><span class="s-default" data-key="yamnet_min_gate"></span></div>
+        <div class="s-tooltip" data-tip="yamnet_min_gate"><strong>YAMNet Min Gate</strong><br>YAMNet must show at least this score for the MLP result to be trusted. Prevents MLP hallucinations on unfamiliar audio. Set to 0 to fully trust MLP.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.01</b></span></div>
+      </div>
+      <div class="sp-panel-footer">
+        <button class="btn-reset-panel" onclick="resetPanelDefaults('sp-detection')">Reset section to defaults</button>
+        <span class="sp-status" id="status-detection"></span>
+      </div>
+    </div>
+
+    <!-- Smoothing -->
+    <div class="sp-panel" id="sp-smoothing">
+      <div class="s-section">
+        <div class="s-title">Trigger Counts</div>
+        <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">How many above-threshold inference windows are needed to change detection state.</p>
+        <div class="s-row"><label>Possible triggers <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-possible_triggers" step="1" min="1" max="60"><span class="s-default" data-key="possible_triggers"></span></div>
+        <div class="s-tooltip" data-tip="possible_triggers"><strong>Possible Triggers</strong><br>Windows needed for early warning (yellow badge). No clip saved yet.<hr><span class="s-tip-range">Range: <b>1 – 60</b></span><br><span class="s-tip-default">Default: <b>4</b></span></div>
+        <div class="s-row"><label>Confirmed triggers <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-confirmed_triggers" step="1" min="1" max="60"><span class="s-default" data-key="confirmed_triggers"></span></div>
+        <div class="s-tooltip" data-tip="confirmed_triggers"><strong>Confirmed Triggers</strong><br>Windows needed to confirm event. Saves clip, sends MQTT. Must be &gt; possible triggers.<hr><span class="s-tip-range">Range: <b>1 – 60</b></span><br><span class="s-tip-default">Default: <b>8</b></span></div>
+      </div>
+      <div class="s-section">
+        <div class="s-title">Timing</div>
+        <div class="s-row"><label>Window (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-smoothing_window_seconds" step="1" min="5" max="120"><span class="s-default" data-key="smoothing_window_seconds"></span></div>
+        <div class="s-tooltip" data-tip="smoothing_window_seconds"><strong>Smoothing Window</strong><br>Rolling time window for trigger accumulation. 30s window at 0.5s inference = up to 61 slots.<hr><span class="s-tip-range">Range: <b>5 – 120 sec</b></span><br><span class="s-tip-default">Default: <b>30</b></span></div>
+        <div class="s-row"><label>Cooldown (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-cooldown_seconds" step="1" min="0" max="600"><span class="s-default" data-key="cooldown_seconds"></span></div>
+        <div class="s-tooltip" data-tip="cooldown_seconds"><strong>Cooldown</strong><br>After confirmed event, ignore detections for this long. Prevents duplicate events. 0 = no cooldown.<hr><span class="s-tip-range">Range: <b>0 – 600 sec</b></span><br><span class="s-tip-default">Default: <b>60</b></span></div>
+        <div class="s-row"><label>Refractory (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-refractory_seconds" step="1" min="0" max="120"><span class="s-default" data-key="refractory_seconds"></span></div>
+        <div class="s-tooltip" data-tip="refractory_seconds"><strong>Refractory</strong><br>After cooldown, wait for score to drop before re-arming. If score stays high, expires by timeout. 0 = disabled.<hr><span class="s-tip-range">Range: <b>0 – 120 sec</b></span><br><span class="s-tip-default">Default: <b>15</b></span></div>
+      </div>
+      <div class="sp-panel-footer">
+        <button class="btn-reset-panel" onclick="resetPanelDefaults('sp-smoothing')">Reset section to defaults</button>
+        <span class="sp-status" id="status-smoothing"></span>
+      </div>
+    </div>
+
+    <!-- Clips -->
+    <div class="sp-panel" id="sp-clips">
+      <div class="s-section">
+        <div class="s-title">Audio Clips</div>
+        <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Saved when an event is confirmed. Used for review and retraining.</p>
+        <div class="s-row"><label>Clip length (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-clip_seconds" step="1" min="5" max="60"><span class="s-default" data-key="clip_seconds"></span></div>
+        <div class="s-tooltip" data-tip="clip_seconds"><strong>Clip Length</strong><br>Duration of saved audio clip. Shorter = less noise for retraining.<hr><span class="s-tip-range">Range: <b>5 – 60 sec</b></span><br><span class="s-tip-default">Default: <b>10</b></span></div>
+        <div class="s-row"><label>Clip from possible <span class="s-help" onclick="toggleTip(this)">?</span></label><select id="s-clip_from_possible"><option value="0">Off</option><option value="1">On</option></select><span class="s-default" data-key="clip_from_possible"></span></div>
+        <div class="s-tooltip" data-tip="clip_from_possible"><strong>Clip From Possible</strong><br>When On, clip captures from the moment event reaches "possible" (+ 2s pre-buffer) instead of last N seconds before "confirmed". Includes per-window scores in metadata.<hr><span class="s-tip-default">Default: <b>Off</b></span></div>
+      </div>
+      <div class="sp-panel-footer">
+        <button class="btn-reset-panel" onclick="resetPanelDefaults('sp-clips')">Reset section to defaults</button>
+        <span class="sp-status" id="status-clips"></span>
+      </div>
+    </div>
+
+    <!-- Sources -->
+    <div class="sp-panel" id="sp-sources">
+      <div class="s-section">
+        <div class="s-title">Audio Sources</div>
+        <p style="font-size:12px;color:#555;margin:0 0 12px 0;line-height:1.5">Enable or disable detection for each microphone. Disabled sources still receive audio (available for calibration) but their events are discarded.</p>
+        <div id="sources-list" style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:13px;color:#666">Loading sources...</div>
+        </div>
+      </div>
+      <div class="sp-panel-footer">
+        <span class="sp-status" id="status-sources"></span>
+      </div>
+    </div>
+
+    <!-- Calibration -->
+    <div class="sp-panel" id="sp-calibration">
+      <div class="s-section">
+        <div class="s-title">Background Calibration</div>
+        <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Record ambient background from a microphone so the model learns what is <em>not</em> a siren through this audio source.</p>
+        <div style="background:#1a1a1a;border:1px solid #222;border-radius:6px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:#888;line-height:1.6">
+          <b style="color:#ccc">How to get best results:</b><br>
+          &bull; Record <b>5+ minutes</b> of your typical environment<br>
+          &bull; Include varied sounds: appliances, street noise, conversations, 3D printers, etc.<br>
+          &bull; Record multiple sessions at different times of day<br>
+          &bull; Each source (ESP32 mic, USB mic) needs its own calibration<br>
+          &bull; After recording, run <code style="background:#222;padding:1px 4px;border-radius:3px">make retrain</code> to apply
+        </div>
+        <div class="s-row"><label>Source</label><select id="cal-source" style="flex:1"></select></div>
+        <div class="s-row"><label>Duration (sec)</label>
+          <select id="cal-preset" onchange="document.getElementById('cal-duration').value=this.value" style="flex:1;max-width:140px">
+            <option value="300" selected>5 min</option>
+            <option value="600">10 min</option>
+            <option value="900">15 min</option>
+          </select>
+          <input type="number" id="cal-duration" value="300" min="10" max="900" step="10" style="width:80px" oninput="syncPreset(this.value)">
+        </div>
+        <div id="cal-progress" style="display:none;margin:8px 0">
+          <div style="background:#222;border-radius:4px;height:20px;overflow:hidden">
+            <div id="cal-bar" style="height:100%;width:0%;background:#4caf50;border-radius:4px;transition:width .5s"></div>
+          </div>
+          <div id="cal-text" style="font-size:12px;color:#888;margin-top:4px;text-align:center">0% (0s/300s)</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button id="cal-start-btn" onclick="startCalibration()" class="btn-save" style="flex:1">Start Recording</button>
+          <button id="cal-stop-btn" onclick="stopCalibration()" style="flex:1;display:none;background:#1a3a1a;border:1px solid #4caf50;color:#4caf50;padding:6px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600">Stop & Save</button>
+          <button id="cal-cancel-btn" onclick="cancelCalibration()" style="flex:1;display:none;background:#3a1a1a;border:1px solid #ef5350;color:#ef5350;padding:6px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600">Cancel</button>
+        </div>
+        <div id="cal-status" style="font-size:12px;color:#888;margin-top:8px;text-align:center"></div>
+      </div>
+      <div class="s-section" style="margin-top:20px">
+        <div class="s-title">Recordings</div>
+        <div id="cal-recordings" style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:13px;color:#666">Loading recordings...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- About -->
+    <div class="sp-panel" id="sp-about">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+        <img src="/static/img/siren-detector-logo.svg" alt="Logo" class="header-logo" style="width:32px;height:32px">
+        <h2 style="font-size:18px;font-weight:600">Siren Detector</h2>
+      </div>
+      <div style="border-top:1px solid #222;padding-top:12px;margin-bottom:12px">
+        <p style="color:#ffa726;font-size:12px;line-height:1.5"><span style="color:#ffa726;font-weight:600">Disclaimer</span><br>
+          This application and all its components are intended exclusively for peaceful purposes. Any use of this software for military, harmful, or destructive purposes is strictly prohibited.</p>
+      </div>
+      <p style="font-size:13px;color:#aaa;line-height:1.6;margin-bottom:12px">Universal audio event detection platform. ESP32-S3 captures audio from an INMP441 microphone and streams it to a detection engine powered by YAMNet + MLP.</p>
+      <p style="font-size:13px;color:#aaa;line-height:1.6;margin-bottom:16px">Target classes: <span style="color:#ef5350;font-weight:600">siren</span>, <span style="color:#ff7043;font-weight:600">explosion</span>, <span style="color:#ffd54f;font-weight:600">motorcycle</span>, <span style="color:#4caf50;font-weight:600">background</span>.</p>
+      <div style="border-top:1px solid #222;padding-top:12px;margin-bottom:12px">
+        <div style="font-size:12px;color:#888;font-weight:600;margin-bottom:4px">Repository</div>
+        <a href="https://github.com/benchdoos/siren-detector" target="_blank" rel="noopener" style="color:#4caf50;text-decoration:none;font-size:13px">github.com/benchdoos/siren-detector</a>
+      </div>
+      <div style="border-top:1px solid #222;padding-top:12px">
+        <p style="font-size:12px;line-height:1.5;color:#aaa"><span style="color:#ccc;font-weight:600">License</span> — CC BY-NC 4.0<br>
+        This software is provided <b>"as is"</b>, without warranty of any kind. You are free to copy, share, and adapt it for <b>non-commercial</b> purposes, provided you give appropriate credit to the original author and link to the source repository.<br>
+        <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener" style="color:#4caf50;text-decoration:none;font-size:11px">creativecommons.org/licenses/by-nc/4.0</a></p>
+      </div>
+    </div>
+
+  </div><!-- /.sp-content -->
+</div><!-- /.sp-body -->
+
+<script src="/static/js/audio-player.js"></script>
+<script>
+/* ── Auth (shared with index.html via sessionStorage) ── */
+const _adminToken = sessionStorage.getItem('adminToken') || '';
+function adminHeaders() {
+  return _adminToken ? {'Authorization': 'Bearer ' + _adminToken} : {};
+}
+
+/* ── Settings keys & panel mapping ── */
+const SETTINGS_KEYS = [
+  'detection_mode',
+  'siren_threshold','explosion_threshold','motorcycle_threshold',
+  'possible_triggers','confirmed_triggers','smoothing_window_seconds',
+  'cooldown_seconds','refractory_seconds','yamnet_min_gate',
+  'clip_seconds','clip_from_possible'
+];
+
+const PANEL_KEYS = {
+  'sp-detection': ['detection_mode','siren_threshold','explosion_threshold','motorcycle_threshold','yamnet_min_gate'],
+  'sp-smoothing': ['possible_triggers','confirmed_triggers','smoothing_window_seconds','cooldown_seconds','refractory_seconds'],
+  'sp-clips': ['clip_seconds','clip_from_possible'],
+};
+
+let _defaults = {};
+let _loaded = {};   // values as loaded from server (strings)
+
+/* ── Navigation ── */
+function switchPanel(btn) {
+  document.querySelectorAll('.sp-nav-item').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.sp-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(btn.dataset.panel).classList.add('active');
+}
+
+function hasUnsaved() {
+  for (const k of SETTINGS_KEYS) {
+    const el = document.getElementById('s-' + k);
+    if (el && el.value !== _loaded[k]) return true;
+  }
+  return false;
+}
+
+function goBack() {
+  if (hasUnsaved()) {
+    if (!confirm('You have unsaved changes. Discard?')) return;
+  }
+  window.location.href = '/';
+}
+
+/* ── Tooltips ── */
+function toggleTip(helpBtn) {
+  const row = helpBtn.closest('.s-row');
+  const tip = row.nextElementSibling;
+  if (!tip || !tip.classList.contains('s-tooltip')) return;
+  const wasOpen = tip.classList.contains('open');
+  document.querySelectorAll('.s-tooltip.open').forEach(t => t.classList.remove('open'));
+  document.querySelectorAll('.s-help.open').forEach(h => h.classList.remove('open'));
+  if (!wasOpen) { tip.classList.add('open'); helpBtn.classList.add('open'); }
+}
+
+/* ── Load settings ── */
+async function loadSettings() {
+  try {
+    const res = await fetch('/api/settings', { headers: adminHeaders() });
+    const data = await res.json();
+    _defaults = data.defaults || {};
+    _loaded = {};
+    for (const k of SETTINGS_KEYS) {
+      const input = document.getElementById('s-' + k);
+      if (!input) continue;
+      input.value = data[k] ?? _defaults[k] ?? '';
+      _loaded[k] = input.value;
+      input.classList.remove('changed');
+      const evt = input.tagName === 'SELECT' ? 'onchange' : 'oninput';
+      input[evt] = () => input.classList.toggle('changed', input.value !== _loaded[k]);
+
+      const def = document.querySelector(`.s-default[data-key="${k}"]`);
+      if (def) {
+        const label = input.tagName === 'SELECT'
+          ? (input.querySelector(`option[value="${_defaults[k]}"]`)?.textContent ?? _defaults[k])
+          : _defaults[k];
+        def.innerHTML = `<span style="margin-right:2px">↺</span>${label}`;
+        def.title = 'Reset to default';
+        def.onclick = () => {
+          input.value = _defaults[k];
+          input.classList.toggle('changed', input.value !== _loaded[k]);
+        };
+      }
+    }
+  } catch(e) {
+    console.error('Failed to load settings', e);
+  }
+}
+
+/* ── Save (all keys) ── */
+async function saveSettings() {
+  const body = {};
+  for (const k of SETTINGS_KEYS) {
+    const el = document.getElementById('s-' + k);
+    if (!el) continue;
+    const v = parseFloat(el.value);
+    body[k] = isNaN(v) ? el.value : v;
+  }
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', ...adminHeaders()},
+      body: JSON.stringify(body),
+    });
+    if (res.status === 401) { alert('Auth required — go back and log in as Admin.'); return; }
+    if (res.ok) {
+      await res.json();
+      // refresh loaded state
+      for (const k of SETTINGS_KEYS) {
+        const el = document.getElementById('s-' + k);
+        if (el) { _loaded[k] = el.value; el.classList.remove('changed'); }
+      }
+      showStatus('Saved', '#4caf50');
+    } else {
+      const err = await res.json();
+      showStatus(err.detail || 'Error', '#ef5350');
+    }
+  } catch(e) { showStatus('Network error', '#ef5350'); }
+}
+
+/* ── Reset panel defaults (local only, no save) ── */
+function resetPanelDefaults(panelId) {
+  const keys = PANEL_KEYS[panelId];
+  if (!keys) return;
+  for (const k of keys) {
+    const el = document.getElementById('s-' + k);
+    if (el && _defaults[k] !== undefined) {
+      el.value = _defaults[k];
+      el.classList.toggle('changed', el.value !== _loaded[k]);
+    }
+  }
+  showStatus('Section reset to defaults (not saved yet)', '#ffa726');
+}
+
+/* ── Reset all defaults (server-side reset + reload) ── */
+async function resetAllDefaults() {
+  if (!confirm('Reset ALL settings to factory defaults? This will save immediately.')) return;
+  try {
+    const res = await fetch('/api/settings/reset', { method: 'POST', headers: adminHeaders() });
+    if (res.status === 401) { alert('Auth required.'); return; }
+    if (res.ok) {
+      showStatus('All settings reset to defaults', '#ffa726');
+      await loadSettings();
+    }
+  } catch(e) { showStatus('Network error', '#ef5350'); }
+}
+
+function showStatus(msg, color) {
+  // show on the active panel footer if it has one, otherwise log
+  const panel = document.querySelector('.sp-panel.active');
+  const el = panel ? panel.querySelector('.sp-status') : null;
+  if (el) { el.textContent = msg; el.style.color = color; setTimeout(() => el.textContent = '', 4000); }
+}
+
+/* ── Sources ── */
+async function loadSources() {
+  const list = document.getElementById('sources-list');
+  try {
+    const [srcRes, setRes] = await Promise.all([
+      fetch('/api/sources', { headers: adminHeaders() }),
+      fetch('/api/settings', { headers: adminHeaders() }),
+    ]);
+    const srcData = await srcRes.json();
+    const setData = await setRes.json();
+    const disabled = setData.disabled_sources || [];
+    const sources = srcData.sources || [];
+    if (sources.length === 0) {
+      list.innerHTML = '<div style="font-size:13px;color:#666">No sources connected yet.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    for (const s of sources) {
+      const enabled = !disabled.includes(s.source_id);
+      const card = document.createElement('div');
+      card.className = 'src-card' + (enabled ? '' : ' disabled');
+      card.innerHTML = `
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            <input type="text" class="src-name-input" data-sid="${s.source_id}"
+              value="${esc(s.custom_name || '')}" placeholder="${esc(s.original_name)}"
+              style="background:#222;border:1px solid #333;color:#e0e0e0;padding:3px 8px;border-radius:4px;font-size:14px;font-weight:500;width:100%;max-width:200px"
+              oninput="markSourceNameChanged(this)" onkeydown="if(event.key==='Enter')saveSourceName(this)">
+            <button class="src-name-save" data-sid="${s.source_id}" onclick="saveSourceName(this.previousElementSibling)"
+              style="display:none;background:none;border:1px solid #4caf50;color:#4caf50;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap">Save</button>
+          </div>
+          <span class="src-id">id: ${s.source_id}${s.custom_name ? ' · ' + esc(s.original_name) : ''}</span>
+        </div>
+        <button class="src-listen" data-sid="${s.source_id}" onclick="toggleSourceListen(this, ${s.source_id})">Listen</button>
+        <label class="src-toggle">
+          <input type="checkbox" ${enabled ? 'checked' : ''} data-sid="${s.source_id}">
+          <span class="slider"></span>
+        </label>`;
+      card.querySelector('input[type="checkbox"]').addEventListener('change', (e) => toggleSource(s.source_id, e.target.checked, card));
+      list.appendChild(card);
+    }
+  } catch(e) {
+    list.innerHTML = '<div style="font-size:13px;color:#ef5350">Failed to load sources.</div>';
+  }
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+async function toggleSource(sourceId, enabled, card) {
+  // Read current disabled list, modify, save
+  try {
+    const res = await fetch('/api/settings', { headers: adminHeaders() });
+    const data = await res.json();
+    let disabled = data.disabled_sources || [];
+    if (enabled) {
+      disabled = disabled.filter(id => id !== sourceId);
+    } else {
+      if (!disabled.includes(sourceId)) disabled.push(sourceId);
+    }
+    const saveRes = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify({ disabled_sources: disabled }),
+    });
+    if (saveRes.status === 401) { alert('Auth required.'); return; }
+    if (saveRes.ok) {
+      card.classList.toggle('disabled', !enabled);
+      const el = document.getElementById('status-sources');
+      if (el) { el.textContent = enabled ? 'Source enabled' : 'Source disabled'; el.style.color = '#4caf50'; setTimeout(() => el.textContent = '', 3000); }
+    }
+  } catch(e) {
+    const el = document.getElementById('status-sources');
+    if (el) { el.textContent = 'Network error'; el.style.color = '#ef5350'; }
+  }
+}
+
+/* ── Calibration ── */
+let _calPollTimer = null;
+let _calDuration = 300;
+
+function _calSetRecording(active) {
+  document.getElementById('cal-source').disabled = active;
+  document.getElementById('cal-duration').disabled = active;
+  document.getElementById('cal-start-btn').style.display = active ? 'none' : '';
+  document.getElementById('cal-stop-btn').style.display = active ? '' : 'none';
+  document.getElementById('cal-cancel-btn').style.display = active ? '' : 'none';
+  document.getElementById('cal-progress').style.display = active ? '' : 'none';
+}
+
+function _calReset() {
+  _calSetRecording(false);
+  document.getElementById('cal-status').textContent = '';
+  document.getElementById('cal-status').style.color = '#888';
+  document.getElementById('cal-bar').style.width = '0%';
+  document.getElementById('cal-text').textContent = '0% (0s/' + _calDuration + 's)';
+  if (_calPollTimer) { clearInterval(_calPollTimer); _calPollTimer = null; }
+}
+
+async function loadCalibrationSources() {
+  const sel = document.getElementById('cal-source');
+  sel.innerHTML = '';
+  try {
+    const res = await fetch('/api/sources', { headers: adminHeaders() });
+    const data = await res.json();
+    for (const s of data.sources || []) {
+      const opt = document.createElement('option');
+      opt.value = s.source_id;
+      opt.textContent = `${s.name} (id: ${s.source_id})`;
+      sel.appendChild(opt);
+    }
+  } catch(e) { sel.innerHTML = '<option value="0">default (0)</option>'; }
+}
+
+function syncPreset(val) {
+  const sel = document.getElementById('cal-preset');
+  sel.value = [...sel.options].some(o => o.value === val) ? val : '';
+}
+
+async function startCalibration() {
+  const sourceId = parseInt(document.getElementById('cal-source').value);
+  _calDuration = parseInt(document.getElementById('cal-duration').value) || 300;
+  try {
+    const res = await fetch('/api/calibrate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify({ source_id: sourceId, duration: _calDuration }),
+    });
+    if (res.status === 401) { alert('Auth required.'); return; }
+    if (!res.ok) { const err = await res.json(); alert(err.detail || 'Error'); return; }
+  } catch(e) { alert('Network error'); return; }
+  _calSetRecording(true);
+  document.getElementById('cal-status').textContent = 'Recording...';
+  document.getElementById('cal-status').style.color = '#888';
+  _calPollTimer = setInterval(pollCalibration, 1000);
+}
+
+async function pollCalibration() {
+  try {
+    const res = await fetch('/api/calibrate', { headers: adminHeaders() });
+    const data = await res.json();
+    if (!data.active || data.done) {
+      if (_calPollTimer) { clearInterval(_calPollTimer); _calPollTimer = null; }
+      document.getElementById('cal-bar').style.width = '100%';
+      document.getElementById('cal-text').textContent = `100% (${_calDuration}s/${_calDuration}s)`;
+      document.getElementById('cal-status').textContent = 'Done! Saving...';
+      await stopCalibration();
+      return;
+    }
+    const pct = Math.round(data.progress * 100);
+    const recorded = Math.round(data.progress * _calDuration);
+    document.getElementById('cal-bar').style.width = pct + '%';
+    document.getElementById('cal-text').textContent = `${pct}% (${recorded}s/${_calDuration}s)`;
+  } catch(e) {}
+}
+
+async function stopCalibration() {
+  if (_calPollTimer) { clearInterval(_calPollTimer); _calPollTimer = null; }
+  try {
+    const res = await fetch('/api/calibrate/stop', { method: 'POST', headers: adminHeaders() });
+    if (res.ok) {
+      const data = await res.json();
+      document.getElementById('cal-status').innerHTML = `Saved for <b>${data.source}</b>. Run <code style="background:#222;padding:1px 4px;border-radius:3px">make retrain</code> to apply.`;
+      document.getElementById('cal-status').style.color = '#4caf50';
+      document.getElementById('cal-stop-btn').style.display = 'none';
+      document.getElementById('cal-cancel-btn').style.display = 'none';
+      document.getElementById('cal-source').disabled = false;
+      document.getElementById('cal-duration').disabled = false;
+      document.getElementById('cal-start-btn').style.display = '';
+      loadCalRecordings();
+    } else {
+      const err = await res.json();
+      document.getElementById('cal-status').textContent = err.detail || 'Error';
+      document.getElementById('cal-status').style.color = '#ef5350';
+    }
+  } catch(e) {
+    document.getElementById('cal-status').textContent = 'Network error';
+    document.getElementById('cal-status').style.color = '#ef5350';
+  }
+}
+
+async function cancelCalibration() {
+  if (_calPollTimer) { clearInterval(_calPollTimer); _calPollTimer = null; }
+  try { await fetch('/api/calibrate/cancel', { method: 'POST', headers: adminHeaders() }); } catch(e) {}
+  _calReset();
+  document.getElementById('cal-status').textContent = 'Cancelled — recording discarded.';
+  document.getElementById('cal-status').style.color = '#888';
+}
+
+/* ── Source custom names ── */
+function markSourceNameChanged(input) {
+  const sid = input.dataset.sid;
+  const saveBtn = input.parentElement.querySelector('.src-name-save');
+  if (saveBtn) saveBtn.style.display = '';
+}
+
+async function saveSourceName(input) {
+  const sid = input.dataset.sid;
+  const newName = input.value.trim();
+  try {
+    const res = await fetch('/api/settings', { headers: adminHeaders() });
+    const data = await res.json();
+    const customNames = data.source_custom_names || {};
+    if (newName) {
+      customNames[sid] = newName;
+    } else {
+      delete customNames[sid];
+    }
+    const saveRes = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify({ source_custom_names: customNames }),
+    });
+    if (saveRes.status === 401) { alert('Auth required.'); return; }
+    if (saveRes.ok) {
+      const saveBtn = input.parentElement.querySelector('.src-name-save');
+      if (saveBtn) saveBtn.style.display = 'none';
+      const el = document.getElementById('status-sources');
+      if (el) { el.textContent = 'Name saved'; el.style.color = '#4caf50'; setTimeout(() => el.textContent = '', 3000); }
+      // Reload to update original_name display
+      await loadSources();
+    }
+  } catch(e) {
+    const el = document.getElementById('status-sources');
+    if (el) { el.textContent = 'Network error'; el.style.color = '#ef5350'; }
+  }
+}
+
+/* ── Listen (per-source audio) ── */
+let _listenWs = null;
+let _listenCtx = null;
+let _listenNextTime = 0;
+let _listenSid = null;
+let _listenBtn = null;
+let _listenDotTimer = null;
+const _DOT_FRAMES = ['...', '\u00a0..', '.\u00a0.', '..\u00a0'];
+let _dotIdx = 0;
+
+function _wsUrl(path) {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const q = _adminToken ? `?token=${encodeURIComponent(_adminToken)}` : '';
+  return `${proto}//${location.host}${path}${q}`;
+}
+
+function toggleSourceListen(btn, sourceId) {
+  if (_listenSid === sourceId && _listenWs) {
+    stopSourceListen();
+    return;
+  }
+  // Stop any active listen first
+  if (_listenWs) stopSourceListen();
+  _listenSid = sourceId;
+  _listenBtn = btn;
+  _listenCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+  _listenNextTime = 0;
+  const sep = _wsUrl('/ws/audio').includes('?') ? '&' : '?';
+  _listenWs = new WebSocket(_wsUrl('/ws/audio') + sep + 'source_id=' + sourceId);
+  _listenWs.binaryType = 'arraybuffer';
+  _listenWs.onopen = () => {
+    btn.classList.add('active');
+    _dotIdx = 0;
+    _listenDotTimer = setInterval(() => {
+      btn.textContent = _DOT_FRAMES[_dotIdx % _DOT_FRAMES.length];
+      _dotIdx++;
+    }, 300);
+  };
+  _listenWs.onclose = () => stopSourceListen();
+  _listenWs.onmessage = ({ data }) => {
+    if (!_listenCtx) return;
+    const f32 = new Float32Array(data);
+    const buf = _listenCtx.createBuffer(1, f32.length, 16000);
+    buf.getChannelData(0).set(f32);
+    const src = _listenCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(_listenCtx.destination);
+    const now = _listenCtx.currentTime;
+    if (_listenNextTime < now) _listenNextTime = now + 0.05;
+    src.start(_listenNextTime);
+    _listenNextTime += buf.duration;
+  };
+}
+
+function stopSourceListen() {
+  if (_listenDotTimer) { clearInterval(_listenDotTimer); _listenDotTimer = null; }
+  if (_listenWs) { _listenWs.close(); _listenWs = null; }
+  if (_listenCtx) { _listenCtx.close(); _listenCtx = null; }
+  if (_listenBtn) { _listenBtn.classList.remove('active'); _listenBtn.textContent = 'Listen'; }
+  _listenSid = null;
+  _listenBtn = null;
+}
+
+/* ── Calibration recordings ── */
+function fmtDuration(sec) {
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+function fmtDate(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+      + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  } catch(e) { return iso; }
+}
+
+async function loadCalRecordings() {
+  const container = document.getElementById('cal-recordings');
+  try {
+    const res = await fetch('/api/calibrate/recordings', { headers: adminHeaders() });
+    const data = await res.json();
+    const recs = data.recordings || [];
+    if (recs.length === 0) {
+      container.innerHTML = '<div style="font-size:13px;color:#666">No recordings yet. Use the form above to record background audio.</div>';
+      return;
+    }
+    container.innerHTML = '';
+    for (const r of recs) {
+      const card = document.createElement('div');
+      card.className = 'cal-rec';
+      const audioUrl = `/calibrate-audio/${encodeURIComponent(r.source)}/${encodeURIComponent(r.filename)}`;
+      const specUrl = audioUrl + '/spectrogram';
+      const tokenParam = _adminToken ? '?token=' + encodeURIComponent(_adminToken) : '';
+      card.innerHTML = `
+        <div class="cal-rec-header">
+          <span class="cal-rec-source">${esc(r.source)}</span>
+          <div class="cal-rec-meta">
+            <span>${fmtDuration(r.duration)}</span>
+            <span>${fmtDate(r.recorded_at)}</span>
+            <span>${r.size_kb} KB</span>
+          </div>
+          <div class="cal-rec-actions">
+            <button class="cal-rec-del" onclick="deleteCalRecording(this, '${esc(r.path)}')" title="Delete recording">&times; Delete</button>
+          </div>
+        </div>
+        <div class="clip-player" data-clip-url="${audioUrl}">
+          <canvas class="spec-canvas"></canvas>
+          <div class="player-controls">
+            <div class="pc-buttons">
+              <button class="pc-btn pc-skip-back" onclick="pcSkip(this,-1)">&#9664; 5s</button>
+              <button class="pc-btn pc-skip-fwd" onclick="pcSkip(this,1)">5s &#9654;</button>
+              <button class="pc-btn pc-speed" onclick="pcSpeed(this)">1&times;</button>
+            </div>
+            <audio controls preload="metadata" src="${audioUrl}${tokenParam}"></audio>
+          </div>
+        </div>`;
+      container.appendChild(card);
+      const player = card.querySelector('.clip-player');
+      initBasicPlayer(player, { spectrogramUrl: specUrl });
+    }
+  } catch(e) {
+    container.innerHTML = '<div style="font-size:13px;color:#ef5350">Failed to load recordings.</div>';
+  }
+}
+
+async function deleteCalRecording(btn, path) {
+  if (!confirm('Delete this recording? This cannot be undone.')) return;
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    const res = await fetch('/api/calibrate/recordings', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify({ path }),
+    });
+    if (res.status === 401) { alert('Auth required.'); btn.disabled = false; btn.textContent = '\u00D7 Delete'; return; }
+    if (res.ok) {
+      const card = btn.closest('.cal-rec');
+      // Stop audio if playing
+      const audio = card.querySelector('audio');
+      if (audio && !audio.paused) { audio.pause(); }
+      card.style.transition = 'opacity .3s';
+      card.style.opacity = '0';
+      setTimeout(() => { card.remove(); loadCalRecordings(); }, 300);
+    } else {
+      const err = await res.json();
+      alert(err.detail || 'Error');
+      btn.disabled = false;
+      btn.textContent = '\u00D7 Delete';
+    }
+  } catch(e) {
+    alert('Network error');
+    btn.disabled = false;
+    btn.textContent = '\u00D7 Delete';
+  }
+}
+
+/* ── Init ── */
+loadSettings();
+loadCalibrationSources();
+loadSources();
+loadCalRecordings();
+
+(async function init() {
+  // Check if calibration is in progress — if so, open Calibration panel
+  let openCalibration = false;
+  try {
+    const res = await fetch('/api/calibrate', { headers: adminHeaders() });
+    const data = await res.json();
+    if (data.active && !data.done) {
+      openCalibration = true;
+      _calDuration = data.duration || 300;
+      document.getElementById('cal-duration').value = _calDuration;
+      _calSetRecording(true);
+      document.getElementById('cal-status').textContent = 'Recording in progress...';
+      document.getElementById('cal-status').style.color = '#888';
+      const srcSel = document.getElementById('cal-source');
+      if (srcSel) srcSel.value = data.source_id;
+      const pct = Math.round(data.progress * 100);
+      const recorded = Math.round(data.progress * _calDuration);
+      document.getElementById('cal-bar').style.width = pct + '%';
+      document.getElementById('cal-text').textContent = `${pct}% (${recorded}s/${_calDuration}s)`;
+      _calPollTimer = setInterval(pollCalibration, 1000);
+    }
+  } catch(e) {}
+
+  // Activate the right panel
+  const panelId = openCalibration ? 'sp-calibration' : 'sp-detection';
+  const btn = document.querySelector(`[data-panel="${panelId}"]`);
+  if (btn) switchPanel(btn);
+})();
+</script>
+</body>
+</html>
