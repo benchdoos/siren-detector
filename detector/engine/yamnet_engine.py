@@ -6,7 +6,12 @@ the EventBus.
 
 Supports multiple audio sources (multi-microphone).  Each source gets
 its own buffers and smoothers; YAMNet + MLP are loaded once and shared.
-Sources are processed round-robin in a single inference loop.
+
+Detection modes:
+- **round_robin** — single thread cycles through sources sequentially.
+- **parallel** — one inference thread per source, running simultaneously.
+  TensorFlow releases the GIL during inference, so threads get real
+  parallelism on the TF/numpy portions.  CPU load scales with source count.
 """
 
 from __future__ import annotations
@@ -172,34 +177,94 @@ class YAMNetEngine:
 
         print("Ready.", flush=True)
 
-        # ── Inference loop (round-robin across sources) ──────────────────
+        # ── Unified inference loop with hot-switchable mode ──────────────
         _last_heartbeat = 0.0
+        _parallel_stop = threading.Event()
+        _parallel_threads: dict[int, threading.Thread] = {}
+        _current_mode = ""
 
-        while True:
-            any_data = False
-            disabled = settings_mod.settings.get("disabled_sources", [])
-            for source in list(sources.values()):
+        def _source_loop(source: SourceState, stop: threading.Event):
+            """Inference loop for a single source (used in parallel mode)."""
+            while not stop.is_set():
+                disabled = settings_mod.settings.get("disabled_sources", [])
                 waveform = source.inference_buf.consume(INFERENCE_HOP_SAMPLES)
                 if waveform is None:
+                    stop.wait(0.05)
                     continue
-                any_data = True
                 if source.source_id in disabled:
-                    continue  # audio still buffered (for calibration), skip inference
+                    continue
                 self._process_source(
                     source, waveform, yamnet, class_names, detector_indices,
                     clf, det_engine, bus, args, sources,
                 )
 
-            now = time.monotonic()
-            if not any_data:
-                time.sleep(0.05)
+        def _stop_parallel():
+            nonlocal _parallel_threads
+            if _parallel_threads:
+                _parallel_stop.set()
+                for t in _parallel_threads.values():
+                    t.join(timeout=2.0)
+                _parallel_threads.clear()
+                _parallel_stop.clear()
+                print("[mode] parallel threads stopped", flush=True)
+
+        def _ensure_parallel():
+            with sources_lock:
+                for sid, source in sources.items():
+                    if sid not in _parallel_threads:
+                        t = threading.Thread(
+                            target=_source_loop, args=(source, _parallel_stop),
+                            daemon=True, name=f"infer-{source.name}",
+                        )
+                        t.start()
+                        _parallel_threads[sid] = t
+                        print(f"[parallel] thread started: {source.name} (id={sid})", flush=True)
+
+        while True:
+            mode = settings_mod.settings.get("detection_mode", "round_robin")
+
+            if mode != _current_mode:
+                if _current_mode == "parallel":
+                    _stop_parallel()
+                _current_mode = mode
+                print(f"[mode] switched to {mode}", flush=True)
+
+            if mode == "parallel":
+                _ensure_parallel()
+                # Main thread: heartbeat only
+                now = time.monotonic()
                 if now - _last_heartbeat >= 1.0:
                     heartbeat = self._build_heartbeat(sources)
                     heartbeat.update(udp_stats_snapshot())
                     bus.broadcast(heartbeat)
                     _last_heartbeat = now
+                time.sleep(0.5)
             else:
-                _last_heartbeat = now
+                # Round-robin: process all sources on main thread
+                any_data = False
+                disabled = settings_mod.settings.get("disabled_sources", [])
+                for source in list(sources.values()):
+                    waveform = source.inference_buf.consume(INFERENCE_HOP_SAMPLES)
+                    if waveform is None:
+                        continue
+                    any_data = True
+                    if source.source_id in disabled:
+                        continue
+                    self._process_source(
+                        source, waveform, yamnet, class_names, detector_indices,
+                        clf, det_engine, bus, args, sources,
+                    )
+
+                now = time.monotonic()
+                if not any_data:
+                    time.sleep(0.05)
+                    if now - _last_heartbeat >= 1.0:
+                        heartbeat = self._build_heartbeat(sources)
+                        heartbeat.update(udp_stats_snapshot())
+                        bus.broadcast(heartbeat)
+                        _last_heartbeat = now
+                else:
+                    _last_heartbeat = now
 
     # ── Per-source inference ─────────────────────────────────────────────
 

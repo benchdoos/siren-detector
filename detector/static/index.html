@@ -485,8 +485,15 @@ function updateScores(msg) {
     updateDetector(name, bestScore, bestState, bestTriggers, possNeeded, confNeeded, maxCooldown, maxRefractory);
   }
 
-  // Top info: show from the source that just sent data (naturally alternates round-robin)
-  const topSource = msg;
+  // Top info: pick source with highest siren score (most urgent) from latest data
+  let topSource = msg;
+  if (sources.length > 1) {
+    let maxSiren = -1;
+    for (const s of sources) {
+      const sc = s.siren_score || 0;
+      if (sc > maxSiren) { maxSiren = sc; topSource = s; }
+    }
+  }
   const parts = [];
   if (topSource.top)            parts.push(`<span class="top-label">top:</span> ${esc(topSource.top)}`);
   if (topSource.yamnet != null) parts.push(`<span class="top-label">yamnet:</span> ${(topSource.yamnet * 100).toFixed(0)}%`);

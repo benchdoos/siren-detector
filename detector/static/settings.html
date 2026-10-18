@@ -116,8 +116,8 @@
     <div class="sp-panel" id="sp-detection">
       <div class="s-section">
         <div class="s-title">Detection Mode</div>
-        <div class="s-row"><label>Mode <span class="s-help" onclick="toggleTip(this)">?</span></label><select disabled style="opacity:0.7"><option>Round Robin</option></select></div>
-        <div class="s-tooltip"><strong>Detection Mode</strong><br>Determines how the engine processes audio from multiple sources.<hr><b style="color:#4caf50">Round Robin</b> — engine cycles through sources one at a time, running inference on each in turn (~0.5 s per source). With 2 sources each gets checked roughly once per second. Low CPU load, no parallel overhead.<br><br><b style="color:#666">Parallel</b> <span style="color:#555">(planned)</span> — run inference on all sources simultaneously. Doubles CPU/GPU load but gives continuous coverage per source.</div>
+        <div class="s-row"><label>Mode <span class="s-help" onclick="toggleTip(this)">?</span></label><select id="s-detection_mode"><option value="round_robin">Round Robin</option><option value="parallel">Parallel</option></select><span class="s-default" data-key="detection_mode"></span></div>
+        <div class="s-tooltip" data-tip="detection_mode"><strong>Detection Mode</strong><br>Determines how the engine processes audio from multiple sources. Switches on the fly after Save.<hr><b style="color:#4caf50">Round Robin</b> — single thread cycles through sources one at a time (~0.5 s per source). With 2 sources each gets checked roughly once per second. Low CPU load.<br><br><b style="color:#4caf50">Parallel</b> — one inference thread per source, running simultaneously. TensorFlow releases the GIL, so threads get real parallelism. CPU load scales with source count (~2× for 2 sources).<hr><span class="s-tip-default">Default: <b>round_robin</b></span></div>
       </div>
       <div class="s-section">
         <div class="s-title">Thresholds</div>
@@ -268,6 +268,7 @@ function adminHeaders() {
 
 /* ── Settings keys & panel mapping ── */
 const SETTINGS_KEYS = [
+  'detection_mode',
   'siren_threshold','explosion_threshold','motorcycle_threshold',
   'possible_triggers','confirmed_triggers','smoothing_window_seconds',
   'cooldown_seconds','refractory_seconds','yamnet_min_gate',
@@ -275,7 +276,7 @@ const SETTINGS_KEYS = [
 ];
 
 const PANEL_KEYS = {
-  'sp-detection': ['siren_threshold','explosion_threshold','motorcycle_threshold','yamnet_min_gate'],
+  'sp-detection': ['detection_mode','siren_threshold','explosion_threshold','motorcycle_threshold','yamnet_min_gate'],
   'sp-smoothing': ['possible_triggers','confirmed_triggers','smoothing_window_seconds','cooldown_seconds','refractory_seconds'],
   'sp-clips': ['clip_seconds','clip_from_possible'],
 };
@@ -356,7 +357,9 @@ async function saveSettings() {
   const body = {};
   for (const k of SETTINGS_KEYS) {
     const el = document.getElementById('s-' + k);
-    if (el) body[k] = parseFloat(el.value);
+    if (!el) continue;
+    const v = parseFloat(el.value);
+    body[k] = isNaN(v) ? el.value : v;
   }
   try {
     const res = await fetch('/api/settings', {
