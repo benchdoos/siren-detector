@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, Header, HTTPException
+from fastapi.responses import FileResponse
 
 from ..auth import AUTH_ENABLED, check_token, require_admin, require_viewer
 from ..config import CLIP_DIR, DATASET_DIR, DEFAULT_SETTINGS, VALID_LABELS, SAMPLE_RATE
@@ -414,6 +415,95 @@ async def cancel_calibration():
         raise HTTPException(status_code=404, detail="No calibration in progress")
     _bus.cancel_calibration()
     return {"ok": True}
+
+
+@router.get("/api/calibrate/recordings", dependencies=[Depends(require_viewer)])
+async def list_calibration_recordings():
+    """List all background calibration WAV files with metadata."""
+    bg_dir = DATASET_DIR / "background"
+    if not bg_dir.exists():
+        return {"recordings": []}
+    recordings = []
+    for source_dir in sorted(bg_dir.iterdir()):
+        if not source_dir.is_dir():
+            continue
+        source_name = source_dir.name
+        for wav in sorted(source_dir.glob("*.wav")):
+            stat = wav.stat()
+            try:
+                with wave.open(str(wav), "rb") as wf:
+                    duration = wf.getnframes() / wf.getframerate()
+            except Exception:
+                duration = 0
+            recordings.append({
+                "source": source_name,
+                "filename": wav.name,
+                "path": f"{source_name}/{wav.name}",
+                "duration": round(duration, 1),
+                "size_kb": round(stat.st_size / 1024),
+                "recorded_at": datetime.fromtimestamp(
+                    stat.st_mtime, tz=timezone.utc
+                ).isoformat(timespec="seconds"),
+            })
+    recordings.sort(key=lambda r: r["recorded_at"], reverse=True)
+    return {"recordings": recordings}
+
+
+@router.delete("/api/calibrate/recordings", dependencies=[Depends(require_admin)])
+async def delete_calibration_recording(body: dict):
+    """Delete a calibration recording. Body: {"path": "source_name/filename.wav"}"""
+    rel = body.get("path", "")
+    if not rel or ".." in rel:
+        raise HTTPException(status_code=400, detail="Invalid path")
+    bg_dir = DATASET_DIR / "background"
+    target = (bg_dir / rel).resolve()
+    if not target.is_relative_to(bg_dir.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Recording not found")
+    # Also remove cached spectrogram
+    spec_cache = target.with_suffix(".spec")
+    target.unlink()
+    if spec_cache.exists():
+        spec_cache.unlink()
+    # Clean up empty source dir
+    parent = target.parent
+    if parent != bg_dir and parent.is_dir() and not any(parent.iterdir()):
+        parent.rmdir()
+    print(f"[calibrate] deleted {rel}", flush=True)
+    return {"ok": True}
+
+
+@router.get("/calibrate-audio/{source_name}/{filename}")
+async def serve_calibration_audio(
+    source_name: str, filename: str,
+    token: str = "", authorization: str = Header(""),
+):
+    """Serve a calibration WAV file."""
+    if AUTH_ENABLED:
+        hdr_token = authorization.removeprefix("Bearer ").strip()
+        if not ((hdr_token and check_token(hdr_token)) or (token and check_token(token))):
+            raise HTTPException(status_code=401, detail="Authentication required")
+    bg_dir = DATASET_DIR / "background"
+    path = (bg_dir / source_name / filename).resolve()
+    if not path.is_relative_to(bg_dir.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Recording not found")
+    return FileResponse(str(path), media_type="audio/wav")
+
+
+@router.get("/calibrate-audio/{source_name}/{filename}/spectrogram")
+async def calibration_spectrogram(source_name: str, filename: str):
+    """Return spectrogram for a calibration recording."""
+    bg_dir = DATASET_DIR / "background"
+    path = (bg_dir / source_name / filename).resolve()
+    if not path.is_relative_to(bg_dir.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Recording not found")
+    from .routes_clips import generate_spectrogram
+    return generate_spectrogram(path)
 
 
 @router.post("/api/manual-event", dependencies=[Depends(require_admin)])
