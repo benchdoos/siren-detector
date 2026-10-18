@@ -24,8 +24,8 @@ deploy-audio:
 
 ## Deploy only frontend (no rebuild needed)
 deploy-ui:
-	scp detector/static/index.html $(RPI):$(RPI_BASE)/detector/static/
-	ssh $(RPI) "docker cp $(RPI_BASE)/detector/static/index.html $(CONTAINER):/app/detector/static/index.html"
+	rsync -av --exclude='.DS_Store' detector/static/ $(RPI):$(RPI_BASE)/detector/static/
+	ssh $(RPI) "docker cp $(RPI_BASE)/detector/static/. $(CONTAINER):/app/detector/static/"
 
 ESP_YAML    ?= esp32/siren-detector.yaml
 ESP_DEVICE  ?= siren-detector.local
