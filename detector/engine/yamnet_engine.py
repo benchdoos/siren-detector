@@ -51,7 +51,7 @@ _EMPTY_PEAK = {"score": 0.0, "yamnet": 0.0, "mlp": None, "top": "", "yamnet_top3
 
 def _inference_hop_samples() -> int:
     interval = float(settings_mod.settings.get("inference_interval_seconds", 0.5))
-    return int(SAMPLE_RATE * min(3.0, max(0.25, interval)))
+    return int(SAMPLE_RATE * min(2.0, max(0.25, interval)))
 
 
 def _create_source(source_id: int, name: str) -> SourceState:
@@ -61,7 +61,7 @@ def _create_source(source_id: int, name: str) -> SourceState:
     clip_buf = ClipBuffer(seconds=s.get("clip_seconds", CLIP_SECONDS))
 
     smoothers: dict[str, TemporalSmoother] = {}
-    inference_interval = min(3.0, max(0.25, float(s.get("inference_interval_seconds", 0.5))))
+    inference_interval = min(2.0, max(0.25, float(s.get("inference_interval_seconds", 0.5))))
     for det_name in DETECTORS:
         thr_key = f"{det_name}_threshold"
         smoothers[det_name] = TemporalSmoother(
@@ -322,7 +322,7 @@ class YAMNetEngine:
         # ── DSP pre-filter: skip YAMNet for confident background ────────
         dsp_result = None
         if dsp is not None and settings_mod.settings.get("dsp_enabled", 1):
-            new_audio = waveform
+            new_audio = waveform[-_inference_hop_samples():]
             dsp_result = dsp.process(new_audio, source.dsp_feature_buf)
 
             if dsp_result["ready"]:
@@ -330,7 +330,7 @@ class YAMNetEngine:
                 dsp_label = dsp_result["label"]
                 dsp_conf = dsp_result["confidence"]
                 skip_yamnet = dsp_label == "background" and dsp_conf >= bg_threshold
-                dsp.record_decision(skip_yamnet)
+                dsp.record_decision(dsp_label, dsp_conf, skip_yamnet)
 
                 if skip_yamnet:
                     # Confident background — skip YAMNet, broadcast minimal score

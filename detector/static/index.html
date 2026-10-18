@@ -476,7 +476,15 @@ function _updateSourcesDropdown() {
     const checks = _dspStats.checks;
     const skips = _dspStats.yamnet_skips;
     const pct = Math.round(skips / checks * 100);
-    summary.textContent = `DSP skipped YAMNet: ${pct}% (${skips}/${checks})`;
+    const bgAvg = _dspStats.background_confidence_avg;
+    const bgMax = _dspStats.background_confidence_max;
+    const bgInfo = bgAvg == null ? ''
+      : ` · background confidence avg/max: ${Math.round(bgAvg * 100)}%/${Math.round(bgMax * 100)}%`;
+    const classes = Object.entries(_dspStats.prediction_counts || {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, count]) => `${label} ${count}`)
+      .join(', ');
+    summary.textContent = `DSP skipped YAMNet: ${pct}% (${skips}/${checks})${bgInfo}${classes ? ` · classes: ${classes}` : ''}`;
     summary.hidden = false;
   } else {
     summary.hidden = true;

@@ -64,7 +64,7 @@ def apply_settings_to_smoothers() -> None:
         smoother._confirmed = settings["confirmed_triggers"]
         smoother._cooldown_seconds = settings["cooldown_seconds"]
         smoother._refractory_seconds = settings["refractory_seconds"]
-        inference_interval = max(0.25, min(3.0, float(settings.get("inference_interval_seconds", 0.5))))
+        inference_interval = max(0.25, min(2.0, float(settings.get("inference_interval_seconds", 0.5))))
         new_maxlen = int(settings["smoothing_window_seconds"] / inference_interval) + 1
         if smoother._scores.maxlen != new_maxlen:
             smoother._scores = collections.deque(smoother._scores, maxlen=new_maxlen)
