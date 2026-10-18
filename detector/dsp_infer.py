@@ -52,6 +52,7 @@ class DspPreFilter:
         self._consecutive_yamnet_skips = 0
         self._probability_sums: dict[str, float] = {}
         self._source_skip_state: dict[int, tuple[bool, float]] = {}
+        self._source_gate_state: dict[int, tuple[bool, int]] = {}
         self._input_detail = self._interpreter.get_input_details()[0]
         self._output_detail = self._interpreter.get_output_details()[0]
 
@@ -130,6 +131,34 @@ class DspPreFilter:
             else:
                 self._consecutive_yamnet_skips = 0
             self._source_skip_state[source_id] = (skipped_yamnet, time.monotonic())
+
+    def should_skip_yamnet(
+        self,
+        source_id: int,
+        label: str,
+        background_confidence: float,
+        enter_threshold: float,
+        release_threshold: float,
+        confirm_windows: int,
+    ) -> bool:
+        """Apply per-source background hysteresis to the DSP prediction."""
+        with self._stats_lock:
+            was_skipping, background_streak = self._source_gate_state.get(source_id, (False, 0))
+            if was_skipping:
+                skipping = label == "background" and background_confidence >= release_threshold
+                if skipping:
+                    self._source_gate_state[source_id] = (True, background_streak)
+                else:
+                    self._source_gate_state[source_id] = (False, 0)
+                return skipping
+
+            if label == "background" and background_confidence >= enter_threshold:
+                background_streak += 1
+            else:
+                background_streak = 0
+            skipping = background_streak >= max(1, confirm_windows)
+            self._source_gate_state[source_id] = (skipping, background_streak)
+            return skipping
 
     def stats_snapshot(self) -> dict:
         with self._stats_lock:
