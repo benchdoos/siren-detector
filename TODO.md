@@ -152,6 +152,8 @@
 - [x] Полоска модели (top/yamnet/mlp) вынесена в отдельный блок — кнопки header больше не дёргаются.
 - [x] Сегментная разметка клипов: drag на спектрограмме → выбор диапазона + лейбл → `POST /feedback/segments` нарезает WAV и копирует в dataset.
 - [x] Персистентность сегментов при обновлении страницы: `event_history` обновляется при сохранении сегментов → WS replay включает актуальные данные.
+- [x] Обнаружение рестарта сервера: WS отправляет `session.started_at`, UI очищает события + баннер "Server restarted".
+- [x] Пресеты длительности калибровки (5/10/15 min dropdown) в Settings.
 - [ ] Персистентность лейблов между перезапусками контейнера (сейчас in-memory).
 
 ## 9. Локальный inference на ESP32-S3 — долгосрочная цель
@@ -247,6 +249,7 @@
 - [x] Docker Compose: `audio-source` сервис с профилем `usb-mic`.
 - [x] CLI: `--source-name 0=esp32-main --source-name 1=rpi-usb` для именования источников.
 - [x] Web UI: отображать source_id в событиях и score bar (+ client-side агрегация worst-case).
+- [x] Fix: `src:` label показывается на основе `_knownSources` (все известные источники), а не только активно инферящие. Heartbeat и score messages включают `source_names`.
 - [x] Per-source background calibration: кнопка Calibrate в Web UI записывает фон с выбранного
   источника, сохраняет в `dataset/background/{source_name}/`, `make retrain` подхватывает.
 - [ ] Проверить задержку и нагрузку на RPi при двух параллельных потоках.

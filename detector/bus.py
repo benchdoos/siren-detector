@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import collections
 import threading
+import time
 from typing import Callable
 
 import numpy as np
@@ -55,6 +56,7 @@ class _CalibrationRecorder:
 class EventBus:
     def __init__(self) -> None:
         self.loop: asyncio.AbstractEventLoop | None = None
+        self.started_at: float = time.time()
 
         # WebSocket client queues
         self.client_queues: dict[WebSocket, asyncio.Queue] = {}

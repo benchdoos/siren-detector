@@ -64,6 +64,7 @@ async def ws_audio_endpoint(ws: WebSocket):
 @router.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
+    await ws.send_json({"type": "session", "started_at": _bus.started_at})
     await ws.send_json(_bus.last_score)
     for ev in list(_bus.event_history):
         clip_url = ev.get("clip_url")
