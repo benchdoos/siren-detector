@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import collections
 import json
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -41,6 +42,9 @@ class DspPreFilter:
 
         self._interpreter = tf.lite.Interpreter(model_path=str(model_path))
         self._interpreter.allocate_tensors()
+        # A single interpreter is shared by all per-source inference threads.
+        # TFLite's set_tensor/invoke/get_tensor sequence is not thread-safe.
+        self._inference_lock = threading.Lock()
         self._input_detail = self._interpreter.get_input_details()[0]
         self._output_detail = self._interpreter.get_output_details()[0]
 
@@ -117,10 +121,10 @@ class DspPreFilter:
             scale, zero_point = self._input_detail["quantization"]
             inp = (inp / scale + zero_point).clip(-128, 127).astype(np.int8)
 
-        self._interpreter.set_tensor(self._input_detail["index"], inp)
-        self._interpreter.invoke()
-
-        output = self._interpreter.get_tensor(self._output_detail["index"])
+        with self._inference_lock:
+            self._interpreter.set_tensor(self._input_detail["index"], inp)
+            self._interpreter.invoke()
+            output = self._interpreter.get_tensor(self._output_detail["index"])
 
         output_dtype = self._output_detail["dtype"]
         if output_dtype == np.int8:
