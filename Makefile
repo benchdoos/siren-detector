@@ -134,6 +134,15 @@ _clean-trained:
 			ssh $(RPI) "cd $(RPI_BASE)/dataset/$$label && rm -f $$NAMES" && \
 			count=$$((count + $$(echo $$NAMES | wc -w))); \
 		fi; \
+		for subdir in dataset/$$label/*/; do \
+			[ -d "$$subdir" ] || continue; \
+			subname=$$(basename "$$subdir"); \
+			if ls "$$subdir"*.wav >/dev/null 2>&1; then \
+				NAMES=$$(cd "$$subdir" && ls *.wav | tr '\n' ' '); \
+				ssh $(RPI) "cd $(RPI_BASE)/dataset/$$label/$$subname && rm -f $$NAMES" && \
+				count=$$((count + $$(echo $$NAMES | wc -w))); \
+			fi; \
+		done; \
 	done; \
 	ssh $(RPI) "docker exec $(CONTAINER) sh -c 'rm -f /clips/*.wav'" && \
 	echo "Cleaned $$count dataset files + all clips from RPi"
