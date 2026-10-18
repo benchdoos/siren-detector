@@ -25,6 +25,7 @@ package-lock.json
 /dataset/**/*.wav
 /dataset/**/*.mp3
 /dataset/recorder/**/*.json
+/ml/dsp_cache
 
 # Environment config (contains IPs, credentials)
 .env
