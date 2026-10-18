@@ -73,6 +73,12 @@ async def post_settings(body: dict):
                     raise HTTPException(status_code=400, detail=f"{k} must be a list")
                 updated[k] = body[k]
                 continue
+            # dict-type settings (e.g. source_custom_names)
+            if isinstance(default_val, dict):
+                if not isinstance(body[k], dict):
+                    raise HTTPException(status_code=400, detail=f"{k} must be an object")
+                updated[k] = body[k]
+                continue
             try:
                 val = type(default_val)(body[k])
             except (ValueError, TypeError):
@@ -339,9 +345,15 @@ async def get_sources():
     """List known audio sources."""
     if _bus is None:
         return {"sources": []}
+    custom_names = settings_mod.settings.get("source_custom_names", {})
     return {
         "sources": [
-            {"source_id": sid, "name": name}
+            {
+                "source_id": sid,
+                "name": custom_names.get(str(sid), name),
+                "original_name": name,
+                "custom_name": custom_names.get(str(sid), ""),
+            }
             for sid, name in sorted(_bus.source_names.items())
         ]
     }

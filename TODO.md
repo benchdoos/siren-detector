@@ -262,6 +262,7 @@
 - [x] Fix: `src:` label показывается на основе `_knownSources` (все известные источники), а не только активно инферящие. Heartbeat и score messages включают `source_names`.
 - [x] Per-source background calibration: кнопка Calibrate в Web UI записывает фон с выбранного
   источника, сохраняет в `dataset/background/{source_name}/`, `make retrain` подхватывает.
+- [x] Custom display names: пользовательские имена источников в Settings → Sources, сохраняются в `source_custom_names`, приоритетно отображаются в Web UI.
 - [ ] Проверить задержку и нагрузку на RPi при двух параллельных потоках.
 
 ## Ближайшие действия

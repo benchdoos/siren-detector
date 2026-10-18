@@ -21,12 +21,14 @@
   #audio-status.alive { background: #1a3a1a; color: #4caf50; }
   #audio-status.dead { background: #3a1a1a; color: #ef5350; }
   #audio-status.clickable { cursor: pointer; }
-  #audio-dropdown { display: none; position: absolute; left: 0; top: calc(100% + 4px); background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 10px 14px; min-width: 220px; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,.5); font-size: 12px; }
+  #audio-dropdown { display: none; position: absolute; left: 0; top: calc(100% + 4px); background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 10px 14px; min-width: 280px; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,.5); font-size: 12px; max-width: calc(100vw - 24px); }
   #audio-dropdown.open { display: block; }
-  .audio-src-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid #222; }
+  .audio-src-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px solid #222; }
   .audio-src-row:last-child { border-bottom: none; }
-  .audio-src-name { color: #ccc; font-weight: 600; }
-  .audio-src-stats { color: #888; font-variant-numeric: tabular-nums; }
+  .audio-src-name { color: #ccc; font-weight: 600; max-width: 140px; overflow: hidden; white-space: nowrap; flex-shrink: 0; }
+  .audio-src-name.marquee { animation: marquee 4s linear infinite alternate; }
+  @keyframes marquee { 0%, 20% { transform: translateX(0); } 80%, 100% { transform: translateX(var(--marquee-offset, 0px)); } }
+  .audio-src-stats { color: #888; font-variant-numeric: tabular-nums; white-space: nowrap; margin-left: auto; }
   .audio-src-stats .alive-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
   .audio-src-stats .alive-dot.on { background: #4caf50; }
   .audio-src-stats .alive-dot.off { background: #ef5350; }
@@ -43,6 +45,8 @@
     .top-info-bar .top-text { font-size: 11px; }
     .top-dropdown { left: 12px; transform: none; right: 12px; min-width: 0; }
     .listen-picker { position: fixed; top: auto; right: 12px; left: 12px; min-width: 0; }
+    #audio-dropdown { left: auto; right: 0; min-width: 0; width: calc(100vw - 24px); }
+    .audio-src-name { max-width: 120px; }
     .player-controls { flex-direction: column; align-items: stretch; }
     .player-controls audio { min-width: 0; width: 100%; }
   }
@@ -406,7 +410,8 @@ const DETECTOR_NAMES = ['siren', 'explosion', 'motorcycle'];
 const DETECTOR_THRESHOLDS = { siren: 0.10, explosion: 0.15, motorcycle: 0.15 };
 const _cooldownStart = {};  // track when cooldown first began per detector
 const VALID_LABELS = ['siren', 'background', 'motorcycle', 'explosion', 'unknown'];
-const _knownSources = {};  // source_id → source name (populated from score messages)
+const _knownSources = {};  // source_id → display name (custom or original)
+const _sourceCustomNames = {};  // source_id → custom name (from settings, survives heartbeat)
 const _sourceScores = {};  // source_id → last score message (for multi-source aggregation)
 const _STATE_PRIORITY = { idle: 0, possible: 1, confirmed: 2 };
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -513,11 +518,11 @@ function updateScores(msg) {
   const isHeartbeat = msg.source_id == null;
   if (!isHeartbeat) {
     _sourceScores[msg.source_id] = msg;
-    _knownSources[msg.source_id] = msg.source;
+    if (!_sourceCustomNames[msg.source_id]) _knownSources[msg.source_id] = msg.source;
   }
   if (msg.source_names) {
     for (const [sid, name] of Object.entries(msg.source_names)) {
-      _knownSources[sid] = name;
+      if (!_sourceCustomNames[sid]) _knownSources[sid] = name;
     }
   }
 
@@ -614,11 +619,19 @@ function _updateAudioDropdown() {
   let html = '';
   for (const [id, s] of Object.entries(_lastAudioSources)) {
     const dot = `<span class="alive-dot ${s.alive ? 'on' : 'off'}"></span>`;
-    const label = s.name ? `${id}: ${s.name}` : id;
+    const displayName = _knownSources[id] || s.name || id;
+    const label = `${id}: ${displayName}`;
     const stats = s.alive ? `${s.pps || 0} pps · ${_fmtPkts(s.packets || 0)}` : (s.ago != null ? `lost ${s.ago.toFixed(0)}s ago` : 'no signal');
     html += `<div class="audio-src-row"><span class="audio-src-name">${esc(label)}</span><span class="audio-src-stats">${dot}${stats}</span></div>`;
   }
   dd.innerHTML = html;
+  // Apply marquee to overflowing names
+  dd.querySelectorAll('.audio-src-name').forEach(el => {
+    if (el.scrollWidth > el.clientWidth) {
+      el.classList.add('marquee');
+      el.style.setProperty('--marquee-offset', `${el.clientWidth - el.scrollWidth}px`);
+    }
+  });
 }
 
 document.addEventListener('click', e => {
@@ -1019,6 +1032,11 @@ fetch('/api/settings', { headers: adminHeaders() }).then(r => r.json()).then(d =
   if (d.siren_threshold) DETECTOR_THRESHOLDS.siren = d.siren_threshold;
   if (d.explosion_threshold) DETECTOR_THRESHOLDS.explosion = d.explosion_threshold;
   if (d.motorcycle_threshold) DETECTOR_THRESHOLDS.motorcycle = d.motorcycle_threshold;
+  // Apply custom source names (these take priority over engine names)
+  const cn = d.source_custom_names || {};
+  for (const [sid, name] of Object.entries(cn)) {
+    if (name) { _sourceCustomNames[sid] = name; _knownSources[sid] = name; }
+  }
 }).catch(() => {});
 
 /* ── Metrics modal ──────────────────────────────── */
