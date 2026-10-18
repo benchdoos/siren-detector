@@ -60,10 +60,17 @@ def _dsp_stats_snapshot(dsp, sources: dict) -> dict | None:
     stats = dsp.stats_snapshot()
     disabled = set(settings_mod.settings.get("disabled_sources", []))
     active_source_ids = set(sources) - disabled
+    overrides = settings_mod.settings.get("dsp_source_overrides", {})
+    dsp_source_ids = {
+        sid for sid in active_source_ids
+        if bool(overrides.get(str(sid), {}).get(
+            "dsp_enabled", settings_mod.settings.get("dsp_enabled", 1),
+        ))
+    }
     skipping_ids = set(stats.pop("skipping_source_ids", []))
-    stats["source_count"] = len(active_source_ids)
-    stats["active_sources"] = len(active_source_ids & skipping_ids)
-    stats["enabled"] = bool(settings_mod.settings.get("dsp_enabled", 1))
+    stats["source_count"] = len(dsp_source_ids)
+    stats["active_sources"] = len(dsp_source_ids & skipping_ids)
+    stats["enabled"] = bool(dsp_source_ids)
     return stats
 
 
@@ -334,14 +341,26 @@ class YAMNetEngine:
 
         # ── DSP pre-filter: skip YAMNet for confident background ────────
         dsp_result = None
-        if dsp is not None and settings_mod.settings.get("dsp_enabled", 1):
+        dsp_override = settings_mod.settings.get("dsp_source_overrides", {}).get(
+            str(source.source_id), {},
+        )
+        source_dsp_enabled = dsp_override.get(
+            "dsp_enabled", settings_mod.settings.get("dsp_enabled", 1),
+        )
+        if dsp is not None and source_dsp_enabled:
             new_audio = waveform[-_inference_hop_samples():]
             dsp_result = dsp.process(new_audio, source.dsp_feature_buf)
 
             if dsp_result["ready"]:
-                bg_threshold = settings_mod.settings.get("dsp_bg_threshold", 0.85)
-                bg_release_threshold = settings_mod.settings.get("dsp_bg_release_threshold", 0.85)
-                bg_confirm_windows = settings_mod.settings.get("dsp_bg_confirm_windows", 2)
+                bg_threshold = dsp_override.get(
+                    "bg_threshold", settings_mod.settings.get("dsp_bg_threshold", 0.85),
+                )
+                bg_release_threshold = dsp_override.get(
+                    "bg_release_threshold", settings_mod.settings.get("dsp_bg_release_threshold", 0.85),
+                )
+                bg_confirm_windows = dsp_override.get(
+                    "bg_confirm_windows", settings_mod.settings.get("dsp_bg_confirm_windows", 2),
+                )
                 dsp_label = dsp_result["label"]
                 dsp_conf = dsp_result["confidence"]
                 bg_conf = dsp_result["probs"].get("background", 0.0)
@@ -377,6 +396,9 @@ class YAMNetEngine:
                         score_msg["source_names"] = {sid: src.name for sid, src in sources.items()}
                     bus.broadcast(score_msg)
                     return
+        elif dsp is not None:
+            source.dsp_feature_buf.clear()
+            dsp.reset_source_gate(source.source_id)
 
         scores, embeddings, _ = yamnet(waveform)
         scores_np = scores.numpy()

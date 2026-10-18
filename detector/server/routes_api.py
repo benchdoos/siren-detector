@@ -98,7 +98,33 @@ async def post_settings(body: dict):
             if isinstance(default_val, dict):
                 if not isinstance(body[k], dict):
                     raise HTTPException(status_code=400, detail=f"{k} must be an object")
-                updated[k] = body[k]
+                if k == "dsp_source_overrides":
+                    clean_overrides = {}
+                    override_ranges = {
+                        "dsp_enabled": (0, 1),
+                        "bg_threshold": (0.5, 1.0),
+                        "bg_release_threshold": (0.5, 1.0),
+                        "bg_confirm_windows": (1, 10),
+                    }
+                    for source_id, override in body[k].items():
+                        if not str(source_id).isdigit() or not isinstance(override, dict):
+                            raise HTTPException(status_code=400, detail="Invalid DSP source override")
+                        clean = {}
+                        for name, value in override.items():
+                            if name not in override_ranges:
+                                raise HTTPException(status_code=400, detail=f"Invalid DSP override: {name}")
+                            lo, hi = override_ranges[name]
+                            try:
+                                parsed = int(value) if name in ("dsp_enabled", "bg_confirm_windows") else float(value)
+                            except (ValueError, TypeError):
+                                raise HTTPException(status_code=400, detail=f"Invalid DSP override value for {name}")
+                            if not lo <= parsed <= hi:
+                                raise HTTPException(status_code=400, detail=f"{name} must be between {lo} and {hi}")
+                            clean[name] = parsed
+                        clean_overrides[str(source_id)] = clean
+                    updated[k] = clean_overrides
+                else:
+                    updated[k] = body[k]
                 continue
             try:
                 val = type(default_val)(body[k])

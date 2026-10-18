@@ -160,6 +160,12 @@ class DspPreFilter:
             self._source_gate_state[source_id] = (skipping, background_streak)
             return skipping
 
+    def reset_source_gate(self, source_id: int) -> None:
+        """Forget DSP gate state when a source switches to the global bypass."""
+        with self._stats_lock:
+            self._source_gate_state[source_id] = (False, 0)
+            self._source_skip_state[source_id] = (False, time.monotonic())
+
     def stats_snapshot(self) -> dict:
         with self._stats_lock:
             now = time.monotonic()
