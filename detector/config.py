@@ -12,7 +12,6 @@ MAGIC = 0x53445231  # "SDR1"
 
 MODEL_URL = "https://tfhub.dev/google/yamnet/1"
 ANALYSIS_SECONDS = 2.0
-INFERENCE_HOP_SAMPLES = SAMPLE_RATE // 2
 
 # Each detector: event name → (YAMNet class names, threshold, clip prefix)
 DETECTORS = {
@@ -45,6 +44,7 @@ DEFAULT_SETTINGS = {
     "disabled_sources": [],
     "source_custom_names": {},
     "detection_mode": "round_robin",
+    "inference_interval_seconds": 0.5,
     "dsp_enabled": 1,
     "dsp_bg_threshold": 0.85,
 }

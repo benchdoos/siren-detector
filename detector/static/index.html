@@ -68,6 +68,7 @@
   .top-dropdown .src-stats { color: #666; font-variant-numeric: tabular-nums; }
   .top-dropdown .src-detail { display: none; margin-top: 8px; padding-top: 6px; border-top: 1px solid #2a2a2a; }
   .top-dropdown .src-detail.open { display: block; }
+  .top-dropdown .dsp-summary { font-size: 13px; color: #aaa; font-variant-numeric: tabular-nums; padding-bottom: 10px; margin-bottom: 4px; border-bottom: 1px solid #222; }
 
   .score-panel { padding: 20px 24px; border-bottom: 1px solid #222; }
   .score-label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
@@ -414,6 +415,7 @@ const VALID_LABELS = ['siren', 'background', 'motorcycle', 'explosion', 'unknown
 const _knownSources = {};  // source_id → display name (custom or original)
 const _sourceCustomNames = {};  // source_id → custom name (from settings, survives heartbeat)
 const _sourceScores = {};  // source_id → last score message (for multi-source aggregation)
+let _dspStats = null;  // aggregate DSP decisions across all sources
 const _STATE_PRIORITY = { idle: 0, possible: 1, confirmed: 2 };
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
@@ -463,6 +465,23 @@ function updateDetector(name, score, state, triggers, possibleNeeded, confirmedN
 
 function _updateSourcesDropdown() {
   const container = document.getElementById('dd-sources');
+  let summary = container.querySelector('[data-dsp-summary]');
+  if (!summary) {
+    summary = document.createElement('div');
+    summary.className = 'dsp-summary';
+    summary.dataset.dspSummary = '';
+    container.prepend(summary);
+  }
+  if (_dspStats && _dspStats.checks > 0) {
+    const checks = _dspStats.checks;
+    const skips = _dspStats.yamnet_skips;
+    const pct = Math.round(skips / checks * 100);
+    summary.textContent = `DSP skipped YAMNet: ${pct}% (${skips}/${checks})`;
+    summary.hidden = false;
+  } else {
+    summary.hidden = true;
+  }
+
   const sourceIds = new Set([...Object.keys(_knownSources), ...Object.keys(_sourceScores)]);
   const sources = [...sourceIds].map(sid => _sourceScores[sid] || {
     source_id: Number(sid), source: _knownSources[sid],
@@ -470,10 +489,14 @@ function _updateSourcesDropdown() {
   if (sources.length <= 1 && sources.length > 0) {
     const s = sources[0];
     // Single source: ensure structure exists, then update in-place
-    if (!container.querySelector('[data-single]')) {
-      container.innerHTML = '<div data-single><h3>YAMNet</h3><div class="dd-yam"></div><h3>MLP</h3><div class="dd-mlp"></div></div>';
+    let wrap = container.querySelector('[data-single]');
+    if (!wrap) {
+      container.querySelectorAll('.src-section').forEach(section => section.remove());
+      wrap = document.createElement('div');
+      wrap.dataset.single = '';
+      wrap.innerHTML = '<h3>YAMNet</h3><div class="dd-yam"></div><h3>MLP</h3><div class="dd-mlp"></div>';
+      container.appendChild(wrap);
     }
-    const wrap = container.querySelector('[data-single]');
     if (s.yamnet_top3) wrap.querySelector('.dd-yam').innerHTML = _renderTop3Html(s.yamnet_top3);
     if (s.mlp_top3) wrap.querySelector('.dd-mlp').innerHTML = _renderTop3Html(s.mlp_top3);
     return;
@@ -529,6 +552,7 @@ function updateScores(msg) {
       if (!_sourceCustomNames[sid]) _knownSources[sid] = name;
     }
   }
+  if (msg.dsp_stats) _dspStats = msg.dsp_stats;
 
   const scoredSources = Object.keys(_sourceScores).length > 0
     ? Object.values(_sourceScores)
@@ -559,7 +583,7 @@ function updateScores(msg) {
 
   // Top info: average across all sources
   const parts = [];
-  if (sources.length === 1) {
+  if (sourceCount <= 1) {
     const s = sources[0];
     if (s.top) parts.push(`<span class="top-label">top:</span> ${esc(s.top)}`);
     if (s.yamnet != null) parts.push(`<span class="top-label">yamnet:</span> ${(s.yamnet * 100).toFixed(0)}%`);

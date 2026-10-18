@@ -77,6 +77,7 @@ async def post_settings(body: dict):
         "cooldown_seconds": (0, 600),
         "refractory_seconds": (0, 120),
         "smoothing_window_seconds": (5, 120),
+        "inference_interval_seconds": (0.25, 3.0),
         "yamnet_min_gate": (0.0, 1.0),
         "clip_seconds": (5, 60),
         "clip_from_possible": (0, 1),
