@@ -3,6 +3,9 @@ substitutions:
   # Override in secrets.yaml or set here directly.
   udp_target_ip: !secret udp_target_ip
   udp_target_port: !secret udp_target_port
+  # SDR1 source_id for this microphone (0 = default, 1+ for additional mics).
+  # See docs/MULTI_MIC.md for multi-microphone setup.
+  source_id: "0"
 
 esphome:
   name: siren-detector
@@ -25,16 +28,19 @@ esp32:
 logger:
   level: DEBUG
 
-# INMP441 wiring:
-#   SCK/BCLK  -> GPIO4
-#   WS/LRCLK  -> GPIO5
-#   SD/DOUT   -> GPIO6
-#   L/R       -> GND  (left channel)
-# No MCLK wire is required for this microphone.
+# INMP441 wiring (each mic on its own I2S bus, mixed into one stream):
+#   Mic 1: SCK->GPIO4,  WS->GPIO5,  SD->GPIO6,  L/R->GND
+#   Mic 2: SCK->GPIO15, WS->GPIO16, SD->GPIO17, L/R->GND (optional)
+# When both mics are connected, audio is averaged for better SNR (~3 dB).
+# Add 100nF capacitor between VDD and GND on each mic.
+# No MCLK wire is required.
 i2s_audio:
   - id: i2s_bus
     i2s_bclk_pin: GPIO4
     i2s_lrclk_pin: GPIO5
+  - id: i2s_bus_2
+    i2s_bclk_pin: GPIO15
+    i2s_lrclk_pin: GPIO16
 
 microphone:
   - platform: i2s_audio
@@ -85,16 +91,25 @@ microphone:
             // The sequence lets the recorder preserve real time when UDP drops a packet.
             static uint8_t packet[12 + 1024];
             if (x.size() <= 1024) {
+              // Mix mic 2 into mic 1 if available (average for ~3 dB noise reduction).
+              static int32_t mixed[256];  // 1024 bytes / 4 = 256 samples max
+              memcpy(mixed, x.data(), x.size());
+              if (id(mic2_active) && id(mic2_buf_size) == x.size()) {
+                const int32_t *mic2 = reinterpret_cast<const int32_t *>(id(mic2_buf));
+                for (size_t i = 0; i < sample_count; i++) {
+                  mixed[i] = (samples[i] >> 1) + (mic2[i] >> 1);
+                }
+              }
               const uint32_t magic = htonl(0x53445231);  // "SDR1"
               const uint32_t sequence_number = udp_sequence++;
               const uint32_t sequence = htonl(sequence_number);
               const uint16_t payload_size = htons(static_cast<uint16_t>(x.size()));
-              const uint16_t reserved = 0;
+              const uint16_t reserved = htons(${source_id});
               memcpy(packet + 0, &magic, sizeof(magic));
               memcpy(packet + 4, &sequence, sizeof(sequence));
               memcpy(packet + 8, &payload_size, sizeof(payload_size));
               memcpy(packet + 10, &reserved, sizeof(reserved));
-              memcpy(packet + 12, x.data(), x.size());
+              memcpy(packet + 12, mixed, x.size());
               const int result = sendto(udp_socket, packet, 12 + x.size(), 0,
                                         reinterpret_cast<const sockaddr *>(&udp_address), sizeof(udp_address));
               if (result == static_cast<int>(12 + x.size())) {
@@ -117,11 +132,52 @@ microphone:
                      (unsigned) sample_count, rms, peak);
           }
 
+  # Second INMP441 (optional) — saves buffer for mixing with mic 1.
+  # If no mic connected, buffer stays zeroed — mic 1 sends its own data only.
+  - platform: i2s_audio
+    id: inmp441_2
+    adc_type: external
+    i2s_din_pin: GPIO17
+    i2s_audio_id: i2s_bus_2
+    channel: left
+    sample_rate: 16000
+    bits_per_sample: 32bit
+    use_apll: true
+    on_data:
+      - lambda: |-
+          // Save latest mic 2 buffer for mixing in mic 1 callback.
+          const size_t len = x.size() < sizeof(id(mic2_buf)) ? x.size() : sizeof(id(mic2_buf));
+          memcpy(id(mic2_buf), x.data(), len);
+          id(mic2_buf_size) = len;
+          // Check if mic 2 has real audio (not floating noise).
+          const int32_t *samples = reinterpret_cast<const int32_t *>(x.data());
+          const size_t sample_count = x.size() / sizeof(int32_t);
+          double sum_sq = 0.0;
+          for (size_t i = 0; i < sample_count; i++) {
+            const float s = static_cast<float>(samples[i] >> 8) / 8388608.0f;
+            sum_sq += static_cast<double>(s) * s;
+          }
+          const float rms = sample_count > 0
+                              ? sqrtf(static_cast<float>(sum_sq / sample_count))
+                              : 0.0f;
+          id(mic2_active) = rms >= 0.0001f;
+
 globals:
   - id: audio_chunks
     type: uint32_t
     restore_value: false
     initial_value: "0"
+  - id: mic2_buf
+    type: uint8_t[1024]
+    restore_value: false
+  - id: mic2_buf_size
+    type: uint16_t
+    restore_value: false
+    initial_value: "0"
+  - id: mic2_active
+    type: bool
+    restore_value: false
+    initial_value: "false"
 
 sensor:
   - platform: uptime
@@ -149,9 +205,13 @@ switch:
     turn_on_action:
       - microphone.capture:
           id: inmp441
+      - microphone.capture:
+          id: inmp441_2
     turn_off_action:
       - microphone.stop_capture:
           id: inmp441
+      - microphone.stop_capture:
+          id: inmp441_2
 
 api:
 

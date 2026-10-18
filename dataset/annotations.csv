@@ -32,3 +32,4 @@ dataset/inbox/20261009-075032-982028.wav,dataset/background/20261009-075032-9820
 dataset/inbox/20261009-075032-982028.wav,dataset/background/20261009-075032-982028__background__4129-4132s.wav,background,,,4129.900,4132.340
 dataset/inbox/20261009-075032-982028.wav,dataset/background/20261009-075032-982028__background__1003-2602s.wav,background,,,1003.421,2602.091
 dataset/inbox/20261009-093630-755333.wav,dataset/background/20261009-093630-755333__background__0-21s.wav,background,,,0.402,21.465
+dataset/inbox/background_usb.wav,dataset/background/background_usb__background__0-299s.wav,background,2026-10-17T13:25:00+03:00,2026-10-17T13:29:59+03:00,0.000,299.000

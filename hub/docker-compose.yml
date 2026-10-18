@@ -60,6 +60,8 @@ services:
       - "${DETECTOR_PORT:-9002}"
       - --source
       - siren-detector-01
+      - --source-name
+      - "1=rpi-usb"
       - --classifier-weights
       - /models/classifier_weights.npz
       - --classifier-labels

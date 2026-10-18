@@ -30,8 +30,11 @@ async def ws_audio_endpoint(ws: WebSocket):
         await ws.close(code=4401, reason="Authentication required")
         return
     await ws.accept()
+    # Optional source_id filter: /ws/audio?source_id=1
+    sid_raw = ws.query_params.get("source_id")
+    sid_filter: int | None = int(sid_raw) if sid_raw is not None else None
     queue: asyncio.Queue = asyncio.Queue()
-    _bus.audio_queues[ws] = queue
+    _bus.audio_queues[ws] = (queue, sid_filter)
     try:
         async def sender():
             while True:
@@ -61,6 +64,7 @@ async def ws_audio_endpoint(ws: WebSocket):
 @router.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
+    await ws.send_json({"type": "session", "started_at": _bus.started_at})
     await ws.send_json(_bus.last_score)
     for ev in list(_bus.event_history):
         clip_url = ev.get("clip_url")
