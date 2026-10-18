@@ -77,6 +77,12 @@ async def post_settings(body: dict):
                 val = type(default_val)(body[k])
             except (ValueError, TypeError):
                 raise HTTPException(status_code=400, detail=f"Invalid value for {k}")
+            SETTING_CHOICES = {
+                "detection_mode": ("round_robin", "parallel"),
+            }
+            if k in SETTING_CHOICES:
+                if val not in SETTING_CHOICES[k]:
+                    raise HTTPException(status_code=400, detail=f"{k} must be one of {SETTING_CHOICES[k]}")
             lo, hi = SETTING_RANGES.get(k, (None, None))
             if lo is not None and not (lo <= val <= hi):
                 raise HTTPException(status_code=400, detail=f"{k} must be between {lo} and {hi}")

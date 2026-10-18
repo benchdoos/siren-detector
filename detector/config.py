@@ -43,4 +43,5 @@ DEFAULT_SETTINGS = {
     "clip_seconds": 10,
     "clip_from_possible": 0,
     "disabled_sources": [],
+    "detection_mode": "round_robin",
 }
