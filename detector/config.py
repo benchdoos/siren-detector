@@ -49,6 +49,7 @@ DEFAULT_SETTINGS = {
     "dsp_bg_threshold": 0.85,
     "dsp_bg_release_threshold": 0.85,
     "dsp_bg_confirm_windows": 2,
+    "dsp_source_overrides": {},
 }
 
 # DSP pre-filter model paths (defaults for Docker volume mount)

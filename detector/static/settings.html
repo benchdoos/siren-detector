@@ -63,6 +63,17 @@
 
   /* ── Source toggles ── */
   .src-card { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #1a1a1a; border: 1px solid #222; border-radius: 6px; }
+  .src-card { flex-wrap: wrap; }
+  .src-main-row { width: 100%; display: flex; align-items: center; gap: 12px; }
+  .src-dsp-settings { width: 100%; border-top: 1px solid #292929; padding-top: 9px; margin-top: 2px; }
+  .src-dsp-heading { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #aaa; }
+  .src-dsp-heading select, .src-dsp-fields select, .src-dsp-fields input { background: #222; border: 1px solid #444; color: #ddd; border-radius: 4px; padding: 4px 7px; font-size: 12px; }
+  .src-dsp-fields { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 9px; }
+  .src-dsp-fields[hidden] { display: none; }
+  .src-dsp-control { display: flex; align-items: center; gap: 5px; color: #777; font-size: 11px; }
+  .src-dsp-control input { width: 66px; }
+  .src-dsp-save { background: none; border: 1px solid #4caf50; color: #4caf50; padding: 4px 9px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+  .src-dsp-status { font-size: 11px; color: #4caf50; }
   .src-card.disabled { opacity: 0.5; }
   .src-name { font-size: 14px; color: #ccc; font-weight: 500; }
   .src-id { font-size: 11px; color: #666; margin-left: 4px; }
@@ -223,7 +234,7 @@
     <div class="sp-panel" id="sp-sources">
       <div class="s-section">
         <div class="s-title">Audio Sources</div>
-        <p style="font-size:12px;color:#555;margin:0 0 12px 0;line-height:1.5">Enable or disable detection for each microphone. Disabled sources still receive audio (available for calibration) but their events are discarded.</p>
+        <p style="font-size:12px;color:#555;margin:0 0 12px 0;line-height:1.5">Enable or disable detection for each microphone. Disabled sources still receive audio (available for calibration) but their events are discarded. DSP settings inherit the global defaults unless you add a source override.</p>
         <div id="sources-list" style="display:flex;flex-direction:column;gap:8px">
           <div style="font-size:13px;color:#666">Loading sources...</div>
         </div>
@@ -486,6 +497,7 @@ async function loadSources() {
     const srcData = await srcRes.json();
     const setData = await setRes.json();
     const disabled = setData.disabled_sources || [];
+    const dspOverrides = setData.dsp_source_overrides || {};
     const sources = srcData.sources || [];
     if (sources.length === 0) {
       list.innerHTML = '<div style="font-size:13px;color:#666">No sources connected yet.</div>';
@@ -494,9 +506,16 @@ async function loadSources() {
     list.innerHTML = '';
     for (const s of sources) {
       const enabled = !disabled.includes(s.source_id);
+      const override = dspOverrides[String(s.source_id)] || null;
+      const useOverride = !!override;
+      const dspEnabled = override?.dsp_enabled ?? setData.dsp_enabled ?? 1;
+      const bgThreshold = override?.bg_threshold ?? setData.dsp_bg_threshold ?? 0.85;
+      const bgRelease = override?.bg_release_threshold ?? setData.dsp_bg_release_threshold ?? 0.85;
+      const bgWindows = override?.bg_confirm_windows ?? setData.dsp_bg_confirm_windows ?? 2;
       const card = document.createElement('div');
       card.className = 'src-card' + (enabled ? '' : ' disabled');
       card.innerHTML = `
+        <div class="src-main-row">
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
             <input type="text" class="src-name-input" data-sid="${s.source_id}"
@@ -512,12 +531,77 @@ async function loadSources() {
         <label class="src-toggle">
           <input type="checkbox" ${enabled ? 'checked' : ''} data-sid="${s.source_id}">
           <span class="slider"></span>
-        </label>`;
+        </label></div>
+        <div class="src-dsp-settings">
+          <div class="src-dsp-heading">DSP <select class="src-dsp-mode" data-sid="${s.source_id}" onchange="toggleSourceDspOverride(this)">
+            <option value="global" ${useOverride ? '' : 'selected'}>Use global defaults</option>
+            <option value="override" ${useOverride ? 'selected' : ''}>Override for this source</option>
+          </select><span class="src-dsp-status" data-sid="${s.source_id}"></span></div>
+          <div class="src-dsp-fields" data-sid="${s.source_id}" ${useOverride ? '' : 'hidden'}>
+            <label class="src-dsp-control">Enabled <select data-dsp-field="dsp_enabled"><option value="1" ${Number(dspEnabled) ? 'selected' : ''}>On</option><option value="0" ${Number(dspEnabled) ? '' : 'selected'}>Off</option></select></label>
+            <label class="src-dsp-control">BG threshold <input type="number" data-dsp-field="bg_threshold" min="0.5" max="1" step="0.01" value="${bgThreshold}"></label>
+            <label class="src-dsp-control">BG release <input type="number" data-dsp-field="bg_release_threshold" min="0.5" max="1" step="0.01" value="${bgRelease}"></label>
+            <label class="src-dsp-control">BG windows <input type="number" data-dsp-field="bg_confirm_windows" min="1" max="10" step="1" value="${bgWindows}"></label>
+            <button class="src-dsp-save" onclick="saveSourceDspOverride(this, ${s.source_id})">Save</button>
+          </div>
+        </div>`;
       card.querySelector('input[type="checkbox"]').addEventListener('change', (e) => toggleSource(s.source_id, e.target.checked, card));
       list.appendChild(card);
     }
   } catch(e) {
     list.innerHTML = '<div style="font-size:13px;color:#ef5350">Failed to load sources.</div>';
+  }
+}
+
+function toggleSourceDspOverride(select) {
+  const fields = select.closest('.src-dsp-settings').querySelector('.src-dsp-fields');
+  if (select.value === 'override') {
+    fields.hidden = false;
+    return;
+  }
+  clearSourceDspOverride(select, Number(select.dataset.sid));
+}
+
+async function saveSourceDspOverride(button, sourceId) {
+  const card = button.closest('.src-card');
+  const fields = card.querySelector('.src-dsp-fields');
+  const override = {};
+  fields.querySelectorAll('[data-dsp-field]').forEach(input => {
+    const value = Number(input.value);
+    override[input.dataset.dspField] = value;
+  });
+  const status = card.querySelector('.src-dsp-status');
+  await updateSourceDspOverride(sourceId, override, status);
+}
+
+async function clearSourceDspOverride(select, sourceId) {
+  const status = select.closest('.src-dsp-settings').querySelector('.src-dsp-status');
+  await updateSourceDspOverride(sourceId, null, status);
+  select.closest('.src-dsp-settings').querySelector('.src-dsp-fields').hidden = true;
+}
+
+async function updateSourceDspOverride(sourceId, override, statusEl) {
+  try {
+    const getRes = await fetch('/api/settings', { headers: adminHeaders() });
+    const data = await getRes.json();
+    const overrides = data.dsp_source_overrides || {};
+    if (override) overrides[String(sourceId)] = override;
+    else delete overrides[String(sourceId)];
+    const saveRes = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify({ dsp_source_overrides: overrides }),
+    });
+    if (saveRes.status === 401) { alert('Auth required.'); return; }
+    if (!saveRes.ok) {
+      const err = await saveRes.json();
+      throw new Error(err.detail || 'Save failed');
+    }
+    statusEl.textContent = override ? 'Saved' : 'Using global defaults';
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+  } catch (e) {
+    statusEl.textContent = e.message || 'Network error';
+    statusEl.style.color = '#ef5350';
   }
 }
 
