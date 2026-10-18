@@ -68,6 +68,12 @@ deploy-model:
 	scp ml/results/classifier_weights.npz ml/results/classifier_labels.json \
 		ml/results/val_metrics.json \
 		$(RPI):$(RPI_BASE)/ml/results/
+	@if ls ml/results/dsp_classifier_int8.tflite ml/results/dsp_norm_stats.npz ml/results/dsp_classifier_labels.json >/dev/null 2>&1; then \
+		echo "Deploying DSP model..."; \
+		scp ml/results/dsp_classifier_int8.tflite ml/results/dsp_norm_stats.npz \
+			ml/results/dsp_classifier_labels.json \
+			$(RPI):$(RPI_BASE)/ml/results/; \
+	fi
 	@if [ -d ml/results/audits ]; then \
 		ssh $(RPI) "mkdir -p $(RPI_BASE)/ml/results/audits"; \
 		scp ml/results/audits/audit_*.json $(RPI):$(RPI_BASE)/ml/results/audits/; \

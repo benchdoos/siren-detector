@@ -162,11 +162,15 @@ detector/
 ├── main.py               # entry point: wires bus, engine, server, integrations
 ├── config.py             # constants, detector definitions, default settings
 ├── bus.py                # EventBus — the single shared object between layers
+├── dsp_features.py       # DSP feature extraction (numpy only, 8 features × 50 fps)
+├── dsp_infer.py          # TFLite DSP classifier — pre-filter for YAMNet cascade
+├── classifier_infer.py   # MLP classifier (numpy-only inference on YAMNet embeddings)
 ├── transport/udp.py      # UDP receiver (SDR1 protocol)
 ├── engine/
 │   ├── interface.py      # EngineInterface Protocol — contract for engine replacement
 │   ├── smoother.py       # TemporalSmoother (idle → possible → confirmed)
-│   └── yamnet_engine.py  # YAMNet + MLP (current implementation)
+│   ├── source_state.py   # Per-source buffers and inference state
+│   └── yamnet_engine.py  # YAMNet + MLP with optional DSP cascade pre-filter
 ├── server/               # FastAPI: WebSocket, clips, feedback, settings
 └── integrations/mqtt.py  # MQTT, Home Assistant discovery
 ```
@@ -944,27 +948,30 @@ rather than absolute spectral shapes:
 ### Hybrid Architecture
 
 ```text
-Audio (PCM 16 kHz)
+Audio (PCM 16 kHz, every 0.5s hop)
    ↓
 ┌─────────────────────────────────────┐
-│  DSP Feature Extractor (~1 KB RAM)  │  ← runs on ESP32
+│  DSP Feature Extractor (numpy)      │  ← runs on RPi (later: ESP32)
 │                                     │
-│  • pitch tracker (YIN / autocorr)   │  → f₀ every 20 ms
-│  • energy envelope (RMS)            │  → loudness every 20 ms
-│  • spectral centroid                │  → sound "brightness"
-│  • harmonic-to-noise ratio (HNR)    │  → tone vs noise
-│  • zero crossing rate (ZCR)         │  → "hissiness"
+│  8 features × 50 fps:              │
+│  pitch, RMS, centroid, HNR, ZCR,   │
+│  bandwidth, flatness, rolloff      │
+│  + 8 delta features = 16 channels  │
 └──────────────┬──────────────────────┘
                ↓
-   Time series of features (50 values/sec × 5 features)
+   Rolling buffer (250 frames = 5 seconds)
                ↓
 ┌─────────────────────────────────────┐
-│  Pattern Detector                   │
-│                                     │
-│  Option A: Rule-based (ESP32)       │  ← zero training, works immediately
-│  Option B: Tiny CNN on DSP features │  ← ~10–50 KB, trains in minutes
-│  Option C: YAMNet + MLP (RPi)       │  ← current model as "arbiter"
-└─────────────────────────────────────┘
+│  Conv1D classifier (30 KB INT8)     │  ← fast pre-filter
+│  background with high confidence?   │
+│     YES → skip YAMNet (save CPU)    │
+│     NO  → pass to YAMNet ──────────────┐
+└─────────────────────────────────────┘   │
+                                          ↓
+                              ┌─────────────────────────┐
+                              │  YAMNet + MLP (17 MB)   │
+                              │  Confirms / overrides   │
+                              └─────────────────────────┘
 ```
 
 **Option A — Rule-based (MVP for ESP32):**
