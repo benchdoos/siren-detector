@@ -150,6 +150,14 @@
         <div class="s-tooltip" data-tip="motorcycle_threshold"><strong>Motorcycle Threshold</strong><br>YAMNet confidence for motorcycle engine sounds.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.15</b></span></div>
       </div>
       <div class="s-section">
+        <div class="s-title">DSP Pre-filter</div>
+        <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Lightweight Conv1D model that skips YAMNet for confident background, saving CPU.</p>
+        <div class="s-row"><label>DSP enabled <span class="s-help" onclick="toggleTip(this)">?</span></label><select id="s-dsp_enabled"><option value="1">On</option><option value="0">Off</option></select><span class="s-default" data-key="dsp_enabled"></span></div>
+        <div class="s-tooltip" data-tip="dsp_enabled"><strong>DSP Pre-filter</strong><br>When On, a lightweight DSP classifier pre-screens audio before YAMNet. Confident background is skipped, reducing CPU load by up to 90%. Disable to always run full YAMNet inference.<hr><span class="s-tip-default">Default: <b>On</b></span></div>
+        <div class="s-row"><label>BG threshold <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-dsp_bg_threshold" step="0.01" min="0.5" max="1"><span class="s-default" data-key="dsp_bg_threshold"></span></div>
+        <div class="s-tooltip" data-tip="dsp_bg_threshold"><strong>DSP Background Threshold</strong><br>Minimum DSP confidence to skip YAMNet. Higher = more conservative (fewer skips, less risk of missing events). Lower = more aggressive (more skips, saves more CPU).<hr><span class="s-tip-range">Range: <b>0.50 – 1.00</b></span><br><span class="s-tip-default">Default: <b>0.85</b></span></div>
+      </div>
+      <div class="s-section">
         <div class="s-title">MLP Gate</div>
         <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Controls when to trust the MLP classifier for siren detection.</p>
         <div class="s-row"><label>YAMNet min gate <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-yamnet_min_gate" step="0.001" min="0" max="1"><span class="s-default" data-key="yamnet_min_gate"></span></div>
@@ -297,13 +305,14 @@ function adminHeaders() {
 const SETTINGS_KEYS = [
   'detection_mode',
   'siren_threshold','explosion_threshold','motorcycle_threshold',
+  'dsp_enabled','dsp_bg_threshold',
   'possible_triggers','confirmed_triggers','smoothing_window_seconds',
   'cooldown_seconds','refractory_seconds','yamnet_min_gate',
   'clip_seconds','clip_from_possible'
 ];
 
 const PANEL_KEYS = {
-  'sp-detection': ['detection_mode','siren_threshold','explosion_threshold','motorcycle_threshold','yamnet_min_gate'],
+  'sp-detection': ['detection_mode','siren_threshold','explosion_threshold','motorcycle_threshold','dsp_enabled','dsp_bg_threshold','yamnet_min_gate'],
   'sp-smoothing': ['possible_triggers','confirmed_triggers','smoothing_window_seconds','cooldown_seconds','refractory_seconds'],
   'sp-clips': ['clip_seconds','clip_from_possible'],
 };
