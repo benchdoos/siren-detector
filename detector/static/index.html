@@ -29,6 +29,7 @@
     .top-info-bar { padding: 4px 12px; }
     .top-info-bar .top-text { font-size: 11px; }
     .top-dropdown { left: 12px; transform: none; right: 12px; min-width: 0; }
+    .listen-picker { position: fixed; top: auto; right: 12px; left: 12px; min-width: 0; }
     .player-controls { flex-direction: column; align-items: stretch; }
     .player-controls audio { min-width: 0; width: 100%; }
   }
@@ -161,7 +162,7 @@
   .metrics-btn { font-size: 13px; padding: 3px 10px; border-radius: 4px; border: 1px solid #333; background: none; color: #888; cursor: pointer; }
   .metrics-btn:hover { color: #ccc; border-color: #555; }
   .metrics-btn.listening { background: #1a3a1a; border-color: #4caf50; color: #4caf50; }
-  .listen-picker { display: none; position: absolute; top: calc(100% + 4px); right: 0; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 4px 0; min-width: 160px; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .listen-picker { display: none; position: absolute; top: calc(100% + 4px); right: 0; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 4px 0; min-width: 160px; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,.5); max-width: calc(100vw - 24px); }
   .listen-picker.open { display: block; }
   .listen-picker-item { display: block; width: 100%; text-align: left; padding: 8px 14px; font-size: 13px; color: #ccc; background: none; border: none; cursor: pointer; white-space: nowrap; }
   .listen-picker-item:hover { background: #222; color: #fff; }
