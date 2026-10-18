@@ -167,18 +167,46 @@
 - [x] Audio badge: при 2+ источниках — кликабельный dropdown с per-source статистикой пакетов.
 - [ ] Персистентность лейблов между перезапусками контейнера (сейчас in-memory).
 
-## 9. Локальный inference на ESP32-S3 — долгосрочная цель
+## 9. Локальный inference на ESP32-S3 — новый подход: DSP-фичи
 
-Стек: INMP441 → log-mel спектрограмма → компактная CNN (INT8, ~50-200 KB) → TensorFlow Lite Micro + ESP-NN.
+Проблема спектрограммного подхода: модель зависит от АЧХ микрофона →
+при смене микрофона/локации ломается. Новый подход: **микрофонно-инвариантные
+DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CNN.
 
-- [ ] Оценить доступную память, скорость и энергопотребление локального inference.
-- [ ] Обучить компактную CNN на mel-спектрограммах (knowledge distillation от YAMNet+MLP).
-- [ ] Квантизовать модель в INT8 и проверить точность (цель: 60-80% от серверной).
-- [ ] Запустить feature extraction + inference на ESP32-S3 через TFLite Micro.
+### DSP Feature Extractor (Python → затем C для ESP32)
+- [x] Реализовать DSP feature extractor на Python (`ml/dsp_features.py`):
+  pitch (YIN), RMS energy, spectral centroid, HNR, ZCR,
+  spectral bandwidth, spectral flatness, spectral rolloff — 8 фич на фрейм.
+- [x] Прогнать extractor на имеющемся датасете, собрать статистику фич по классам.
+- [ ] Визуализировать фичи для каждого класса (siren sweep, explosion spike,
+  motorcycle harmonics) — `--plot` флаг готов.
+- [ ] Валидировать: фичи действительно инвариантны к микрофону (сравнить
+  INMP441 vs колонка vs ESC-50).
+
+### Rule-based Detector (Вариант A — слабый базелайн)
+- [x] Siren: centroid autocorrelation + sweep detection.
+- [x] Explosion: RMS скачок + спад + centroid.
+- [x] Motorcycle: sustained energy + spectral stability.
+- [x] Измерить accuracy rule-based: **siren P=0.26 R=0.28, explosion P=0.38 R=0.20,
+  motorcycle P=0.69 R=0.18** — правила недостаточны через шумный INMP441.
+
+### Tiny Conv1D на DSP-фичах (Вариант B — основной подход)
+- [x] Обучить Conv1D на 8+8 фичах × 250 фреймов (5 с). Архитектура:
+  Conv1D(24,k=7) → Pool → Conv1D(48,k=5) → Pool → Conv1D(48,k=3) →
+  GlobalAvgPool → Dense(48) → Dense(4). Итого: **18K параметров**.
+- [x] Квантизовать в INT8: **30 KB** TFLite модель.
+- [x] Val accuracy: siren 58%, background 92%, explosion 81%, motorcycle 76%.
+  Модель в ~600× меньше YAMNet+MLP (30KB vs 17MB).
+- [ ] Добавить mixup и дополнительную аугментацию для улучшения siren accuracy.
+- [ ] Сравнить DSP CNN vs YAMNet+MLP на тех же данных (side-by-side).
+
+### Порт на ESP32
+- [ ] Портировать DSP feature extractor на C (чистая математика, без зависимостей).
+- [ ] Запустить inference на ESP32-S3 (rule-based или TFLite Micro для tiny CNN).
 - [ ] Добавить динамик для локального оповещения.
 - [ ] Реализовать три режима работы (настройка через Home Assistant):
   - автономный: ESP32 детектит сам + оповещение через динамик;
-  - комбинированный: ESP32 скринит → при подозрении отправляет на RPi для уточнения;
+  - комбинированный: ESP32 скринит → при «possible» отправляет на RPi для уточнения;
   - удалённый: весь поток на сервер (текущий режим).
 - [ ] Оставить серверный Detection Engine как альтернативный backend.
 

@@ -919,29 +919,164 @@ unknown
 
 Goal: run ML directly on ESP32-S3 so the device can operate autonomously.
 
-**TinyML** is the general name for the concept (ML on microcontrollers). For implementation we use a specific stack:
+### The Problem with Spectrogram-Based Models
+
+The current server model (YAMNet + MLP) learns spectral fingerprints that are
+**microphone-dependent**. Changing the microphone changes the frequency response,
+which shifts the spectrogram — the model breaks. This means:
+
+- new microphone or audio source → false positives until retrained;
+- model cannot be shared across users/locations without per-site calibration;
+- YAMNet (~17 MB) doesn't fit on ESP32 anyway.
+
+### Key Insight: Microphone-Invariant DSP Features
+
+Each target class has physically measurable characteristics that do not depend
+on the microphone's frequency response, because they track **relative** changes
+rather than absolute spectral shapes:
+
+| Class | Physical pattern | Detection method |
+|-------|-----------------|------------------|
+| **Siren** | Periodic frequency sweep (300→1500→300 Hz, cycle 1–4 s) | Pitch tracking → detect periodic FM modulation |
+| **Explosion** | Sudden broadband energy spike, fast attack (<50 ms), slow decay (>500 ms) | Energy envelope analysis + spectral centroid |
+| **Motorcycle / UAV** | Stable harmonic series (f₀ + 2f₀ + 3f₀…), characteristic "buzz" | Harmonic-to-noise ratio + pitch stability |
+
+### Hybrid Architecture
 
 ```text
-INMP441 → PCM 16 kHz
+Audio (PCM 16 kHz)
    ↓
-log-mel spectrogram (feature extraction, pure math)
-   ↓
-compact CNN (~50-200 KB, INT8 quantization)
-   ↓
-TensorFlow Lite Micro (framework, runs the model)
-   + ESP-NN (computation acceleration via ESP32-S3 SIMD instructions)
-   ↓
-siren / explosion / motorcycle / background → event
-   ↓
-speaker (local alert) + optionally → RPi for confirmation
+┌─────────────────────────────────────┐
+│  DSP Feature Extractor (~1 KB RAM)  │  ← runs on ESP32
+│                                     │
+│  • pitch tracker (YIN / autocorr)   │  → f₀ every 20 ms
+│  • energy envelope (RMS)            │  → loudness every 20 ms
+│  • spectral centroid                │  → sound "brightness"
+│  • harmonic-to-noise ratio (HNR)    │  → tone vs noise
+│  • zero crossing rate (ZCR)         │  → "hissiness"
+└──────────────┬──────────────────────┘
+               ↓
+   Time series of features (50 values/sec × 5 features)
+               ↓
+┌─────────────────────────────────────┐
+│  Pattern Detector                   │
+│                                     │
+│  Option A: Rule-based (ESP32)       │  ← zero training, works immediately
+│  Option B: Tiny CNN on DSP features │  ← ~10–50 KB, trains in minutes
+│  Option C: YAMNet + MLP (RPi)       │  ← current model as "arbiter"
+└─────────────────────────────────────┘
 ```
 
-YAMNet (~14 MB) won't fit on ESP32. Instead, we train a compact CNN on mel spectrograms, optionally using knowledge distillation from the large model.
+**Option A — Rule-based (MVP for ESP32):**
 
-Target characteristics:
-- 60-80% of server model accuracy — sufficient for initial screening;
-- inference ~50-200 ms per window — real-time;
-- three operating modes: standalone, combined, remote (see section 2).
+Siren detection is purely mathematical:
+1. Pitch tracker finds f₀ every 20 ms.
+2. Look for periodic sweep: f₀ rises → falls → rises.
+3. Sweep period 1–4 seconds, amplitude > 200 Hz.
+4. Duration > 2 full cycles → SIREN.
+
+Explosion: RMS jumps >10× within <50 ms, decay >500 ms, high spectral centroid.
+
+UAV/motorcycle: stable f₀ in 100–500 Hz, high HNR (>10 dB), duration >3 s,
+no sweep (distinguishes from siren).
+
+**Option B — DSP features → Tiny CNN:**
+
+Instead of a spectrogram (96×64, microphone-dependent), feed
+**5 DSP features × 100 frames (2 s)** = 5×100 matrix (~2 KB input):
+
+```text
+[pitch, energy, centroid, hnr, zcr] × 100 frames
+   ↓  Conv1D (8 filters, k=5)   ~1.6 KB weights
+   ↓  Conv1D (16 filters, k=3)  ~1.2 KB weights
+   ↓  GlobalAvgPool
+   ↓  Dense(4 classes)           ~256 B weights
+   ↓  Total: ~10–20 KB model → fits on ESP32
+```
+
+### What This Solves
+
+| Problem | Spectrogram (current) | DSP features (new) |
+|---------|----------------------|-------------------|
+| Microphone change | Breaks | Works (features are normalized) |
+| New user / location | Needs full retrain | Works out of the box |
+| Background calibration | Per-mic retraining | Only noise floor needed |
+| ESP32 fit | No (YAMNet 17 MB) | Yes (10–50 KB model) |
+| Training data needed | Thousands of examples | Hundreds (or 0 for rule-based) |
+
+### Implementation Plan
+
+1. ~~DSP feature extractor in Python — validate on existing dataset.~~ **Done** (`ml/dsp_features.py`)
+2. ~~Rule-based detector — test accuracy on real recordings.~~ **Done** — insufficient (see below)
+3. ~~If rules are insufficient — train tiny CNN on DSP features.~~ **Done** (`ml/train_dsp_classifier.py`)
+4. Port feature extractor to C for ESP32 (pure math, no dependencies).
+5. **Combined mode**: ESP32 detects locally → on "possible", sends audio to RPi
+   → YAMNet confirms.
+
+### Current Results
+
+**DSP Feature Extractor** (`ml/dsp_features.py`): 8 features per frame (40 ms window, 20 ms hop = 50 fps):
+
+| Feature | Description |
+|---------|-------------|
+| pitch_hz | Fundamental frequency via YIN algorithm |
+| log_rms | Loudness in dB |
+| spectral_centroid_hz | Brightness of the sound |
+| hnr_db | Harmonic-to-noise ratio (tonal vs noisy) |
+| zcr | Zero-crossing rate |
+| spectral_bandwidth_hz | Spectral spread |
+| spectral_flatness | Noise-like vs tonal (0–1) |
+| spectral_rolloff_hz | Frequency below which 85% energy |
+
+Plus 8 delta (rate-of-change) features → **16 channels total**.
+
+**Rule-based detection** — tested, insufficient for noisy INMP441 data:
+
+| Class | Precision | Recall |
+|-------|-----------|--------|
+| siren | 0.26 | 0.28 |
+| explosion | 0.38 | 0.20 |
+| motorcycle | 0.69 | 0.18 |
+
+Key finding: through noisy INMP441, distant sirens are nearly indistinguishable
+from background in DSP features. Energy levels overlap completely
+(siren mean ≈ −45 dB, background ≈ −44 dB).
+
+**Conv1D classifier** (`ml/train_dsp_classifier.py`) — 18K params, **30 KB INT8 TFLite**:
+
+Architecture: input (250, 16) → Conv1D(24, k=7) → MaxPool → Conv1D(48, k=5) →
+MaxPool → Conv1D(48, k=3) → GlobalAvgPool → Dropout → Dense(48) → Dense(4, softmax).
+
+5-second sliding window (250 frames), 1-second hop. Source-based train/val split.
+
+| Class | Accuracy | Windows |
+|-------|----------|---------|
+| siren | 58% | 284 |
+| background | 92% | 2185 |
+| explosion | 81% | 194 |
+| motorcycle | 76% | 170 |
+
+Confusion matrix (val set):
+
+```text
+True\Pred    siren  background  explosion  motorcycle
+siren         165          99          5          15
+background    105        2018         44          18
+explosion       4          10        157          23
+motorcycle      5           9         27         129
+```
+
+**Conclusion**: siren accuracy (58%) is the main weakness — distant/faint sirens
+are confused with background. This confirms the hybrid architecture: ESP32 detects
+"possible" → sends audio to RPi → YAMNet confirms. The DSP model serves as a
+lightweight first-pass filter, not a standalone detector.
+
+### Remaining Work
+
+- Validate microphone invariance (compare features across INMP441 vs ESC-50 vs Freesound)
+- Side-by-side comparison of DSP CNN vs YAMNet+MLP on the same val set
+- Port DSP feature extractor to C for ESP32
+- Integrate combined mode (ESP32 local → RPi confirmation)
 
 The server Detection Engine always remains available as an alternative or for confirmation.
 
