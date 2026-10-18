@@ -1,6 +1,6 @@
 {
-  "audit_timestamp": "2026-10-18T19:57:02+00:00",
-  "model_trained_at": "2026-10-18T19:56:58+00:00",
+  "audit_timestamp": "2026-10-18T20:42:40+00:00",
+  "model_trained_at": "2026-10-18T20:42:36+00:00",
   "labels": [
     "siren",
     "background",
@@ -9,56 +9,56 @@
   ],
   "val_accuracy": {
     "siren": {
-      "accuracy": 0.796,
+      "accuracy": 0.803,
       "windows": 3719
     },
     "background": {
-      "accuracy": 0.839,
+      "accuracy": 0.819,
       "windows": 8700
     },
     "explosion": {
-      "accuracy": 0.687,
+      "accuracy": 0.692,
       "windows": 947
     },
     "motorcycle": {
-      "accuracy": 0.659,
+      "accuracy": 0.607,
       "windows": 578
     }
   },
   "confusion_matrix": [
     [
-      2961,
-      347,
-      126,
-      285
+      2987,
+      298,
+      113,
+      321
     ],
     [
-      626,
-      7303,
-      520,
-      251
+      805,
+      7129,
+      517,
+      249
     ],
     [
-      54,
-      205,
-      651,
-      37
+      59,
+      197,
+      655,
+      36
     ],
     [
-      81,
-      54,
+      91,
       62,
-      381
+      74,
+      351
     ]
   ],
   "file_counts": {
     "siren": {
-      "total": 274,
-      "real": 102,
+      "total": 276,
+      "real": 104,
       "aug": 172,
-      "aug_pct": 62.8,
+      "aug_pct": 62.3,
       "aug_real_ratio": 1.7,
-      "max_recommended_aug": 204
+      "max_recommended_aug": 208
     },
     "background": {
       "total": 860,
@@ -69,20 +69,20 @@
       "max_recommended_aug": 1720
     },
     "explosion": {
-      "total": 422,
-      "real": 272,
+      "total": 423,
+      "real": 273,
       "aug": 150,
       "aug_pct": 35.5,
-      "aug_real_ratio": 0.6,
-      "max_recommended_aug": 544
+      "aug_real_ratio": 0.5,
+      "max_recommended_aug": 546
     },
     "motorcycle": {
-      "total": 291,
-      "real": 131,
+      "total": 293,
+      "real": 133,
       "aug": 160,
-      "aug_pct": 55.0,
+      "aug_pct": 54.6,
       "aug_real_ratio": 1.2,
-      "max_recommended_aug": 262
+      "max_recommended_aug": 266
     }
   },
   "issues": [
