@@ -29,14 +29,8 @@ def init(bus: EventBus) -> None:
     _bus = bus
 
 
-@router.get("/clips/{filename}/spectrogram")
-async def clip_spectrogram(filename: str):
-    """Return spectrogram data for visualization (no auth required)."""
-    path = (CLIP_DIR / filename).resolve()
-    if not path.is_relative_to(CLIP_DIR.resolve()):
-        raise HTTPException(status_code=400, detail="Invalid filename")
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Clip not found")
+def generate_spectrogram(path: "Path") -> dict:
+    """Generate spectrogram data dict for any WAV file. Uses .spec cache."""
     cache_path = path.with_suffix(".spec")
     if cache_path.exists():
         try:
@@ -84,6 +78,17 @@ async def clip_spectrogram(filename: str):
     except Exception:
         pass
     return result
+
+
+@router.get("/clips/{filename}/spectrogram")
+async def clip_spectrogram(filename: str):
+    """Return spectrogram data for visualization (no auth required)."""
+    path = (CLIP_DIR / filename).resolve()
+    if not path.is_relative_to(CLIP_DIR.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Clip not found")
+    return generate_spectrogram(path)
 
 
 @router.get("/clips/{filename}")

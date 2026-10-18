@@ -38,7 +38,10 @@ detector/                 # Modular detection engine (Python package)
 │   └── routes_ws.py      #   /ws, /ws/audio WebSocket endpoints
 ├── integrations/
 │   └── mqtt.py           #   MQTT client, HA discovery
-└── static/index.html     #   Web UI (single-page)
+└── static/
+    ├── index.html          #   Web UI (single-page)
+    ├── settings.html       #   Settings page
+    └── js/audio-player.js  #   Shared spectrogram + player module
 ```
 
 ## Commands

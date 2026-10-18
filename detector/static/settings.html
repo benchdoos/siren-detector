@@ -74,6 +74,26 @@
   .src-toggle input:checked + .slider { background: #1a3a1a; }
   .src-toggle input:checked + .slider::before { transform: translateX(18px); background: #4caf50; }
 
+  /* ── Calibration recordings ── */
+  .cal-rec { background: #1a1a1a; border: 1px solid #222; border-radius: 6px; padding: 10px 12px; }
+  .cal-rec-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .cal-rec-source { font-size: 13px; color: #4caf50; font-weight: 600; }
+  .cal-rec-meta { font-size: 11px; color: #666; }
+  .cal-rec-meta span { margin-right: 10px; }
+  .cal-rec-actions { margin-left: auto; display: flex; gap: 6px; flex-shrink: 0; }
+  .cal-rec-del { background: none; border: 1px solid #333; color: #888; padding: 3px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  .cal-rec-del:hover { color: #ef5350; border-color: #ef5350; }
+  .clip-player { margin-top: 4px; position: relative; }
+  .spec-canvas { width: 100%; height: 60px; border-radius: 4px; cursor: pointer; display: block; background: #111; touch-action: none; }
+  .player-controls { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .player-controls audio { flex: 1; min-width: 180px; height: 36px; filter: invert(1) hue-rotate(180deg) brightness(0.8); }
+  .pc-buttons { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+  .pc-btn { font-size: 12px; padding: 3px 8px; border-radius: 4px; border: 1px solid #333; background: none; color: #888; cursor: pointer; white-space: nowrap; }
+  .pc-btn:hover { color: #ccc; border-color: #555; }
+  .pc-speed { font-variant-numeric: tabular-nums; width: 38px; text-align: center; }
+  .player-controls audio::-webkit-media-controls-seek-back-button,
+  .player-controls audio::-webkit-media-controls-seek-forward-button { display: none; }
+
   /* ── Mobile ── */
   @media (max-width: 700px) {
     .sp-body { flex-direction: column; }
@@ -231,6 +251,12 @@
         </div>
         <div id="cal-status" style="font-size:12px;color:#888;margin-top:8px;text-align:center"></div>
       </div>
+      <div class="s-section" style="margin-top:20px">
+        <div class="s-title">Recordings</div>
+        <div id="cal-recordings" style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:13px;color:#666">Loading recordings...</div>
+        </div>
+      </div>
     </div>
 
     <!-- About -->
@@ -259,6 +285,7 @@
   </div><!-- /.sp-content -->
 </div><!-- /.sp-body -->
 
+<script src="/static/js/audio-player.js"></script>
 <script>
 /* ── Auth (shared with index.html via sessionStorage) ── */
 const _adminToken = sessionStorage.getItem('adminToken') || '';
@@ -585,6 +612,7 @@ async function stopCalibration() {
       document.getElementById('cal-source').disabled = false;
       document.getElementById('cal-duration').disabled = false;
       document.getElementById('cal-start-btn').style.display = '';
+      loadCalRecordings();
     } else {
       const err = await res.json();
       document.getElementById('cal-status').textContent = err.detail || 'Error';
@@ -706,10 +734,107 @@ function stopSourceListen() {
   _listenBtn = null;
 }
 
+/* ── Calibration recordings ── */
+function fmtDuration(sec) {
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+function fmtDate(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+      + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  } catch(e) { return iso; }
+}
+
+async function loadCalRecordings() {
+  const container = document.getElementById('cal-recordings');
+  try {
+    const res = await fetch('/api/calibrate/recordings', { headers: adminHeaders() });
+    const data = await res.json();
+    const recs = data.recordings || [];
+    if (recs.length === 0) {
+      container.innerHTML = '<div style="font-size:13px;color:#666">No recordings yet. Use the form above to record background audio.</div>';
+      return;
+    }
+    container.innerHTML = '';
+    for (const r of recs) {
+      const card = document.createElement('div');
+      card.className = 'cal-rec';
+      const audioUrl = `/calibrate-audio/${encodeURIComponent(r.source)}/${encodeURIComponent(r.filename)}`;
+      const specUrl = audioUrl + '/spectrogram';
+      const tokenParam = _adminToken ? '?token=' + encodeURIComponent(_adminToken) : '';
+      card.innerHTML = `
+        <div class="cal-rec-header">
+          <span class="cal-rec-source">${esc(r.source)}</span>
+          <div class="cal-rec-meta">
+            <span>${fmtDuration(r.duration)}</span>
+            <span>${fmtDate(r.recorded_at)}</span>
+            <span>${r.size_kb} KB</span>
+          </div>
+          <div class="cal-rec-actions">
+            <button class="cal-rec-del" onclick="deleteCalRecording(this, '${esc(r.path)}')" title="Delete recording">&times; Delete</button>
+          </div>
+        </div>
+        <div class="clip-player" data-clip-url="${audioUrl}">
+          <canvas class="spec-canvas"></canvas>
+          <div class="player-controls">
+            <div class="pc-buttons">
+              <button class="pc-btn pc-skip-back" onclick="pcSkip(this,-1)">&#9664; 5s</button>
+              <button class="pc-btn pc-skip-fwd" onclick="pcSkip(this,1)">5s &#9654;</button>
+              <button class="pc-btn pc-speed" onclick="pcSpeed(this)">1&times;</button>
+            </div>
+            <audio controls preload="metadata" src="${audioUrl}${tokenParam}"></audio>
+          </div>
+        </div>`;
+      container.appendChild(card);
+      const player = card.querySelector('.clip-player');
+      initBasicPlayer(player, { spectrogramUrl: specUrl });
+    }
+  } catch(e) {
+    container.innerHTML = '<div style="font-size:13px;color:#ef5350">Failed to load recordings.</div>';
+  }
+}
+
+async function deleteCalRecording(btn, path) {
+  if (!confirm('Delete this recording? This cannot be undone.')) return;
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    const res = await fetch('/api/calibrate/recordings', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify({ path }),
+    });
+    if (res.status === 401) { alert('Auth required.'); btn.disabled = false; btn.textContent = '\u00D7 Delete'; return; }
+    if (res.ok) {
+      const card = btn.closest('.cal-rec');
+      // Stop audio if playing
+      const audio = card.querySelector('audio');
+      if (audio && !audio.paused) { audio.pause(); }
+      card.style.transition = 'opacity .3s';
+      card.style.opacity = '0';
+      setTimeout(() => { card.remove(); loadCalRecordings(); }, 300);
+    } else {
+      const err = await res.json();
+      alert(err.detail || 'Error');
+      btn.disabled = false;
+      btn.textContent = '\u00D7 Delete';
+    }
+  } catch(e) {
+    alert('Network error');
+    btn.disabled = false;
+    btn.textContent = '\u00D7 Delete';
+  }
+}
+
 /* ── Init ── */
 loadSettings();
 loadCalibrationSources();
 loadSources();
+loadCalRecordings();
 
 (async function init() {
   // Check if calibration is in progress — if so, open Calibration panel

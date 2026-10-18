@@ -1085,7 +1085,7 @@ Hub (fan-out relay, RPi :9000)
 - Segment labeling: drag on spectrogram → select range + label → `POST /feedback/segments` slices WAV and copies to dataset
 - Filters by type, history of 100 events
 - Dedicated **Settings page**: thresholds, detection mode, microphone management (enable/disable individual sources, custom display names)
-- **Background calibration**: record ambient audio from a specific source → saves to `/dataset/background/{source_name}/` → `make retrain`
+- **Background calibration**: record ambient audio from a specific source → saves to `/dataset/background/{source_name}/` → `make retrain`. Recordings list with spectrogram player and delete button in Settings → Calibration
 - Admin auth: viewing/listening — no token required; labeling, settings — require `ADMIN_TOKEN`
 - Mobile-friendly: audio listening and layout work on mobile devices
 
@@ -1245,6 +1245,10 @@ The Detection Engine provides HTTP and WebSocket APIs on port 8080.
 | `POST` | `/api/manual-event` | admin | Save current buffer as manual event |
 | `GET` | `/clips/{name}` | viewer | Download WAV clip |
 | `GET` | `/clips/{name}/spectrogram` | — | Clip spectrogram (JSON: width, height, data) |
+| `GET` | `/api/calibrate/recordings` | viewer | List background calibration recordings |
+| `DELETE` | `/api/calibrate/recordings` | admin | Delete recording: `{"path": "source/file.wav"}` |
+| `GET` | `/calibrate-audio/{source}/{file}` | viewer | Download calibration WAV |
+| `GET` | `/calibrate-audio/{source}/{file}/spectrogram` | — | Calibration recording spectrogram |
 
 Auth: `Authorization: Bearer <ADMIN_TOKEN>` header. Viewer and admin use the same token.
 
