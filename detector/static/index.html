@@ -463,7 +463,10 @@ function updateDetector(name, score, state, triggers, possibleNeeded, confirmedN
 
 function _updateSourcesDropdown() {
   const container = document.getElementById('dd-sources');
-  const sources = Object.values(_sourceScores);
+  const sourceIds = new Set([...Object.keys(_knownSources), ...Object.keys(_sourceScores)]);
+  const sources = [...sourceIds].map(sid => _sourceScores[sid] || {
+    source_id: Number(sid), source: _knownSources[sid],
+  });
   if (sources.length <= 1 && sources.length > 0) {
     const s = sources[0];
     // Single source: ensure structure exists, then update in-place
@@ -527,9 +530,11 @@ function updateScores(msg) {
     }
   }
 
-  const sources = Object.keys(_sourceScores).length > 0
+  const scoredSources = Object.keys(_sourceScores).length > 0
     ? Object.values(_sourceScores)
     : [msg];
+  const sourceCount = new Set([...Object.keys(_knownSources), ...Object.keys(_sourceScores)]).size;
+  const sources = scoredSources;
 
   // Aggregate per detector: worst state, max score, max triggers
   for (const name of DETECTOR_NAMES) {
@@ -559,7 +564,7 @@ function updateScores(msg) {
     if (s.top) parts.push(`<span class="top-label">top:</span> ${esc(s.top)}`);
     if (s.yamnet != null) parts.push(`<span class="top-label">yamnet:</span> ${(s.yamnet * 100).toFixed(0)}%`);
     if (s.mlp != null) parts.push(`<span class="top-label">mlp:</span> ${(s.mlp * 100).toFixed(0)}%`);
-  } else if (sources.length > 1) {
+  } else if (sourceCount > 1) {
     let yamSum = 0, yamN = 0, mlpSum = 0, mlpN = 0;
     for (const s of sources) {
       if (s.yamnet != null) { yamSum += s.yamnet; yamN++; }
@@ -567,7 +572,7 @@ function updateScores(msg) {
     }
     if (yamN) parts.push(`<span class="top-label">yamnet:</span> ${(yamSum / yamN * 100).toFixed(0)}%`);
     if (mlpN) parts.push(`<span class="top-label">mlp:</span> ${(mlpSum / mlpN * 100).toFixed(0)}%`);
-    parts.push(`<span class="top-label">src:</span> ${sources.length}`);
+    parts.push(`<span class="top-label">src:</span> ${sourceCount}`);
   }
   document.getElementById('top-text').innerHTML = parts.join(' &nbsp;·&nbsp; ');
 
