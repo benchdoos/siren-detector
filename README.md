@@ -24,32 +24,32 @@ You are free to copy, share, and adapt it for **non-commercial** purposes, provi
 
 ---
 
-## 1. Концепция проекта
+## 1. Project Concept
 
-### Идея
+### Idea
 
-Автономный детектор звуков, представляющих опасность или требующих внимания. Не универсальный классификатор всех звуков мира, а система с конкретной задачей — предупредить, когда рядом происходит что-то, на что стоит обратить внимание.
+An autonomous detector of sounds that represent danger or require attention. Not a universal classifier of every sound in the world, but a system with a specific task — to warn when something happens nearby that is worth paying attention to.
 
-Целевые классы:
+Target classes:
 
-- 🚨 `siren` — сирены гражданского оповещения (воздушная тревога);
-- 💥 `explosion` — взрывы и резкие импульсные звуки;
-- 🛵 `motorcycle` — БПЛА;
-- 🔇 `background` / `unknown` — обычный фон и неуверенные классификации.
+- 🚨 `siren` — civil alert sirens (air raid);
+- 💥 `explosion` — explosions and sharp impulse sounds;
+- 🛵 `motorcycle` — UAVs;
+- 🔇 `background` / `unknown` — normal background and low-confidence classifications.
 
-Ключевой принцип:
+Key principle:
 
-> **ESP32 — это универсальный Audio Node, а не обязательный ML-движок.**
+> **ESP32 is a universal Audio Node, not a mandatory ML engine.**
 
-Один и тот же Audio Node должен уметь работать:
+The same Audio Node should be able to work:
 
-1. полностью автономно с локальной TinyML-моделью;
-2. с Raspberry Pi;
-3. с обычным Linux/PC;
-4. с другим сервером или edge-компьютером;
-5. в будущем — с облачным или специализированным inference engine.
+1. fully autonomously with a local TinyML model;
+2. with Raspberry Pi;
+3. with a regular Linux/PC;
+4. with another server or edge computer;
+5. in the future — with a cloud or specialized inference engine.
 
-### Целевая архитектура
+### Target Architecture
 
 ```text
                     ┌───────────────────┐
@@ -85,62 +85,62 @@ You are free to copy, share, and adapt it for **non-commercial** purposes, provi
 
 ## Quick Start
 
-Минимальный набор для запуска: ESP32-S3 + INMP441 микрофон + любой Linux/Mac хост.
+Minimum requirements: ESP32-S3 + INMP441 microphone + any Linux/Mac host.
 
-1. **Настроить окружение**:
+1. **Set up the environment**:
    ```bash
-   cp .env.example .env                         # корневой .env для Makefile
-   cp hub/.env.example hub/.env                  # .env для Docker Compose
-   cp esp32/secrets.yaml.example esp32/secrets.yaml  # ESP32 секреты
+   cp .env.example .env                         # root .env for Makefile
+   cp hub/.env.example hub/.env                  # .env for Docker Compose
+   cp esp32/secrets.yaml.example esp32/secrets.yaml  # ESP32 secrets
    ```
-   Заполнить IP-адреса, порты и пароли в каждом файле.
+   Fill in IP addresses, ports, and passwords in each file.
 
-2. **Прошить ESP32**: скопировать `esp32/siren-detector.yaml` и `secrets.yaml`
-   на хост с ESPHome, прошить. Микрофон подключается по I2S (GPIO4/5/6,
-   см. раздел 5).
+2. **Flash ESP32**: copy `esp32/siren-detector.yaml` and `secrets.yaml`
+   to the ESPHome host and flash. The microphone connects via I2S (GPIO4/5/6,
+   see section 5).
 
-3. **Запустить Hub** на хосте (принимает UDP-поток от ESP32):
+3. **Start Hub** on the host (receives UDP stream from ESP32):
    ```bash
    cd hub
    docker compose up -d hub
    ```
 
-4. **Запустить Detector** (YAMNet + MLP):
+4. **Start Detector** (YAMNet + MLP):
    ```bash
    docker compose up -d detector
    ```
 
-5. **Открыть Web UI**: `http://<your_host_ip>:8080` — реал-тайм confidence
-   bar, история событий, прослушивание клипов.
+5. **Open Web UI**: `http://<your_host_ip>:8080` — real-time confidence
+   bar, event history, clip playback.
 
-6. **Дообучить модель** на своих данных:
+6. **Retrain the model** on your data:
    ```bash
-   make sync-dataset   # синхронизировать размеченные WAV
-   make train          # обучить MLP-классификатор
-   make deploy-model   # задеплоить веса + перезапуск
+   make sync-dataset   # sync labeled WAVs
+   make train          # train MLP classifier
+   make deploy-model   # deploy weights + restart
    ```
 
-Для автономной работы ESP32 без сервера — см. Phase 9 (в разработке).
+For standalone ESP32 operation without a server — see Phase 9 (in development).
 
 ---
 
-## 2. Архитектурные принципы
+## 2. Architectural Principles
 
-### Разделение ответственности
+### Separation of Concerns
 
 **Audio Node**
-- получает звук;
-- буферизует PCM;
-- передаёт аудио;
-- при необходимости выполняет локальное распознавание;
-- может выдавать локальное голосовое/звуковое оповещение.
+- captures sound;
+- buffers PCM;
+- transmits audio;
+- optionally performs local inference;
+- can provide local voice/sound alerts.
 
 **Detection Engine**
-- извлекает признаки;
-- запускает ML-модель;
-- оценивает confidence;
-- объединяет несколько временных окон;
-- принимает решение о событии.
+- extracts features;
+- runs the ML model;
+- evaluates confidence;
+- combines multiple time windows;
+- makes event decisions.
 
 **Integration**
 - Home Assistant;
@@ -148,77 +148,77 @@ You are free to copy, share, and adapt it for **non-commercial** purposes, provi
 - REST;
 - WebSocket;
 - webhook;
-- другие потребители событий.
+- other event consumers.
 
-Ни один из этих компонентов не должен быть жёстко связан с конкретным производителем железа.
+None of these components should be tightly coupled to a specific hardware vendor.
 
-### Модульная архитектура detector
+### Modular Detector Architecture
 
-Detection Engine реализован как Python-пакет `detector/` с атомарными слоями,
-связанными через in-process **EventBus** (`detector/bus.py`):
+The Detection Engine is implemented as a Python package `detector/` with atomic layers
+connected via an in-process **EventBus** (`detector/bus.py`):
 
 ```
 detector/
-├── main.py               # точка входа: собирает bus, engine, server, integrations
-├── config.py             # константы, определения детекторов, настройки по умолчанию
-├── bus.py                # EventBus — единственный shared object между слоями
-├── transport/udp.py      # UDP-приёмник (SDR1-протокол)
+├── main.py               # entry point: wires bus, engine, server, integrations
+├── config.py             # constants, detector definitions, default settings
+├── bus.py                # EventBus — the single shared object between layers
+├── transport/udp.py      # UDP receiver (SDR1 protocol)
 ├── engine/
-│   ├── interface.py      # EngineInterface Protocol — контракт для замены движка
+│   ├── interface.py      # EngineInterface Protocol — contract for engine replacement
 │   ├── smoother.py       # TemporalSmoother (idle → possible → confirmed)
-│   └── yamnet_engine.py  # YAMNet + MLP (текущая реализация)
+│   └── yamnet_engine.py  # YAMNet + MLP (current implementation)
 ├── server/               # FastAPI: WebSocket, clips, feedback, settings
 └── integrations/mqtt.py  # MQTT, Home Assistant discovery
 ```
 
-Чтобы подключить свой движок, реализуйте класс с методом
-`start(bus, settings, args)` по контракту `detector/engine/interface.py`
-и подключите его в `main.py`.
+To plug in your own engine, implement a class with a
+`start(bus, settings, args)` method per the `detector/engine/interface.py` contract
+and wire it in `main.py`.
 
 ### Interchangeable Engine
 
-ESP32 не должен знать, какая именно нейросеть находится на сервере.
+ESP32 should not know which specific neural network runs on the server.
 
-Возможные движки:
+Possible engines:
 
-- YAMNet + MLP (текущий, `detector/engine/yamnet_engine.py`);
-- собственная TensorFlow/TFLite-модель;
+- YAMNet + MLP (current, `detector/engine/yamnet_engine.py`);
+- custom TensorFlow/TFLite model;
 - LiteRT/TensorFlow Lite Micro;
 - ONNX Runtime;
 - PyTorch-based inference;
 - Edge Impulse;
-- специализированный серверный inference engine.
+- specialized server inference engine.
 
-### Режимы работы ESP32
+### ESP32 Operating Modes
 
-ESP32 поддерживает три режима работы (настраиваются через Home Assistant):
+ESP32 supports three operating modes (configurable via Home Assistant):
 
-**Автономный** — ESP32 детектит звуки самостоятельно и оповещает через динамик:
-
-```text
-INMP441 → ESP32-S3 → mel-спектрограмма → компактная CNN (TFLite Micro)
-   → событие → динамик / локальное оповещение
-```
-
-**Комбинированный** — ESP32 делает первичный скрининг, при подозрении отправляет аудио на сервер для уточнения:
+**Standalone** — ESP32 detects sounds on its own and alerts via speaker:
 
 ```text
-INMP441 → ESP32-S3 → локальная модель → подозрение?
-   → да: отправить аудио на RPi → YAMNet + MLP → подтверждение
-   → нет: тишина, трафик не тратим
+INMP441 → ESP32-S3 → mel spectrogram → compact CNN (TFLite Micro)
+   → event → speaker / local alert
 ```
 
-**Удалённый** (текущий режим) — весь поток идёт на сервер:
+**Combined** — ESP32 performs initial screening, sends audio to server on suspicion:
 
 ```text
-INMP441 → ESP32-S3 → UDP → RPi → YAMNet + MLP → событие
+INMP441 → ESP32-S3 → local model → suspicion?
+   → yes: send audio to RPi → YAMNet + MLP → confirmation
+   → no: silence, no traffic
 ```
 
-Внешний движок при этом всегда остаётся опциональным.
+**Remote** (current mode) — entire stream goes to server:
+
+```text
+INMP441 → ESP32-S3 → UDP → RPi → YAMNet + MLP → event
+```
+
+The external engine always remains optional.
 
 ---
 
-# 3. Технологический стек
+# 3. Technology Stack
 
 ## Hardware
 
@@ -228,7 +228,7 @@ INMP441 → ESP32-S3 → UDP → RPi → YAMNet + MLP → событие
 - 8 MB PSRAM
 - Wi-Fi
 - INMP441 I2S MEMS microphone
-- в будущем — небольшой динамик/усилитель для локального голосового оповещения
+- in the future — a small speaker/amplifier for local voice alerts
 
 ### Server / Edge
 
@@ -236,72 +236,72 @@ INMP441 → ESP32-S3 → UDP → RPi → YAMNet + MLP → событие
 - Linux
 - Docker / Docker Compose
 
-## Firmware / device layer
+## Firmware / Device Layer
 
-- ESPHome 2026.9.1 — текущий этап разработки
+- ESPHome 2026.9.1 — current development stage
 - ESP-IDF
 - I2S audio
 - mDNS
 - ESPHome API
 - OTA
 
-ESPHome используется сейчас для быстрого bring-up железа и управления устройством. Для универсального Audio Node в дальнейшем аудиотранспорт может быть вынесен в отдельный firmware/application layer.
+ESPHome is currently used for quick hardware bring-up and device management. For a universal Audio Node, the audio transport may later be extracted into a separate firmware/application layer.
 
 ## ML / Audio
 
-Первый baseline:
+First baseline:
 
 - YAMNet
 - AudioSet
 
-Будущие направления:
+Future directions:
 
-- собственная компактная CNN;
-- MFCC / log-mel spectrogram — извлечение признаков из сырого PCM;
-- INT8 quantization — сжатие модели для микроконтроллера;
-- TensorFlow Lite Micro (он же LiteRT Micro) — фреймворк для запуска моделей на ESP32;
-- ESP-NN — библиотека от Espressif, ускоряет нейросетевые операции на ESP32-S3 через SIMD-инструкции (подключается автоматически через TFLite Micro);
-- Edge Impulse — альтернативная платформа для TinyML.
+- custom compact CNN;
+- MFCC / log-mel spectrogram — feature extraction from raw PCM;
+- INT8 quantization — model compression for microcontrollers;
+- TensorFlow Lite Micro (aka LiteRT Micro) — framework for running models on ESP32;
+- ESP-NN — Espressif library that accelerates neural network operations on ESP32-S3 via SIMD instructions (automatically integrated via TFLite Micro);
+- Edge Impulse — alternative TinyML platform.
 
 ## Transport
 
-Первый планируемый транспорт:
+First planned transport:
 
 - WebSocket
 - PCM audio stream
 
-Возможные дополнительные варианты:
+Additional options:
 
 - UDP;
 - TCP;
-- MQTT для событий/команд;
+- MQTT for events/commands;
 - Serial/USB;
-- другие протоколы.
+- other protocols.
 
 ## Integrations
 
-Первый целевой consumer:
+Primary target consumer:
 
 - Home Assistant
 
-Дополнительно:
+Additionally:
 
 - MQTT;
 - REST API;
 - WebSocket;
 - webhook;
 - Node-RED;
-- собственные приложения.
+- custom applications.
 
 ---
 
-# 4. Текущий стенд
+# 4. Current Setup
 
-## Сеть
+## Network
 
-Адреса зависят от конкретной установки. Ниже пример:
+Addresses depend on your specific installation. Example:
 
-| Устройство | Адрес |
+| Device | Address |
 |---|---|
 | Router | `<your_router_ip>` |
 | Raspberry Pi 5 | `<your_rpi_ip>` |
@@ -309,12 +309,12 @@ ESPHome используется сейчас для быстрого bring-up �
 | ESP32 hostname | `siren-detector.local` |
 | Wi-Fi SSID | `<your_ssid>` |
 
-Реальные адреса, пароли и SSID задаются через `.env` файлы и `secrets.yaml`
-(не коммитятся в Git). См. `.env.example` в каждом компоненте.
+Actual addresses, passwords, and SSID are set via `.env` files and `secrets.yaml`
+(not committed to Git). See `.env.example` in each component.
 
 ## Raspberry Pi
 
-Проект ESPHome:
+ESPHome project:
 
 ```text
 ~/Projects/esphome/
@@ -325,7 +325,7 @@ ESPHome используется сейчас для быстрого bring-up �
     └── siren-detector.yaml
 ```
 
-Текущий Docker Compose:
+Current Docker Compose:
 
 ```yaml
 services:
@@ -342,9 +342,9 @@ services:
       - /etc/localtime:/etc/localtime:ro
 ```
 
-## Текущая ESPHome-конфигурация
+## Current ESPHome Configuration
 
-Базовые возможности:
+Basic capabilities:
 
 - ESP32-S3;
 - ESP-IDF;
@@ -356,9 +356,9 @@ services:
 - uptime sensor;
 - status/online sensor.
 
-### Первый аудиотест: INMP441
+### First Audio Test: INMP441
 
-В `esp32/siren-detector.yaml` добавлен I²S-захват без ML:
+I2S capture without ML has been added to `esp32/siren-detector.yaml`:
 
 | INMP441 | ESP32-S3 |
 |---|---|
@@ -367,45 +367,45 @@ services:
 | `SCK` / `BCLK` | `GPIO4` |
 | `WS` / `LRCLK` | `GPIO5` |
 | `SD` / `DOUT` | `GPIO6` |
-| `L/R` | `GND` (левый канал) |
+| `L/R` | `GND` (left channel) |
 
-Параметры захвата: mono, `16 kHz`, данные микрофона в `32-bit I²S`-слотах. Recorder преобразует поток в WAV `16-bit PCM`.
+Capture parameters: mono, `16 kHz`, microphone data in `32-bit I2S` slots. The recorder converts the stream to WAV `16-bit PCM`.
 
-Для проверки в Home Assistant появился переключатель `Microphone capture`:
+For verification, a `Microphone capture` toggle appeared in Home Assistant:
 
-- включить — начать чтение I²S;
-- выключить — остановить чтение;
-- через 5 секунд после загрузки ESP32 захват автоматически включается.
+- enable — start reading I2S;
+- disable — stop reading;
+- 5 seconds after ESP32 boot, capture starts automatically.
 
-При активном захвате ESP32 примерно раз в полсекунды пишет размер блока и уровни сигнала (`rms` и `peak`). Это проверка наличия реального аудиосигнала, а не детектор событий.
+During active capture, ESP32 logs block size and signal levels (`rms` and `peak`) roughly every half second. This is a check for the presence of a real audio signal, not an event detector.
 
-Перед первой прошивкой нужно проверить конфиг на Raspberry Pi:
+Before the first flash, validate the config on Raspberry Pi:
 
 ```bash
 cd ~/Projects/esphome
 docker compose run --rm esphome config /config/siren-detector.yaml
 ```
 
-Затем прошить по OTA:
+Then flash via OTA:
 
 ```bash
 docker compose run --rm esphome upload /config/siren-detector.yaml --device siren-detector.local
 docker compose run --rm esphome logs /config/siren-detector.yaml --device siren-detector.local
 ```
 
-Через 5 секунд после загрузки `Microphone capture` включается автоматически. В Home Assistant его можно выключить вручную; после следующей перезагрузки захват снова запустится.
+After boot, `Microphone capture` enables automatically after 5 seconds. In Home Assistant you can disable it manually; after the next reboot, capture will start again.
 
-Ожидаемый формат строки в логах:
+Expected log line format:
 
 ```text
 INMP441 data: 1024 bytes, chunks=32, samples=256, rms=0.00..., peak=0.00...
 ```
 
-## UDP recorder: первый рабочий прототип
+## UDP Recorder: First Working Prototype
 
-ESP32 отправляет I²S-пакеты по UDP на Raspberry Pi 5 (`<your_rpi_ip>:9000`). Захват включается при запуске устройства. Каждый пакет получает порядковый номер: если UDP потеряет пакет, recorder вставит на его месте тишину, а не укоротит WAV. Рекордер сохраняет поток как WAV `16 kHz / mono / 16 bit` и не требует сторонних Python-библиотек.
+ESP32 sends I2S packets over UDP to Raspberry Pi 5 (`<your_rpi_ip>:9000`). Capture starts on device boot. Each packet gets a sequence number: if UDP loses a packet, the recorder inserts silence in its place rather than shortening the WAV. The recorder saves the stream as WAV `16 kHz / mono / 16 bit` and requires no third-party Python libraries.
 
-Recorder вынесен в отдельную папку `recorder/`:
+The recorder is in a separate `recorder/` directory:
 
 ```text
 recorder/
@@ -422,7 +422,7 @@ recorder/
     └── inbox/
 ```
 
-Скопировать папку на Raspberry Pi:
+Copy the directory to Raspberry Pi:
 
 ```bash
 scp -r recorder <user>@<your_rpi_ip>:~/Projects/esphome/
@@ -433,16 +433,16 @@ docker compose build
 LABEL=background DURATION=10 docker compose run --rm recorder
 ```
 
-После изменений в формате UDP-пакетов нужно заново собрать и прошить ESP32, а затем пересобрать recorder:
+After changes to the UDP packet format, you need to rebuild and reflash ESP32, then rebuild the recorder:
 
 ```bash
 cd ~/Projects/esphome/recorder
 docker compose build --no-cache
 ```
 
-`LABEL` выбирает подпапку, а `DURATION` задаёт длину записи в секундах. Например, команда выше создаст 10-секундный WAV в `dataset/background/` и завершится автоматически. Допустимые метки: `siren`, `explosion`, `motorcycle`, `background`, `unknown`, `inbox`. Если `DURATION` не задан или равен `0`, запись идёт до `Ctrl-C`.
+`LABEL` selects the subdirectory, and `DURATION` sets the recording length in seconds. For example, the command above creates a 10-second WAV in `dataset/background/` and finishes automatically. Allowed labels: `siren`, `explosion`, `motorcycle`, `background`, `unknown`, `inbox`. If `DURATION` is not set or equals `0`, recording continues until `Ctrl-C`.
 
-Примеры:
+Examples:
 
 ```bash
 LABEL=siren DURATION=10 docker compose run --rm recorder
@@ -450,13 +450,13 @@ LABEL=background DURATION=30 docker compose run --rm recorder
 docker compose run --rm recorder
 ```
 
-Последняя команда сохраняет непрерывную запись в `dataset/inbox/`.
+The last command saves a continuous recording to `dataset/inbox/`.
 
-### Разметка длительной записи после события
+### Annotating a Long Recording After an Event
 
-Чтобы не угадывать класс заранее, recorder можно запустить в `inbox` без
-ограничения длительности. После остановки он сохраняет WAV и JSON-файл с
-временем старта. Перенеси оба файла на Mac, затем разметь интервалы по часам:
+To avoid guessing the class in advance, the recorder can be started in `inbox` without
+a duration limit. After stopping, it saves a WAV and a JSON file with
+the start time. Transfer both files to Mac, then annotate intervals by clock time:
 
 ```bash
 python3 dataset/annotate_recording.py dataset/inbox/<recording>.wav \
@@ -465,138 +465,138 @@ python3 dataset/annotate_recording.py dataset/inbox/<recording>.wav \
   --segment background 12:08 12:15
 ```
 
-Интервалы будут скопированы в соответствующие папки датасета, исходный WAV
-останется нетронутым в `inbox`, а связь сегментов с исходником сохранится в
-`dataset/annotations.csv`. Полная инструкция — в [`dataset/README.md`](dataset/README.md).
+Intervals will be copied to the corresponding dataset directories, the original WAV
+remains untouched in `inbox`, and the segment-to-source mapping is saved in
+`dataset/annotations.csv`. Full instructions are in [`dataset/README.md`](dataset/README.md).
 
-Чтобы задавать время относительно начала файла, добавь `-f` после `--segment`:
-`--segment -f siren 12:03 12:08` — это минуты и секунды (`MM:SS`); для записи
-длиннее часа указывай `HH:MM:SS`, например `1:12:03`.
+To specify time relative to the file start, add `-f` after `--segment`:
+`--segment -f siren 12:03 12:08` — these are minutes and seconds (`MM:SS`); for recordings
+longer than an hour, use `HH:MM:SS`, e.g. `1:12:03`.
 
-## Готовые звуки для быстрого старта
+## Pre-made Sounds for Quick Start
 
-Чтобы быстрее проверить будущий классификатор, можно использовать внешний набор
-[ESC-50](https://github.com/karolpiczak/ESC-50): 2 000 пятисекундных записей,
-в том числе `siren`, `rain`, `wind`, `washing_machine`, `keyboard_typing`,
-`engine` и `fireworks`. В нём нет отдельных классов «посудомойка» и «3D-принтер».
+To quickly test the classifier, you can use the external dataset
+[ESC-50](https://github.com/karolpiczak/ESC-50): 2,000 five-second recordings,
+including `siren`, `rain`, `wind`, `washing_machine`, `keyboard_typing`,
+`engine`, and `fireworks`. It has no separate classes for "dishwasher" or "3D printer".
 
-Важно: ESC-50 распространяется под **CC BY-NC 3.0** (некоммерческое
-использование); отдельное подмножество ESC-10 — CC BY 3.0. В архиве есть
-атрибуция авторов исходных клипов. Перед коммерческим использованием нужно
-проверить права на каждый материал. Поэтому аудио не хранится в Git и не
-смешивается с собственными записями.
+Important: ESC-50 is distributed under **CC BY-NC 3.0** (non-commercial
+use); the ESC-10 subset is CC BY 3.0. The archive includes
+attribution of original clip authors. Before commercial use, you need to
+check the rights for each item. Therefore, audio is not stored in Git and is not
+mixed with our own recordings.
 
-Структура данных:
+Data structure:
 
 ```text
 dataset/
-├── siren/                 # собственные записи с recorder
+├── siren/                 # own recordings from recorder
 ├── explosion/
 ├── motorcycle/
 ├── background/
 ├── unknown/
 ├── inbox/
 └── external/
-    └── esc50/             # скачивается отдельно; не коммитить аудио
+    └── esc50/             # downloaded separately; do not commit audio
         ├── audio/
         ├── meta/esc50.csv
         ├── LICENSE
         └── SOURCE.md
 ```
 
-Из корня репозитория запусти:
+From the repository root, run:
 
 ```bash
 python3 dataset/fetch_esc50.py
 ```
 
-Скрипт скачает официальный архив и извлечёт только выбранные категории
-(примерно 280 пятисекундных клипов), сохранив оригинальные имена, полный CSV
-метаданных и LICENSE. Архив временный; сами WAV останутся локально в
-`dataset/external/esc50/audio/` и не попадут в Git. Не переименовывай файлы:
-CSV связывает их с классом, fold и источником. Соответствия для sanity-check:
+The script downloads the official archive and extracts only selected categories
+(approximately 280 five-second clips), preserving original filenames, the full CSV
+of metadata, and the LICENSE. The archive is temporary; the WAV files remain locally in
+`dataset/external/esc50/audio/` and won't enter Git. Do not rename files:
+the CSV links them to class, fold, and source. Mappings for sanity check:
 
-| ESC-50 class | Использование при проверке | Наша целевая метка |
+| ESC-50 class | Use in validation | Our target label |
 |---|---|---|
-| `siren` | сирена | `siren` |
-| `rain`, `wind`, `washing_machine`, `keyboard_typing` | разнообразный фон | `background` |
-| `engine` | двигатель → мопед/мотоцикл | `motorcycle` |
-| `fireworks`, `thunderstorm`, `helicopter` и др. | фоновые звуки | `background` |
+| `siren` | siren | `siren` |
+| `rain`, `wind`, `washing_machine`, `keyboard_typing` | diverse background | `background` |
+| `engine` | engine → moped/motorcycle | `motorcycle` |
+| `fireworks`, `thunderstorm`, `helicopter`, etc. | background sounds | `background` |
 
-Не копируй внешние клипы в папки `dataset/siren/` или `dataset/background/`:
-это скроет происхождение и может привести к утечке одинаковых исходных записей
-между обучением и проверкой. При сравнении разделяй данные по `fold` из CSV;
-результат на ESC-50 — только быстрый sanity-check, не оценка качества на
-микрофоне INMP441. Для реального качества обязательно нужны собственные записи
-с устройства. У ESC-50 возможны особенности исходной обработки, влияющие на
-обучение и метрики.
+Do not copy external clips into `dataset/siren/` or `dataset/background/`:
+this would hide provenance and could cause data leakage of identical source recordings
+between training and validation. When comparing, split data by `fold` from CSV;
+the ESC-50 result is only a quick sanity check, not a quality assessment on
+the INMP441 microphone. For real quality metrics, you need your own recordings
+from the device. ESC-50 may have processing artifacts that affect
+training and metrics.
 
-### Добавление данных из Freesound и других источников
+### Adding Data from Freesound and Other Sources
 
-Для классов, которых нет в ESC-50 (например, `explosion`), можно скачать клипы
-с [Freesound.org](https://freesound.org/) или других открытых источников.
+For classes not present in ESC-50 (e.g. `explosion`), you can download clips
+from [Freesound.org](https://freesound.org/) or other open sources.
 
-Скачанные файлы кладутся в `dataset/inbox/downloads/`, затем конвертируются
-скриптом `convert_downloads.py`:
+Downloaded files go to `dataset/inbox/downloads/`, then are converted
+by the `convert_downloads.py` script:
 
 ```bash
 python3 dataset/convert_downloads.py explosion
 python3 dataset/convert_downloads.py motorcycle
 ```
 
-Скрипт автоматически конвертирует в 16 kHz / mono / 16-bit WAV, нарезает на
-5-секундные чанки и раскладывает в `dataset/<label>/`. Обработанные оригиналы
-перемещаются в `dataset/inbox/downloads/done/`.
+The script automatically converts to 16 kHz / mono / 16-bit WAV, splits into
+5-second chunks, and places them in `dataset/<label>/`. Processed originals
+are moved to `dataset/inbox/downloads/done/`.
 
-Лицензия и карточка набора:
-[ESC-50 README и лицензия](https://github.com/karolpiczak/ESC-50).
+License and dataset card:
+[ESC-50 README and license](https://github.com/karolpiczak/ESC-50).
 
-### Аугментация данных
+### Data Augmentation
 
-Скрипт `dataset/augment.py` создаёт реалистичные тренировочные данные из чистых
-внешних источников (ESC-50, Freesound), применяя:
+The `dataset/augment.py` script creates realistic training data from clean
+external sources (ESC-50, Freesound) by applying:
 
-- варьирование громкости (-20…+3 dB — имитация разного расстояния);
-- миксование с реальными INMP441 background-записями (улица, комната);
-- опционально: noise profile микрофона (из записи тишины с INMP441).
+- volume variation (-20…+3 dB — simulating different distances);
+- mixing with real INMP441 background recordings (street, room);
+- optionally: microphone noise profile (from a silence recording with INMP441).
 
 ```bash
-# Аугментировать siren и explosion
+# Augment siren and explosion
 make augment
 
-# Или по отдельности
+# Or individually
 make augment-siren
 make augment-explosion
 
-# С noise profile (после записи тишины с INMP441)
+# With noise profile (after recording silence with INMP441)
 ml/.venv/bin/python dataset/augment.py siren --count 200 \
   --noise-profile dataset/background/noise-profile-inmp441.wav
 
-# Посмотреть что будет создано
+# Preview what will be created
 ml/.venv/bin/python dataset/augment.py siren --count 10 --dry-run
 ```
 
-Аугментированные файлы сохраняются как `dataset/<label>/aug_*.wav` и участвуют
-в тренировке наравне с остальными записями. После аугментации — `make retrain`.
+Augmented files are saved as `dataset/<label>/aug_*.wav` and participate
+in training alongside other recordings. After augmentation — `make retrain`.
 
-Подробные рекомендации по соотношению aug/real данных, class imbalance, domain gap
-и чеклист перед ретрейном — в [`ml/TRAINING_GUIDE.md`](ml/TRAINING_GUIDE.md).
+Detailed recommendations on aug/real data ratios, class imbalance, domain gap,
+and a pre-retrain checklist are in [`ml/TRAINING_GUIDE.md`](ml/TRAINING_GUIDE.md).
 
-### Первый локальный baseline: YAMNet
+### First Local Baseline: YAMNet
 
-На Mac подготовлено изолированное окружение и скрипт [`ml/evaluate_yamnet.py`](ml/evaluate_yamnet.py).
-Инструкция запуска — в [`ml/README.md`](ml/README.md). Скрипт приводит WAV к
-mono/16 kHz на лету и проверяет YAMNet на выбранных клипах по исходным fold;
-исходные аудиофайлы не меняются, результаты сохраняются локально в
-`ml/results/` и не попадают в Git.
+An isolated environment and script [`ml/evaluate_yamnet.py`](ml/evaluate_yamnet.py) are prepared on Mac.
+Launch instructions are in [`ml/README.md`](ml/README.md). The script converts WAVs to
+mono/16 kHz on the fly and tests YAMNet on selected clips by original fold;
+source audio files are not modified, results are saved locally in
+`ml/results/` and don't enter Git.
 
-Первый прогон по 280 клипам дал ROC AUC `0.996` для ранжирования сирены против
-остальных выбранных классов; точное top-1 совпадение по классу `siren` — `60%`.
-Это только sanity-check готовой модели на внешнем наборе, не оценка работы
-INMP441 в комнате или на улице. YAMNet не имеет отдельного класса
-`washing_machine`.
+The first run on 280 clips gave ROC AUC `0.996` for ranking siren against
+other selected classes; exact top-1 match for class `siren` — `60%`.
+This is only a sanity check of the pre-trained model on an external dataset, not an assessment of
+INMP441 performance in a room or outdoors. YAMNet does not have a separate
+`washing_machine` class.
 
-Перед прошивкой версии с UDP-транспортом на Raspberry Pi выполнить:
+Before flashing the UDP transport version to Raspberry Pi:
 
 ```bash
 cd ~/Projects/esphome
@@ -605,7 +605,7 @@ docker compose run --rm esphome compile /config/siren-detector.yaml
 docker compose run --rm esphome upload /config/siren-detector.yaml --device siren-detector.local
 ```
 
-Устройство успешно подключается к ESPHome API:
+The device successfully connects to ESPHome API:
 
 ```text
 siren-detector.local:6053
@@ -617,13 +617,13 @@ OTA:
 siren-detector.local:3232
 ```
 
-Текущий Wi-Fi уровень в момент проверки был около `-35 dB`.
+The Wi-Fi signal level at the time of testing was approximately `-35 dB`.
 
 ## Home Assistant
 
-ESPHome-интеграция устройства уже подключена.
+The ESPHome device integration is already connected.
 
-Текущие сущности включают:
+Current entities include:
 
 - Wi-Fi Signal;
 - Uptime;
@@ -633,7 +633,7 @@ ESPHome-интеграция устройства уже подключена.
 
 # 5. INMP441
 
-Планируемое подключение:
+Wiring:
 
 | INMP441 | ESP32-S3 |
 |---|---|
@@ -644,7 +644,7 @@ ESPHome-интеграция устройства уже подключена.
 | SD / DOUT | GPIO6 |
 | L/R | GND |
 
-Целевой аудиоформат первого прототипа:
+Target audio format for the first prototype:
 
 ```text
 PCM
@@ -653,33 +653,33 @@ mono
 16 bit
 ```
 
-Первый этап — не распознавание, а проверка качества захвата.
+The first stage is not recognition, but verifying capture quality.
 
 ---
 
-# 6. План реализации
+# 6. Implementation Plan
 
 ## Phase 0 — Bring-up
 
-**Статус: завершён**
+**Status: completed**
 
-- [x] ESP32-S3 определён;
-- [x] прошит;
-- [x] подключён к Wi-Fi;
-- [x] доступен по mDNS;
-- [x] ESPHome API работает;
-- [x] OTA подготовлен;
-- [x] Home Assistant подключён;
-- [x] подключён INMP441;
-- [x] получить стабильный I²S-поток;
-- [x] передать аудио по UDP на Raspberry Pi;
-- [x] сохранить и прослушать WAV `16 kHz / mono / 16 bit`.
+- [x] ESP32-S3 identified;
+- [x] flashed;
+- [x] connected to Wi-Fi;
+- [x] accessible via mDNS;
+- [x] ESPHome API works;
+- [x] OTA prepared;
+- [x] Home Assistant connected;
+- [x] INMP441 connected;
+- [x] stable I2S stream obtained;
+- [x] audio transmitted via UDP to Raspberry Pi;
+- [x] WAV `16 kHz / mono / 16 bit` saved and listened to.
 
 ## Phase 1 — Audio Capture
 
-**Статус: базовый захват и прослушивание подтверждены; проверка качества продолжается.**
+**Status: basic capture and playback confirmed; quality testing continues.**
 
-Цель:
+Goal:
 
 ```text
 INMP441
@@ -691,25 +691,25 @@ I2S
 PCM 16 kHz / mono / 16 bit
 ```
 
-Проверено на стенде: запись `20261008-130016.wav` длительностью `16.864 s`, `dropped=0`. Дальше проверить шумовой фон и собрать размеченные записи в разных условиях.
+Verified on the bench: recording `20261008-130016.wav`, duration `16.864 s`, `dropped=0`. Next: check noise floor and collect labeled recordings under various conditions.
 
-Дополнительно проверить:
+Additional checks:
 
-- уровень сигнала;
-- собственный шум;
+- signal level;
+- self-noise;
 - clipping;
-- стабильность I2S;
-- качество записи;
-- влияние положения устройства;
-- работу через окно/балкон.
+- I2S stability;
+- recording quality;
+- effect of device position;
+- operation through window/balcony.
 
 ## Phase 2 — Audio Node
 
-**Статус: впереди.**
+**Status: ahead.**
 
-Сделать ESP32 независимым от конкретного backend.
+Make ESP32 independent of a specific backend.
 
-Функции:
+Functions:
 
 - audio capture;
 - ring buffer;
@@ -722,9 +722,9 @@ PCM 16 kHz / mono / 16 bit
 
 ## Phase 3 — Audio Transport
 
-**Статус: UDP-прототип работает; Hub реализован; WebSocket — следующий шаг.**
+**Status: UDP prototype works; Hub implemented; WebSocket — next step.**
 
-Текущий прототип использует UDP с sequence number. Реализован **Hub** — UDP fan-out relay на Raspberry Pi, который принимает поток от ESP32 и пересылает всем подписчикам:
+The current prototype uses UDP with sequence numbers. A **Hub** has been implemented — a UDP fan-out relay on Raspberry Pi that receives the stream from ESP32 and forwards it to all subscribers:
 
 ```text
 ESP32 ──UDP:9000──> Hub (RPi)
@@ -733,15 +733,15 @@ ESP32 ──UDP:9000──> Hub (RPi)
                        └──> Future consumer    → any engine
 ```
 
-Это позволяет нескольким потребителям работать с одним потоком без изменений в прошивке ESP32. Каждый потребитель независим и может быть любой реализацией.
+This allows multiple consumers to work with a single stream without changes to the ESP32 firmware. Each consumer is independent and can be any implementation.
 
-Следующая версия транспорта — WebSocket с полноценным протоколом:
+The next transport version — WebSocket with a full protocol:
 
 ```text
-ESP32 ── WebSocket ──> Raspberry Pi / любой хост
+ESP32 ── WebSocket ──> Raspberry Pi / any host
 ```
 
-Предварительные типы сообщений:
+Preliminary message types:
 
 ```text
 HELLO
@@ -753,13 +753,13 @@ EVENT
 MODEL_INFO
 ```
 
-Протокол должен оставаться независимым от конкретной ML-модели. В будущем потребитель сможет подключиться к ESP32 напрямую и сообщить, что берёт аудио на себя — ESP32 при этом продолжает или прекращает локальный анализ по договорённости.
+The protocol should remain independent of a specific ML model. In the future, a consumer will be able to connect to ESP32 directly and indicate that it takes over audio processing — ESP32 then continues or stops local analysis by agreement.
 
 ## Phase 4 — Recording / Dataset
 
-**Статус: recorder умеет сохранять собственные WAV по категориям; внешний ESC-50 можно добавить отдельно для sanity-check.**
+**Status: recorder can save own WAVs by category; external ESC-50 can be added separately for sanity check.**
 
-Raspberry Pi должен уметь сохранять реальные записи:
+Raspberry Pi should be able to save real recordings:
 
 ```text
 dataset/
@@ -769,33 +769,33 @@ dataset/
 ├── background/
 ├── unknown/
 ├── inbox/
-└── external/esc50/  # сторонний набор с отдельной лицензией и метаданными
+└── external/esc50/  # third-party dataset with separate license and metadata
 ```
 
-Особое внимание:
+Special attention:
 
-- реальные бытовые шумы;
-- ветер;
-- дождь;
-- речь;
-- телевизор;
-- автомобили;
-- обычные двигатели;
-- музыка;
-- птицы/животные;
-- случайные хлопки.
+- real household noises;
+- wind;
+- rain;
+- speech;
+- TV;
+- cars;
+- regular engines;
+- music;
+- birds/animals;
+- random claps.
 
-Большой `background`-датасет необходим для снижения false positive.
+A large `background` dataset is essential for reducing false positives.
 
 ## Phase 5 — Baseline Engine
 
-**Статус: YAMNet + MLP-классификатор задеплоены на Raspberry Pi, работают на живом потоке.**
+**Status: YAMNet + MLP classifier deployed on Raspberry Pi, running on live stream.**
 
-Первый baseline запускается на Mac; см. [`ml/README.md`](ml/README.md). Результат
-первого прогона: siren-vs-selected-others ROC AUC `0.996`, top-1 `siren` `60%`.
-Проверить на собственных WAV до подключения к реальному потоку.
+The first baseline runs on Mac; see [`ml/README.md`](ml/README.md). First run result:
+siren-vs-selected-others ROC AUC `0.996`, top-1 `siren` `60%`.
+Test on own WAVs before connecting to the live stream.
 
-Первый backend:
+First backend:
 
 ```text
 ESP32
@@ -809,9 +809,9 @@ YAMNet
 classification
 ```
 
-Цель — получить объективный baseline до обучения собственной модели.
+Goal — obtain an objective baseline before training a custom model.
 
-Проверяем:
+Checking:
 
 - siren;
 - explosion;
@@ -819,15 +819,15 @@ classification
 - false positives;
 - false negatives;
 - latency;
-- устойчивость к шуму.
+- noise robustness.
 
 ## Phase 6 — Event Engine
 
-**Статус: реализован и работает.**
+**Status: implemented and running.**
 
-Сырые predictions не должны сразу превращаться в тревогу.
+Raw predictions should not immediately become alerts.
 
-Например:
+For example:
 
 ```text
 window 1 → siren 0.71
@@ -838,7 +838,7 @@ window 4 → siren 0.94
         CONFIRMED EVENT
 ```
 
-Нужны:
+Required:
 
 - confidence threshold;
 - temporal smoothing;
@@ -849,7 +849,7 @@ window 4 → siren 0.94
 
 ## Phase 7 — Integrations
 
-Первый вариант:
+First variant:
 
 ```text
 Detector Engine
@@ -859,9 +859,9 @@ MQTT
 Home Assistant
 ```
 
-Событие должно быть стандартизировано.
+The event must be standardized.
 
-Пример:
+Example:
 
 ```json
 {
@@ -873,39 +873,39 @@ Home Assistant
 }
 ```
 
-## Phase 8 — собственная модель
+## Phase 8 — Custom Model
 
-Архитектура: YAMNet как замороженный feature extractor + маленький классификатор поверх эмбеддингов.
+Architecture: YAMNet as a frozen feature extractor + a small classifier on top of embeddings.
 
 ```text
 audio (16 kHz)
    ↓
-YAMNet (заморожен) → embeddings 1024-dim / окно
+YAMNet (frozen) → embeddings 1024-dim / window
    ↓
-маленький классификатор (2–3 dense слоя, ~50–100 KB)
+small classifier (2–3 dense layers, ~50–100 KB)
    ↓
 siren / explosion / motorcycle / background / unknown
 ```
 
-YAMNet уже обучен на AudioSet и умеет извлекать признаки. Нам нужно только научить голову распознавать **наши** классы на **наших** записях. Это тренируется на Mac за минуты и работает на RPi без проблем.
+YAMNet is already trained on AudioSet and knows how to extract features. We only need to teach the head to recognize **our** classes on **our** recordings. This trains on Mac in minutes and runs on RPi without issues.
 
-После получения достаточного датасета:
+After obtaining a sufficient dataset:
 
 ```text
-dataset (размеченные WAV)
+dataset (labeled WAVs)
    ↓
-извлечь YAMNet embeddings
+extract YAMNet embeddings
    ↓
-обучить классификатор-голову
+train classifier head
    ↓
-оценить на тестовой выборке
+evaluate on test set
    ↓
-экспортировать в TFLite
+export to TFLite
    ↓
-задеплоить на RPi
+deploy to RPi
 ```
 
-Целевые классы:
+Target classes:
 
 ```text
 siren
@@ -915,61 +915,61 @@ background
 unknown
 ```
 
-## Phase 9 — Локальный inference на ESP32
+## Phase 9 — Local Inference on ESP32
 
-Цель: запустить ML прямо на ESP32-S3, чтобы устройство могло работать автономно.
+Goal: run ML directly on ESP32-S3 so the device can operate autonomously.
 
-**TinyML** — это общее название концепции (ML на микроконтроллерах). Для реализации используем конкретный стек:
+**TinyML** is the general name for the concept (ML on microcontrollers). For implementation we use a specific stack:
 
 ```text
 INMP441 → PCM 16 kHz
    ↓
-log-mel spectrogram (feature extraction, чистая математика)
+log-mel spectrogram (feature extraction, pure math)
    ↓
-компактная CNN (~50-200 KB, INT8 quantization)
+compact CNN (~50-200 KB, INT8 quantization)
    ↓
-TensorFlow Lite Micro (фреймворк, запускает модель)
-   + ESP-NN (ускорение вычислений через SIMD-инструкции ESP32-S3)
+TensorFlow Lite Micro (framework, runs the model)
+   + ESP-NN (computation acceleration via ESP32-S3 SIMD instructions)
    ↓
-siren / explosion / motorcycle / background → событие
+siren / explosion / motorcycle / background → event
    ↓
-динамик (локальное оповещение) + опционально → RPi для уточнения
+speaker (local alert) + optionally → RPi for confirmation
 ```
 
-YAMNet (~14 MB) на ESP32 не влезет. Вместо этого тренируем компактную CNN на mel-спектрограммах, при необходимости используя knowledge distillation от большой модели.
+YAMNet (~14 MB) won't fit on ESP32. Instead, we train a compact CNN on mel spectrograms, optionally using knowledge distillation from the large model.
 
-Целевые характеристики:
-- 60-80% точности от серверной модели — достаточно для первичного скрининга;
-- инференс ~50-200 мс на окно — real-time;
-- три режима работы: автономный, комбинированный, удалённый (см. раздел 2).
+Target characteristics:
+- 60-80% of server model accuracy — sufficient for initial screening;
+- inference ~50-200 ms per window — real-time;
+- three operating modes: standalone, combined, remote (see section 2).
 
-При этом серверный Detection Engine всегда остаётся доступным как альтернатива или для уточнения.
+The server Detection Engine always remains available as an alternative or for confirmation.
 
 ---
 
-# 7. Безопасность и качество распознавания
+# 7. Recognition Safety and Quality
 
-Это проект, связанный с потенциально опасными событиями, поэтому главная метрика — не просто accuracy.
+This project deals with potentially dangerous events, so the main metric is not just accuracy.
 
-Особенно важны:
+Especially important:
 
 - false negative rate;
 - false positive rate;
 - latency;
 - confidence;
-- устойчивость к шуму;
-- качество на реальных записях;
-- стабильность при нескольких источниках звука.
+- noise robustness;
+- quality on real recordings;
+- stability with multiple audio sources.
 
-### Не делать
+### Don't
 
-Не превращать одно слабое prediction в категоричное сообщение:
+Don't turn a single weak prediction into a categorical message:
 
 ```text
-"ВЗРЫВ!!!"
+"EXPLOSION!!!"
 ```
 
-Правильнее иметь состояния:
+Better to have states:
 
 ```text
 possible
@@ -977,11 +977,11 @@ probable
 confirmed
 ```
 
-и учитывать несколько последовательных окон.
+and consider multiple consecutive windows.
 
-### Unknown — обязательный класс
+### Unknown — Mandatory Class
 
-Модель не должна быть вынуждена выбирать один из трёх опасных классов для любого звука.
+The model should not be forced to choose one of the three dangerous classes for any sound.
 
 ```text
 siren
@@ -993,11 +993,11 @@ unknown
 
 ---
 
-# 8. Почему не привязываемся к Raspberry Pi
+# 8. Why We Don't Tie to Raspberry Pi
 
-Raspberry Pi — удобный и дешёвый inference host для домашней установки, но не архитектурное требование.
+Raspberry Pi is a convenient and cheap inference host for home installations, but not an architectural requirement.
 
-Возможны:
+Possible setups:
 
 ```text
 ESP32 → Raspberry Pi
@@ -1009,55 +1009,55 @@ ESP32 → cloud
 ESP32 → local TinyML
 ```
 
-Таким образом пользователь может выбрать уровень сложности:
+This way the user can choose the complexity level:
 
-### Минимум (автономный режим)
-
-```text
-ESP32 + microphone + динамик → локальная CNN → оповещение
-```
-
-### Домашний (комбинированный режим)
+### Minimum (standalone mode)
 
 ```text
-ESP32 + Raspberry Pi → локальный скрининг + серверное уточнение
+ESP32 + microphone + speaker → local CNN → alert
 ```
 
-### Продвинутый
+### Home (combined mode)
+
+```text
+ESP32 + Raspberry Pi → local screening + server confirmation
+```
+
+### Advanced
 
 ```text
 ESP32 + powerful PC/server + custom model
 ```
 
-### Удалённый (текущий режим)
+### Remote (current mode)
 
 ```text
-ESP32 → весь поток на RPi/сервер → YAMNet + MLP
+ESP32 → entire stream to RPi/server → YAMNet + MLP
 ```
 
 ---
 
 # 9. Non-goals
 
-Проект не должен:
+The project should not:
 
-- быть привязан к Home Assistant;
-- требовать Raspberry Pi;
-- требовать облака;
-- требовать конкретной ML-модели;
-- требовать ESPHome в качестве конечного firmware;
-- ограничиваться только сиренами;
-- пытаться классифицировать абсолютно любой звук.
+- be tied to Home Assistant;
+- require Raspberry Pi;
+- require cloud;
+- require a specific ML model;
+- require ESPHome as the final firmware;
+- be limited to sirens only;
+- attempt to classify absolutely any sound.
 
 ---
 
-# 10. Текущий статус
+# 10. Current Status
 
-**Проект:** `Sound Detector`
+**Project:** `Sound Detector`
 
-**Фаза:** Live Detection + Feedback Collection.
+**Phase:** Live Detection + Feedback Collection.
 
-Уже работает:
+Already working:
 
 ```text
 INMP441
@@ -1065,98 +1065,104 @@ INMP441
 ESP32-S3 (I2S, UDP transport)
    ↓
 Hub (fan-out relay, RPi :9000)
-   ├──> Recorder (:9001) → WAV dataset (по запросу)
-   └──> Detector (:9002) → YAMNet + MLP → события → Web UI
+   ├──> Recorder (:9001) → WAV dataset (on demand)
+   └──> Detector (:9002) → YAMNet + MLP → events → Web UI
 ```
 
 **Detector** (`http://<your_rpi_ip>:8080`):
-- YAMNet (frozen, TF Hub) извлекает 1024-dim embeddings каждые 0.5 с
-- MLP-классификатор (`siren` / `background` / `explosion` / `motorcycle`) поверх embeddings
-- Temporal smoother: 4 триггера → possible, 8 → confirmed (окно 30 с, cooldown 60 с)
-- На confirmed: сохраняется WAV-клип в `/clips/` (два режима записи, см. ниже)
-- WebSocket бродкаст: score каждые 0.5 с + события
+- YAMNet (frozen, TF Hub) extracts 1024-dim embeddings every 0.5 s
+- MLP classifier (`siren` / `background` / `explosion` / `motorcycle`) on top of embeddings
+- Temporal smoother: 4 triggers → possible, 8 → confirmed (window 30 s, cooldown 60 s)
+- On confirmed: WAV clip saved to `/clips/` (two recording modes, see below)
+- WebSocket broadcast: score every 0.5 s + events
+- **Parallel mode**: one inference thread per audio source (configurable in Settings, requires container restart)
 
 **Web UI**:
-- Реал-тайм шкала confidence с pulse-анимацией при possible/confirmed
-- Список событий с аудиоплеером (только confirmed с клипом)
-- Кнопки лейблинга: при нажатии клип копируется в `/dataset/{label}/` для дообучения
-- Фильтры по типу, история 100 событий
-- Admin-авторизация: просмотр/прослушивание — без токена; разметка, настройки — требуют `ADMIN_TOKEN`
+- Real-time confidence bar with pulse animation on possible/confirmed
+- Per-source score display for multiple microphones
+- Event list with audio player (confirmed events with clips only)
+- Labeling buttons: clicking copies the clip to `/dataset/{label}/` for retraining
+- Segment labeling: drag on spectrogram → select range + label → `POST /feedback/segments` slices WAV and copies to dataset
+- Filters by type, history of 100 events
+- Dedicated **Settings page**: thresholds, detection mode, microphone management (enable/disable individual sources)
+- **Background calibration**: record ambient audio from a specific source → saves to `/dataset/background/{source_name}/` → `make retrain`
+- Admin auth: viewing/listening — no token required; labeling, settings — require `ADMIN_TOKEN`
+- Mobile-friendly: audio listening and layout work on mobile devices
 
-**Режимы записи клипов** (настройка `Clip from possible` в Settings):
+**Clip recording modes** (`Clip from possible` setting in Settings):
 
-- **Off** (по умолчанию) — клип содержит последние N секунд до момента `confirmed`. Подходит для общего мониторинга.
-- **On** — клип начинается с момента `possible` (+ 2 с pre-buffer), захватывая саму звуковую волну, которая вызвала детекцию. В JSON-метадату клипа сохраняются per-window scores для точной разметки при дообучении. Рекомендуется для сбора качественного тренировочного датасета.
+- **Off** (default) — clip contains the last N seconds before the `confirmed` moment. Suitable for general monitoring.
+- **On** — clip starts from the `possible` moment (+ 2 s pre-buffer), capturing the sound wave that triggered detection. Per-window scores are saved in the clip's JSON metadata for precise labeling during retraining. Recommended for collecting quality training data.
 
 **MQTT / Home Assistant**:
-- Mosquitto broker — отдельный Docker Compose (`mosquitto/`)
-- Detector публикует HA MQTT Discovery при подключении к брокеру
-- В HA автоматически появляется устройство **Sound Detector** с сенсорами:
-  - `binary_sensor.sound_siren` / `sound_explosion` / `sound_motorcycle` — ON при confirmed, OFF после cooldown
+- Mosquitto broker — separate Docker Compose (`mosquitto/`)
+- Detector publishes HA MQTT Discovery on broker connection
+- In HA, a **Sound Detector** device automatically appears with sensors:
+  - `binary_sensor.sound_siren` / `sound_explosion` / `sound_motorcycle` — ON on confirmed, OFF after cooldown
   - `sensor.sound_siren_confidence` / `sound_explosion_confidence` / `sound_motorcycle_confidence`
-- MQTT опционален: без `MQTT_HOST` детектор работает как раньше
+- MQTT is optional: without `MQTT_HOST` the detector works as before
 
-Следующий шаг: накопить размеченные примеры через UI → дообучить модель → снизить false positive.
+Next step: accumulate labeled examples via UI → retrain model → reduce false positives.
 
 ---
 
 # 11. Makefile
 
-Для типовых операций есть `Makefile` — альтернатива ручным командам из разделов выше.
+Common operations have a `Makefile` — an alternative to the manual commands in the sections above.
 
 ```bash
-make help            # Показать все доступные команды
+make help            # Show all available commands
 ```
 
 ### Deploy
 
 ```bash
-make deploy          # Полная пересборка: скопировать detector/ + rebuild на RPi
-make deploy-ui       # Только фронтенд (без rebuild)
-make deploy-compose  # Отправить docker-compose.yml на RPi
-make restart         # Перезапустить контейнер
-make logs            # Логи контейнера
+make deploy          # Full rebuild: copy detector/ + rebuild on RPi
+make deploy-ui       # Frontend only (no rebuild)
+make deploy-compose  # Send docker-compose.yml to RPi
+make restart         # Restart container
+make logs            # Container logs
 ```
 
 ### ML / Retraining
 
 ```bash
-make sync-dataset    # Синхронизировать размеченные WAV с RPi на Mac
-make train           # Обучить MLP-классификатор
-make deploy-model    # Отправить веса на RPi + перезапуск
-make retrain         # Полный цикл: sync → train → deploy → clean
-# Калибровка фона: Web UI → Calibrate → выбрать источник → Start Recording
-# Файл сохраняется в dataset/background/{source_name}/ → make retrain
-make clean-clips     # Удалить сохранённые клипы на RPi
-make clean-dataset   # Удалить размеченные WAV на RPi (сначала sync!)
-make clean-docker    # Очистить Docker-кеш на RPi (volumes не трогает)
+make sync-dataset    # Sync labeled WAVs from RPi to Mac
+make train           # Train MLP classifier
+make deploy-model    # Send weights to RPi + restart
+make retrain         # Full cycle: sync → train → deploy → clean
+# Background calibration: Web UI → Calibrate → select source → Start Recording
+# File is saved to dataset/background/{source_name}/ → make retrain
+make clean-clips     # Delete saved clips on RPi
+make clean-dataset   # Delete labeled WAVs on RPi (sync first!)
+make clean-docker    # Clean Docker cache on RPi (volumes untouched)
 ```
 
-### Прочее
+### Other
 
 ```bash
-make fetch-esc50     # Скачать ESC-50 датасет
-make open            # Открыть Web UI в браузере
-make unlock          # Разблокировать SSH-ключ на 10 минут
+make fetch-esc50     # Download ESC-50 dataset
+make open            # Open Web UI in browser
+make unlock          # Unlock SSH key for 10 minutes
 ```
 
 ## MQTT / Home Assistant
 
-Для интеграции с Home Assistant используется MQTT Discovery. Mosquitto запускается отдельным Docker Compose.
+MQTT Discovery is used for Home Assistant integration. Mosquitto runs as a separate Docker Compose.
 
-### Первый запуск Mosquitto на RPi
+### First Mosquitto Launch on RPi
 
 ```bash
 cd ~/Projects/esphome/mosquitto
 cp .env.example .env
-# отредактировать .env: задать MQTT_USER и MQTT_PASSWORD
+# edit .env: set MQTT_USER and MQTT_PASSWORD
 sh create_passwd.sh
 docker compose up -d
 ```
 
-### Настройка детектора
+### Detector Configuration
 
-В `hub/.env` (или переменных окружения) задать:
+Set in `hub/.env` (or environment variables):
 
 ```bash
 MQTT_HOST=127.0.0.1
@@ -1166,31 +1172,31 @@ MQTT_PASSWORD=<your_password>
 ADMIN_TOKEN=<your_admin_token>
 ```
 
-### Admin-авторизация Web UI
+### Web UI Admin Auth
 
-Web UI разделён на публичную и админскую части:
+The Web UI is split into public and admin sections:
 
-- **Без токена**: просмотр score bar, прослушивание клипов, просмотр метрик — всё работает.
-- **С токеном**: разметка клипов (кнопки лейблинга), изменение настроек детектора.
+- **Without token**: viewing the score bar, listening to clips, viewing metrics — everything works.
+- **With token**: labeling clips (label buttons), changing detector settings.
 
-Если `ADMIN_TOKEN` не задан в переменных окружения, токен генерируется автоматически при старте и выводится в лог:
+If `ADMIN_TOKEN` is not set in environment variables, a token is auto-generated at startup and printed to the log:
 
 ```bash
 docker compose logs detector | grep ADMIN_TOKEN
 ```
 
-В Web UI нажать кнопку **Admin** в header, ввести токен. Токен хранится в `sessionStorage` браузера (сбрасывается при закрытии вкладки).
+In the Web UI, click the **Admin** button in the header and enter the token. The token is stored in the browser's `sessionStorage` (reset when the tab is closed).
 
-После перезапуска детектора в Home Assistant автоматически появится устройство
-**Sound Detector** с binary_sensor и sensor для каждого класса.
+After restarting the detector, a **Sound Detector** device automatically appears in Home Assistant
+with binary_sensor and sensor for each class.
 
-Без `MQTT_HOST` детектор работает как раньше — MQTT опционален.
+Without `MQTT_HOST`, the detector works as before — MQTT is optional.
 
 ---
 
 # 12. UDP Audio Protocol
 
-ESP32 отправляет аудио по UDP. Каждый пакет имеет заголовок:
+ESP32 sends audio over UDP. Each packet has a header:
 
 ```text
 Offset  Size   Type         Description
@@ -1203,25 +1209,25 @@ Offset  Size   Type         Description
 ```
 
 - `HEADER = struct.Struct("!IIHH")` — 12 bytes, network byte order (big-endian)
-- Payload: signed 32-bit I2S slots, little-endian. Для получения 16-bit PCM
-  нужно `sample >> 16` и обрезать до `int16`.
+- Payload: signed 32-bit I2S slots, little-endian. To get 16-bit PCM,
+  do `sample >> 16` and clip to `int16`.
 - Sample rate: 16 kHz, mono.
-- Типичный размер payload: 4096 bytes (1024 сэмпла = ~64 ms аудио).
-- При потере пакетов (gap в sequence numbers) приёмник должен вставить тишину
-  соответствующей длины.
+- Typical payload size: 4096 bytes (1024 samples = ~64 ms of audio).
+- On packet loss (gap in sequence numbers), the receiver should insert silence
+  of the corresponding length.
 
-Чтобы подключить свой inference engine, достаточно слушать UDP-порт Hub'а
-и парсить пакеты по этой спецификации. Примеры реализации:
-`recorder/recorder-files/udp_recorder.py` и `detector/transport/udp.py`.
+To connect your own inference engine, just listen on the Hub's UDP port
+and parse packets per this specification. Implementation examples:
+`recorder/recorder-files/udp_recorder.py` and `detector/transport/udp.py`.
 
-Для подключения нескольких микрофонов (ESP32 stereo, USB mic на RPi и т.д.)
-используйте поле Source ID — см. **[Multi-Microphone Setup](docs/MULTI_MIC.md)**.
+For connecting multiple microphones (ESP32 stereo, USB mic on RPi, etc.)
+use the Source ID field — see **[Multi-Microphone Setup](docs/MULTI_MIC.md)**.
 
 ---
 
 # 13. Web & WebSocket API
 
-Detection Engine предоставляет HTTP и WebSocket API на порту 8080.
+The Detection Engine provides HTTP and WebSocket APIs on port 8080.
 
 ## HTTP endpoints
 
@@ -1229,32 +1235,32 @@ Detection Engine предоставляет HTTP и WebSocket API на порт�
 |--------|------|------|-------------|
 | `GET` | `/` | — | Web UI (single-page) |
 | `GET` | `/api/auth/status` | — | `{"auth_enabled": true}` |
-| `POST` | `/api/auth/check` | — | Проверка токена: `{"token": "..."}` → `{"ok": true}` |
-| `GET` | `/api/settings` | viewer | Текущие настройки + defaults |
-| `POST` | `/api/settings` | admin | Обновить настройки (partial update) |
-| `POST` | `/api/settings/reset` | admin | Сбросить к defaults |
-| `GET` | `/api/metrics` | viewer | Метрики последней валидации модели |
-| `GET` | `/api/audits` | viewer | Последние 5 аудитов модели |
-| `POST` | `/feedback` | admin | Присвоить лейбл клипу: `{"filename": "...", "label": "siren"}` |
-| `POST` | `/api/manual-event` | admin | Сохранить текущий буфер как ручное событие |
-| `GET` | `/clips/{name}` | viewer | Скачать WAV-клип |
-| `GET` | `/clips/{name}/spectrogram` | — | Спектрограмма клипа (JSON: width, height, data) |
+| `POST` | `/api/auth/check` | — | Token check: `{"token": "..."}` → `{"ok": true}` |
+| `GET` | `/api/settings` | viewer | Current settings + defaults |
+| `POST` | `/api/settings` | admin | Update settings (partial update) |
+| `POST` | `/api/settings/reset` | admin | Reset to defaults |
+| `GET` | `/api/metrics` | viewer | Metrics from last model validation |
+| `GET` | `/api/audits` | viewer | Last 5 model audits |
+| `POST` | `/feedback` | admin | Assign label to clip: `{"filename": "...", "label": "siren"}` |
+| `POST` | `/api/manual-event` | admin | Save current buffer as manual event |
+| `GET` | `/clips/{name}` | viewer | Download WAV clip |
+| `GET` | `/clips/{name}/spectrogram` | — | Clip spectrogram (JSON: width, height, data) |
 
-Auth: `Authorization: Bearer <ADMIN_TOKEN>` header. Viewer и admin используют один токен.
+Auth: `Authorization: Bearer <ADMIN_TOKEN>` header. Viewer and admin use the same token.
 
 ## WebSocket endpoints
 
-### `/ws` — события и scores
+### `/ws` — events and scores
 
-Подключение: `ws://<host>:8080/ws?token=<ADMIN_TOKEN>`
+Connection: `ws://<host>:8080/ws?token=<ADMIN_TOKEN>`
 
-При подключении сервер отправляет:
-1. Последний score message
-2. Историю событий (до 100)
+On connection, the server sends:
+1. Last score message
+2. Event history (up to 100)
 
-Затем в реальном времени:
+Then in real time:
 
-**Score** (~каждые 0.5с):
+**Score** (~every 0.5s):
 ```json
 {
   "type": "score",
@@ -1265,7 +1271,7 @@ Auth: `Authorization: Bearer <ADMIN_TOKEN>` header. Viewer и admin исполь
 }
 ```
 
-**Event** (при смене состояния):
+**Event** (on state change):
 ```json
 {
   "type": "event",
@@ -1278,20 +1284,20 @@ Auth: `Authorization: Bearer <ADMIN_TOKEN>` header. Viewer и admin исполь
 
 ### `/ws/audio` — live PCM stream
 
-Подключение: `ws://<host>:8080/ws/audio?token=<ADMIN_TOKEN>`
+Connection: `ws://<host>:8080/ws/audio?token=<ADMIN_TOKEN>`
 
-Бинарные сообщения: raw float32 PCM, 16 kHz, mono. Для воспроизведения
-в браузере — декодировать в AudioWorklet.
+Binary messages: raw float32 PCM, 16 kHz, mono. For browser playback —
+decode in an AudioWorklet.
 
 ---
 
-# 14. Долгосрочная цель
+# 14. Long-term Goal
 
-Сделать доступную и расширяемую платформу:
+Build an affordable and extensible platform:
 
-> **дешёвый микрофонный Audio Node + сменный inference engine + стандартизированные события + локальные интеграции.**
+> **cheap microphone Audio Node + replaceable inference engine + standardized events + local integrations.**
 
-Первый практический сценарий — обнаружение потенциально опасных звуков:
+The first practical scenario — detecting potentially dangerous sounds:
 
 ```text
 🚨 Siren
@@ -1299,7 +1305,7 @@ Auth: `Authorization: Bearer <ADMIN_TOKEN>` header. Viewer и admin исполь
 🛵 Motorcycle
 ```
 
-Но архитектура должна позволять добавлять новые модели и классы без изменения базового устройства.
+But the architecture should allow adding new models and classes without changing the base device.
 
 ---
 
