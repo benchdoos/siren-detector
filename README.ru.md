@@ -162,11 +162,15 @@ detector/
 ├── main.py               # точка входа: собирает bus, engine, server, integrations
 ├── config.py             # константы, определения детекторов, настройки по умолчанию
 ├── bus.py                # EventBus — единственный shared object между слоями
+├── dsp_features.py       # DSP-фичи (numpy only, 8 фич × 50 fps)
+├── dsp_infer.py          # TFLite DSP классификатор — пре-фильтр для каскада
+├── classifier_infer.py   # MLP классификатор (numpy, инференс на YAMNet эмбеддингах)
 ├── transport/udp.py      # UDP-приёмник (SDR1-протокол)
 ├── engine/
 │   ├── interface.py      # EngineInterface Protocol — контракт для замены движка
 │   ├── smoother.py       # TemporalSmoother (idle → possible → confirmed)
-│   └── yamnet_engine.py  # YAMNet + MLP (текущая реализация)
+│   ├── source_state.py   # Буферы и состояние инференса для каждого source
+│   └── yamnet_engine.py  # YAMNet + MLP с опциональным DSP каскадом
 ├── server/               # FastAPI: WebSocket, clips, feedback, settings
 └── integrations/mqtt.py  # MQTT, Home Assistant discovery
 ```
@@ -944,27 +948,30 @@ unknown
 ### Гибридная архитектура
 
 ```text
-Audio (PCM 16 kHz)
+Audio (PCM 16 kHz, каждые 0.5 с)
    ↓
 ┌─────────────────────────────────────┐
-│  DSP Feature Extractor (~1 KB RAM)  │  ← работает на ESP32
+│  DSP Feature Extractor (numpy)      │  ← работает на RPi (позже: ESP32)
 │                                     │
-│  • pitch tracker (YIN / autocorr)   │  → f₀ каждые 20 мс
-│  • огибающая энергии (RMS)          │  → громкость каждые 20 мс
-│  • спектральный центроид            │  → «яркость» звука
-│  • harmonic-to-noise ratio (HNR)    │  → тон vs шум
-│  • zero crossing rate (ZCR)         │  → «шипение»
+│  8 фич × 50 fps:                   │
+│  pitch, RMS, centroid, HNR, ZCR,   │
+│  bandwidth, flatness, rolloff      │
+│  + 8 дельта-фич = 16 каналов      │
 └──────────────┬──────────────────────┘
                ↓
-   Временной ряд фич (50 значений/сек × 5 фич)
+   Скользящий буфер (250 фреймов = 5 секунд)
                ↓
 ┌─────────────────────────────────────┐
-│  Pattern Detector                   │
-│                                     │
-│  Вариант A: Rule-based (ESP32)      │  ← 0 обучения, работает сразу
-│  Вариант B: Tiny CNN на DSP-фичах   │  ← ~10–50 KB, обучается за минуты
-│  Вариант C: YAMNet + MLP (RPi)      │  ← текущая модель как «арбитр»
-└─────────────────────────────────────┘
+│  Conv1D классификатор (30 KB INT8)  │  ← быстрый пре-фильтр
+│  background с высокой уверенностью? │
+│     ДА  → пропуск YAMNet (экономия)│
+│     НЕТ → передать в YAMNet ──────────┐
+└─────────────────────────────────────┘   │
+                                          ↓
+                              ┌─────────────────────────┐
+                              │  YAMNet + MLP (17 MB)   │
+                              │  Подтверждает / отменяет │
+                              └─────────────────────────┘
 ```
 
 **Вариант A — Rule-based (MVP для ESP32):**

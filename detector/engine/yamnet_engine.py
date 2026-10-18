@@ -34,6 +34,9 @@ from ..config import (
     CLIP_DIR,
     CLIP_SECONDS,
     DETECTORS,
+    DSP_LABELS_PATH,
+    DSP_MODEL_PATH,
+    DSP_NORM_STATS_PATH,
     INFERENCE_HOP_SAMPLES,
     MODEL_URL,
     SAMPLE_RATE,
@@ -92,6 +95,14 @@ class YAMNetEngine:
             "--source-name", action="append", default=None,
             help="Map source_id to name, e.g. '0=esp32-main' (repeatable)",
         )
+        parser.add_argument("--dsp-model", default=DSP_MODEL_PATH,
+                            help="Path to DSP TFLite model (.tflite)")
+        parser.add_argument("--dsp-norm-stats", default=DSP_NORM_STATS_PATH,
+                            help="Path to DSP normalisation stats (.npz)")
+        parser.add_argument("--dsp-labels", default=DSP_LABELS_PATH,
+                            help="Path to DSP classifier labels (.json)")
+        parser.add_argument("--no-dsp", action="store_true",
+                            help="Disable DSP pre-filter even if model files exist")
 
     def start(self, bus: EventBus, settings: dict, args: argparse.Namespace) -> None:
         settings_mod.settings.update(settings)
@@ -132,6 +143,21 @@ class YAMNetEngine:
             print(f"Classifier loaded: {clf.labels}", flush=True)
         else:
             print("No classifier weights — using raw YAMNet siren score.", flush=True)
+
+        # ── Load DSP pre-filter (optional cascade) ──────────────────────
+        dsp = None
+        if not args.no_dsp:
+            dsp_model = Path(args.dsp_model)
+            dsp_stats = Path(args.dsp_norm_stats)
+            dsp_labels = Path(args.dsp_labels)
+            if dsp_model.exists() and dsp_stats.exists() and dsp_labels.exists():
+                from ..dsp_infer import DspPreFilter
+                dsp = DspPreFilter(dsp_model, dsp_stats, dsp_labels)
+                det_engine = f"dsp+{det_engine}"
+                print(f"[dsp] Pre-filter enabled (cascade mode)", flush=True)
+            else:
+                missing = [p.name for p in (dsp_model, dsp_stats, dsp_labels) if not p.exists()]
+                print(f"[dsp] Pre-filter disabled — missing: {missing}", flush=True)
 
         # ── Source registry ───────────────────────────────────────────────
         sources: dict[int, SourceState] = {}
@@ -195,7 +221,7 @@ class YAMNetEngine:
                     continue
                 self._process_source(
                     source, waveform, yamnet, class_names, detector_indices,
-                    clf, det_engine, bus, args, sources,
+                    clf, det_engine, bus, args, sources, dsp,
                 )
 
         def _stop_parallel():
@@ -252,7 +278,7 @@ class YAMNetEngine:
                         continue
                     self._process_source(
                         source, waveform, yamnet, class_names, detector_indices,
-                        clf, det_engine, bus, args, sources,
+                        clf, det_engine, bus, args, sources, dsp,
                     )
 
                 now = time.monotonic()
@@ -280,8 +306,47 @@ class YAMNetEngine:
         bus: EventBus,
         args: argparse.Namespace,
         sources: dict | None = None,
+        dsp=None,
     ) -> None:
         waveform = np.clip(waveform, -1.0, 1.0)
+
+        # ── DSP pre-filter: skip YAMNet for confident background ────────
+        dsp_result = None
+        if dsp is not None:
+            new_audio = waveform[-INFERENCE_HOP_SAMPLES:]
+            dsp_result = dsp.process(new_audio, source.dsp_feature_buf)
+
+            if dsp_result["ready"]:
+                bg_threshold = settings_mod.settings.get("dsp_bg_threshold", 0.85)
+                dsp_label = dsp_result["label"]
+                dsp_conf = dsp_result["confidence"]
+
+                if dsp_label == "background" and dsp_conf >= bg_threshold:
+                    # Confident background — skip YAMNet, broadcast minimal score
+                    score_msg: dict = {
+                        "type": "score", "top": "(dsp:background)",
+                        "source": source.name, "source_id": source.source_id,
+                        "dsp": dsp_result["probs"],
+                        "dsp_label": dsp_label,
+                        "dsp_confidence": round(dsp_conf, 3),
+                        "dsp_skipped_yamnet": True,
+                    }
+                    for name in DETECTORS:
+                        score_msg[f"{name}_score"] = 0.0
+                        score_msg[f"{name}_state"] = source.smoothers[name].state
+                        score_msg[f"{name}_triggers"] = source.smoothers[name].trigger_count
+                        score_msg[f"{name}_possible_needed"] = source.smoothers[name].possible_needed
+                        score_msg[f"{name}_confirmed_needed"] = source.smoothers[name].confirmed_needed
+                        score_msg[f"{name}_cooldown"] = round(source.smoothers[name].cooldown_remaining, 1)
+                        score_msg[f"{name}_refractory"] = round(source.smoothers[name].refractory_remaining, 1)
+                        # Push zero score through smoothers (decays triggers)
+                        source.smoothers[name].push(0.0)
+                    score_msg.update(udp_stats_snapshot(bus.source_names))
+                    if sources:
+                        score_msg["source_names"] = {sid: src.name for sid, src in sources.items()}
+                    bus.broadcast(score_msg)
+                    return
+
         scores, embeddings, _ = yamnet(waveform)
         scores_np = scores.numpy()
         top_idx = int(scores_np.mean(axis=0).argmax())
@@ -381,6 +446,12 @@ class YAMNetEngine:
         score_msg["yamnet_top3"] = cur_yamnet_top3
         if cur_mlp_top3:
             score_msg["mlp_top3"] = cur_mlp_top3
+
+        if dsp_result and dsp_result["ready"]:
+            score_msg["dsp"] = dsp_result["probs"]
+            score_msg["dsp_label"] = dsp_result["label"]
+            score_msg["dsp_confidence"] = round(dsp_result["confidence"], 3)
+            score_msg["dsp_skipped_yamnet"] = False
 
         score_msg.update(udp_stats_snapshot(bus.source_names))
         if sources:

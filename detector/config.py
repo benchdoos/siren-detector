@@ -45,4 +45,10 @@ DEFAULT_SETTINGS = {
     "disabled_sources": [],
     "source_custom_names": {},
     "detection_mode": "round_robin",
+    "dsp_bg_threshold": 0.85,
 }
+
+# DSP pre-filter model paths (defaults for Docker volume mount)
+DSP_MODEL_PATH = "/models/dsp_classifier_int8.tflite"
+DSP_NORM_STATS_PATH = "/models/dsp_norm_stats.npz"
+DSP_LABELS_PATH = "/models/dsp_classifier_labels.json"

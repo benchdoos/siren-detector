@@ -200,6 +200,18 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
 - [ ] Добавить mixup и дополнительную аугментацию для улучшения siren accuracy.
 - [ ] Сравнить DSP CNN vs YAMNet+MLP на тех же данных (side-by-side).
 
+### Каскад DSP → YAMNet (деплой на RPi)
+- [x] Создать `detector/dsp_features.py` — runtime-версия экстрактора (numpy only).
+- [x] Создать `detector/dsp_infer.py` — TFLite inference + rolling feature buffer.
+- [x] Интегрировать DSP pre-filter в `yamnet_engine.py`:
+  DSP Conv1D → если background с высокой уверенностью → пропуск YAMNet.
+- [x] Обновить `docker-compose.yml` — пути к DSP модели.
+- [x] Обновить `Makefile` — `deploy-model` деплоит и DSP файлы.
+- [x] Настройка `dsp_bg_threshold` (default 0.85) — порог уверенности для пропуска YAMNet.
+- [ ] Задеплоить и протестировать на RPi (`make deploy`).
+- [ ] Подобрать оптимальный `dsp_bg_threshold` на реальных данных.
+- [ ] Добавить DSP метрики в Web UI (dsp label, confidence, skip rate).
+
 ### Порт на ESP32
 - [ ] Портировать DSP feature extractor на C (чистая математика, без зависимостей).
 - [ ] Запустить inference на ESP32-S3 (rule-based или TFLite Micro для tiny CNN).
