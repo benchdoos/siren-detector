@@ -48,6 +48,9 @@ class DspPreFilter:
         self._stats_lock = threading.Lock()
         self._checks = 0
         self._yamnet_skips = 0
+        self._prediction_counts: dict[str, int] = {}
+        self._background_confidence_sum = 0.0
+        self._background_confidence_max = 0.0
         self._input_detail = self._interpreter.get_input_details()[0]
         self._output_detail = self._interpreter.get_output_details()[0]
 
@@ -112,16 +115,29 @@ class DspPreFilter:
             "probs": probs_dict,
         }
 
-    def record_decision(self, skipped_yamnet: bool) -> None:
+    def record_decision(self, label: str, confidence: float, skipped_yamnet: bool) -> None:
         """Count completed DSP decisions across all audio sources."""
         with self._stats_lock:
             self._checks += 1
+            self._prediction_counts[label] = self._prediction_counts.get(label, 0) + 1
+            if label == "background":
+                self._background_confidence_sum += confidence
+                self._background_confidence_max = max(self._background_confidence_max, confidence)
             if skipped_yamnet:
                 self._yamnet_skips += 1
 
-    def stats_snapshot(self) -> dict[str, int]:
+    def stats_snapshot(self) -> dict:
         with self._stats_lock:
-            return {"checks": self._checks, "yamnet_skips": self._yamnet_skips}
+            bg_count = self._prediction_counts.get("background", 0)
+            return {
+                "checks": self._checks,
+                "yamnet_skips": self._yamnet_skips,
+                "prediction_counts": dict(self._prediction_counts),
+                "background_confidence_avg": (
+                    self._background_confidence_sum / bg_count if bg_count else None
+                ),
+                "background_confidence_max": self._background_confidence_max if bg_count else None,
+            }
 
     def _infer(self, features: np.ndarray) -> np.ndarray:
         """Run TFLite inference on normalised (250, 16) features.
@@ -145,6 +161,12 @@ class DspPreFilter:
             scale, zero_point = self._output_detail["quantization"]
             output = (output.astype(np.float32) - zero_point) * scale
 
-        logits = output[0].astype(np.float32)
-        e = np.exp(logits - logits.max())
-        return e / e.sum()
+        # The trained model ends with a softmax layer, so TFLite already
+        # returns probabilities. Applying softmax again compresses the maximum
+        # possible confidence to about 47.5% for four classes, making the
+        # configured 0.85 background skip threshold unreachable.
+        probs = np.maximum(output[0].astype(np.float32), 0.0)
+        total = probs.sum()
+        if total <= 0:
+            return np.full(len(self.labels), 1.0 / len(self.labels), dtype=np.float32)
+        return probs / total
