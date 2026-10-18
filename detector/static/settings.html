@@ -115,6 +115,11 @@
     <!-- Detection -->
     <div class="sp-panel" id="sp-detection">
       <div class="s-section">
+        <div class="s-title">Detection Mode</div>
+        <div class="s-row"><label>Mode <span class="s-help" onclick="toggleTip(this)">?</span></label><select disabled style="opacity:0.7"><option>Round Robin</option></select></div>
+        <div class="s-tooltip"><strong>Detection Mode</strong><br>Determines how the engine processes audio from multiple sources.<hr><b style="color:#4caf50">Round Robin</b> — engine cycles through sources one at a time, running inference on each in turn (~0.5 s per source). With 2 sources each gets checked roughly once per second. Low CPU load, no parallel overhead.<br><br><b style="color:#666">Parallel</b> <span style="color:#555">(planned)</span> — run inference on all sources simultaneously. Doubles CPU/GPU load but gives continuous coverage per source.</div>
+      </div>
+      <div class="s-section">
         <div class="s-title">Thresholds</div>
         <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Minimum confidence score for each sound type. When MLP classifier is active (siren), this applies to the MLP output score.</p>
         <div class="s-row"><label>Siren <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-siren_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="siren_threshold"></span></div>
@@ -205,7 +210,14 @@
           &bull; After recording, run <code style="background:#222;padding:1px 4px;border-radius:3px">make retrain</code> to apply
         </div>
         <div class="s-row"><label>Source</label><select id="cal-source" style="flex:1"></select></div>
-        <div class="s-row"><label>Duration (sec)</label><input type="number" id="cal-duration" value="300" min="10" max="900" step="10" style="width:100px"></div>
+        <div class="s-row"><label>Duration (sec)</label>
+          <select id="cal-preset" onchange="document.getElementById('cal-duration').value=this.value" style="flex:1;max-width:140px">
+            <option value="300" selected>5 min</option>
+            <option value="600">10 min</option>
+            <option value="900">15 min</option>
+          </select>
+          <input type="number" id="cal-duration" value="300" min="10" max="900" step="10" style="width:80px" oninput="syncPreset(this.value)">
+        </div>
         <div id="cal-progress" style="display:none;margin:8px 0">
           <div style="background:#222;border-radius:4px;height:20px;overflow:hidden">
             <div id="cal-bar" style="height:100%;width:0%;background:#4caf50;border-radius:4px;transition:width .5s"></div>
@@ -503,6 +515,11 @@ async function loadCalibrationSources() {
       sel.appendChild(opt);
     }
   } catch(e) { sel.innerHTML = '<option value="0">default (0)</option>'; }
+}
+
+function syncPreset(val) {
+  const sel = document.getElementById('cal-preset');
+  sel.value = [...sel.options].some(o => o.value === val) ? val : '';
 }
 
 async function startCalibration() {

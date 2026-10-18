@@ -187,7 +187,7 @@ class YAMNetEngine:
                     continue  # audio still buffered (for calibration), skip inference
                 self._process_source(
                     source, waveform, yamnet, class_names, detector_indices,
-                    clf, det_engine, bus, args,
+                    clf, det_engine, bus, args, sources,
                 )
 
             now = time.monotonic()
@@ -214,6 +214,7 @@ class YAMNetEngine:
         det_engine: str,
         bus: EventBus,
         args: argparse.Namespace,
+        sources: dict | None = None,
     ) -> None:
         waveform = np.clip(waveform, -1.0, 1.0)
         scores, embeddings, _ = yamnet(waveform)
@@ -317,6 +318,8 @@ class YAMNetEngine:
             score_msg["mlp_top3"] = cur_mlp_top3
 
         score_msg.update(udp_stats_snapshot())
+        if sources:
+            score_msg["source_names"] = {sid: src.name for sid, src in sources.items()}
         bus.broadcast(score_msg)
 
         # Handle state transitions → events + clips
@@ -403,4 +406,5 @@ class YAMNetEngine:
                 heartbeat[f"{det_name}_confirmed_needed"] = sm.confirmed_needed
                 heartbeat[f"{det_name}_cooldown"] = round(sm.cooldown_remaining, 1)
                 heartbeat[f"{det_name}_refractory"] = round(sm.refractory_remaining, 1)
+        heartbeat["source_names"] = {sid: src.name for sid, src in sources.items()}
         return heartbeat

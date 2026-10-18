@@ -456,6 +456,11 @@ function updateScores(msg) {
   if (msg.source && msg.source_id != null) {
     _knownSources[msg.source_id] = msg.source;
   }
+  if (msg.source_names) {
+    for (const [sid, name] of Object.entries(msg.source_names)) {
+      _knownSources[sid] = name;
+    }
+  }
 
   const sources = Object.values(_sourceScores);
 
@@ -480,20 +485,13 @@ function updateScores(msg) {
     updateDetector(name, bestScore, bestState, bestTriggers, possNeeded, confNeeded, maxCooldown, maxRefractory);
   }
 
-  // Top info: show from the source with highest siren score (most relevant)
-  let topSource = msg;
-  if (sources.length > 1) {
-    let maxSiren = -1;
-    for (const s of sources) {
-      const sc = s.siren_score || 0;
-      if (sc > maxSiren) { maxSiren = sc; topSource = s; }
-    }
-  }
+  // Top info: show from the source that just sent data (naturally alternates round-robin)
+  const topSource = msg;
   const parts = [];
   if (topSource.top)            parts.push(`<span class="top-label">top:</span> ${esc(topSource.top)}`);
   if (topSource.yamnet != null) parts.push(`<span class="top-label">yamnet:</span> ${(topSource.yamnet * 100).toFixed(0)}%`);
   if (topSource.mlp != null)    parts.push(`<span class="top-label">mlp:</span> ${(topSource.mlp * 100).toFixed(0)}%`);
-  if (sources.length > 1 && topSource.source) parts.push(`<span class="top-label">src:</span> ${esc(topSource.source)}`);
+  if (Object.keys(_knownSources).length > 1 && topSource.source) parts.push(`<span class="top-label">src:</span> ${esc(topSource.source)}`);
   document.getElementById('top-text').innerHTML = parts.join(' &nbsp;·&nbsp; ');
 
   if (topSource.yamnet_top3) renderTop3(document.getElementById('dd-yamnet'), topSource.yamnet_top3);
@@ -880,12 +878,28 @@ function _wsUrl(path) {
   return `${wsProtocol}//${location.host}${path}${q}`;
 }
 
+let _serverStartedAt = null;
+
 function connect() {
   const ws = new WebSocket(_wsUrl('/ws'));
   ws.onopen  = () => { statusEl.textContent = 'connected'; statusEl.className = 'connected'; };
   ws.onclose = () => { statusEl.textContent = 'reconnecting…'; statusEl.className = ''; setTimeout(connect, 2000); };
   ws.onmessage = ({ data }) => {
     const msg = JSON.parse(data);
+    if (msg.type === 'session') {
+      if (_serverStartedAt !== null && msg.started_at !== _serverStartedAt) {
+        clearEvents();
+        seenEvents.clear();
+        const banner = document.createElement('div');
+        banner.className = 'empty';
+        banner.style.cssText = 'color:#4caf50;font-weight:600';
+        banner.textContent = 'Server restarted — events cleared';
+        eventsEl.prepend(banner);
+        setTimeout(() => banner.remove(), 8000);
+      }
+      _serverStartedAt = msg.started_at;
+      return;
+    }
     if (msg.type === 'score') updateScores(msg);
     if (msg.type === 'event') addEvent(msg);
   };
