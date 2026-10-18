@@ -605,8 +605,9 @@ function _updateAudioDropdown() {
   let html = '';
   for (const [name, s] of Object.entries(_lastAudioSources)) {
     const dot = `<span class="alive-dot ${s.alive ? 'on' : 'off'}"></span>`;
-    const stats = s.alive ? `${s.pps || 0} pps · ${s.packets || 0} pkts` : (s.ago != null ? `lost ${s.ago.toFixed(0)}s ago` : 'no signal');
-    html += `<div class="audio-src-row"><span class="audio-src-name">${esc(name)}</span><span class="audio-src-stats">${dot}${stats}</span></div>`;
+    const label = s.name || name;
+    const stats = s.alive ? `${s.pps || 0} pps · ${(s.packets || 0).toLocaleString()} pkts` : (s.ago != null ? `lost ${s.ago.toFixed(0)}s ago` : 'no signal');
+    html += `<div class="audio-src-row"><span class="audio-src-name">${esc(label)}</span><span class="audio-src-stats">${dot}${stats}</span></div>`;
   }
   dd.innerHTML = html;
 }
