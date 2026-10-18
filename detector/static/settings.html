@@ -439,7 +439,17 @@ async function loadSources() {
       const card = document.createElement('div');
       card.className = 'src-card' + (enabled ? '' : ' disabled');
       card.innerHTML = `
-        <div><span class="src-name">${esc(s.name)}</span><span class="src-id">id: ${s.source_id}</span></div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            <input type="text" class="src-name-input" data-sid="${s.source_id}"
+              value="${esc(s.custom_name || '')}" placeholder="${esc(s.original_name)}"
+              style="background:#222;border:1px solid #333;color:#e0e0e0;padding:3px 8px;border-radius:4px;font-size:14px;font-weight:500;width:100%;max-width:200px"
+              oninput="markSourceNameChanged(this)" onkeydown="if(event.key==='Enter')saveSourceName(this)">
+            <button class="src-name-save" data-sid="${s.source_id}" onclick="saveSourceName(this.previousElementSibling)"
+              style="display:none;background:none;border:1px solid #4caf50;color:#4caf50;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap">Save</button>
+          </div>
+          <span class="src-id">id: ${s.source_id}${s.custom_name ? ' · ' + esc(s.original_name) : ''}</span>
+        </div>
         <button class="src-listen" data-sid="${s.source_id}" onclick="toggleSourceListen(this, ${s.source_id})">Listen</button>
         <label class="src-toggle">
           <input type="checkbox" ${enabled ? 'checked' : ''} data-sid="${s.source_id}">
@@ -592,6 +602,45 @@ async function cancelCalibration() {
   _calReset();
   document.getElementById('cal-status').textContent = 'Cancelled — recording discarded.';
   document.getElementById('cal-status').style.color = '#888';
+}
+
+/* ── Source custom names ── */
+function markSourceNameChanged(input) {
+  const sid = input.dataset.sid;
+  const saveBtn = input.parentElement.querySelector('.src-name-save');
+  if (saveBtn) saveBtn.style.display = '';
+}
+
+async function saveSourceName(input) {
+  const sid = input.dataset.sid;
+  const newName = input.value.trim();
+  try {
+    const res = await fetch('/api/settings', { headers: adminHeaders() });
+    const data = await res.json();
+    const customNames = data.source_custom_names || {};
+    if (newName) {
+      customNames[sid] = newName;
+    } else {
+      delete customNames[sid];
+    }
+    const saveRes = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify({ source_custom_names: customNames }),
+    });
+    if (saveRes.status === 401) { alert('Auth required.'); return; }
+    if (saveRes.ok) {
+      const saveBtn = input.parentElement.querySelector('.src-name-save');
+      if (saveBtn) saveBtn.style.display = 'none';
+      const el = document.getElementById('status-sources');
+      if (el) { el.textContent = 'Name saved'; el.style.color = '#4caf50'; setTimeout(() => el.textContent = '', 3000); }
+      // Reload to update original_name display
+      await loadSources();
+    }
+  } catch(e) {
+    const el = document.getElementById('status-sources');
+    if (el) { el.textContent = 'Network error'; el.style.color = '#ef5350'; }
+  }
 }
 
 /* ── Listen (per-source audio) ── */
