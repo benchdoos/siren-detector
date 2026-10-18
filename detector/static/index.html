@@ -42,6 +42,14 @@
   .top-dropdown .row-fill { height: 100%; border-radius: 3px; background: #4caf50; transition: width .3s; }
   .top-dropdown .row-name { width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ccc; }
   .top-dropdown .row-pct { width: 36px; text-align: right; color: #888; font-variant-numeric: tabular-nums; }
+  .top-dropdown .src-section { cursor: pointer; padding: 6px 0; }
+  .top-dropdown .src-section:not(:first-child) { border-top: 1px solid #222; }
+  .top-dropdown .src-section:hover { background: #222; margin: 0 -16px; padding: 6px 16px; border-radius: 4px; }
+  .top-dropdown .src-header { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .top-dropdown .src-name { color: #ccc; font-weight: 600; }
+  .top-dropdown .src-stats { color: #666; font-variant-numeric: tabular-nums; }
+  .top-dropdown .src-detail { display: none; margin-top: 8px; padding-top: 6px; border-top: 1px solid #2a2a2a; }
+  .top-dropdown .src-detail.open { display: block; }
 
   .score-panel { padding: 20px 24px; border-bottom: 1px solid #222; }
   .score-label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
@@ -258,10 +266,7 @@
 <div class="top-info-bar" id="top-info" onclick="toggleDropdown(event)">
   <span class="top-text" id="top-text"></span>
   <div class="top-dropdown" id="top-dropdown">
-    <h3>YAMNet</h3>
-    <div id="dd-yamnet"></div>
-    <h3>MLP</h3>
-    <div id="dd-mlp"></div>
+    <div id="dd-sources"></div>
   </div>
 </div>
 
@@ -435,8 +440,48 @@ function updateDetector(name, score, state, triggers, possibleNeeded, confirmedN
   }
 }
 
-function renderTop3(container, items) {
-  container.innerHTML = items.map(it => {
+
+function _updateSourcesDropdown() {
+  const container = document.getElementById('dd-sources');
+  const sources = Object.values(_sourceScores);
+  if (sources.length <= 1 && sources.length > 0) {
+    const s = sources[0];
+    // Single source: ensure structure exists, then update in-place
+    if (!container.querySelector('[data-single]')) {
+      container.innerHTML = '<div data-single><h3>YAMNet</h3><div class="dd-yam"></div><h3>MLP</h3><div class="dd-mlp"></div></div>';
+    }
+    const wrap = container.querySelector('[data-single]');
+    if (s.yamnet_top3) wrap.querySelector('.dd-yam').innerHTML = _renderTop3Html(s.yamnet_top3);
+    if (s.mlp_top3) wrap.querySelector('.dd-mlp').innerHTML = _renderTop3Html(s.mlp_top3);
+    return;
+  }
+  // Multi-source: update in-place, preserve open state
+  container.querySelector('[data-single]')?.remove();
+  for (const s of sources) {
+    const sid = s.source_id != null ? s.source_id : 0;
+    let section = container.querySelector(`[data-sid="${sid}"]`);
+    if (!section) {
+      section = document.createElement('div');
+      section.className = 'src-section';
+      section.dataset.sid = sid;
+      section.onclick = function(e) { e.stopPropagation(); this.querySelector('.src-detail').classList.toggle('open'); };
+      section.innerHTML = '<div class="src-header"><span class="src-name"></span><span class="src-stats"></span></div>'
+        + '<div class="src-detail"><h3>YAMNet</h3><div class="dd-yam"></div><h3>MLP</h3><div class="dd-mlp"></div></div>';
+      container.appendChild(section);
+    }
+    const name = s.source || `source-${sid}`;
+    const yPct = s.yamnet != null ? (s.yamnet * 100).toFixed(0) + '%' : '—';
+    const mPct = s.mlp != null ? (s.mlp * 100).toFixed(0) + '%' : '—';
+    const top = s.top ? esc(s.top) : '';
+    section.querySelector('.src-name').textContent = name;
+    section.querySelector('.src-stats').innerHTML = `${top ? esc(top) + ' · ' : ''}yamnet: ${yPct} · mlp: ${mPct}`;
+    if (s.yamnet_top3) section.querySelector('.dd-yam').innerHTML = _renderTop3Html(s.yamnet_top3);
+    if (s.mlp_top3) section.querySelector('.dd-mlp').innerHTML = _renderTop3Html(s.mlp_top3);
+  }
+}
+
+function _renderTop3Html(items) {
+  return items.map(it => {
     const pct = Math.round(it.score * 100);
     return `<div class="row"><span class="row-name">${esc(it.name)}</span><div class="row-bar"><div class="row-fill" style="width:${pct}%"></div></div><span class="row-pct">${pct}%</span></div>`;
   }).join('');
@@ -485,24 +530,27 @@ function updateScores(msg) {
     updateDetector(name, bestScore, bestState, bestTriggers, possNeeded, confNeeded, maxCooldown, maxRefractory);
   }
 
-  // Top info: pick source with highest siren score (most urgent) from latest data
-  let topSource = msg;
-  if (sources.length > 1) {
-    let maxSiren = -1;
-    for (const s of sources) {
-      const sc = s.siren_score || 0;
-      if (sc > maxSiren) { maxSiren = sc; topSource = s; }
-    }
-  }
+  // Top info: average across all sources
   const parts = [];
-  if (topSource.top)            parts.push(`<span class="top-label">top:</span> ${esc(topSource.top)}`);
-  if (topSource.yamnet != null) parts.push(`<span class="top-label">yamnet:</span> ${(topSource.yamnet * 100).toFixed(0)}%`);
-  if (topSource.mlp != null)    parts.push(`<span class="top-label">mlp:</span> ${(topSource.mlp * 100).toFixed(0)}%`);
-  if (Object.keys(_knownSources).length > 1 && topSource.source) parts.push(`<span class="top-label">src:</span> ${esc(topSource.source)}`);
+  if (sources.length === 1) {
+    const s = sources[0];
+    if (s.top) parts.push(`<span class="top-label">top:</span> ${esc(s.top)}`);
+    if (s.yamnet != null) parts.push(`<span class="top-label">yamnet:</span> ${(s.yamnet * 100).toFixed(0)}%`);
+    if (s.mlp != null) parts.push(`<span class="top-label">mlp:</span> ${(s.mlp * 100).toFixed(0)}%`);
+  } else if (sources.length > 1) {
+    let yamSum = 0, yamN = 0, mlpSum = 0, mlpN = 0;
+    for (const s of sources) {
+      if (s.yamnet != null) { yamSum += s.yamnet; yamN++; }
+      if (s.mlp != null) { mlpSum += s.mlp; mlpN++; }
+    }
+    if (yamN) parts.push(`<span class="top-label">yamnet:</span> ${(yamSum / yamN * 100).toFixed(0)}%`);
+    if (mlpN) parts.push(`<span class="top-label">mlp:</span> ${(mlpSum / mlpN * 100).toFixed(0)}%`);
+    parts.push(`<span class="top-label">src:</span> ${sources.length}`);
+  }
   document.getElementById('top-text').innerHTML = parts.join(' &nbsp;·&nbsp; ');
 
-  if (topSource.yamnet_top3) renderTop3(document.getElementById('dd-yamnet'), topSource.yamnet_top3);
-  if (topSource.mlp_top3) renderTop3(document.getElementById('dd-mlp'), topSource.mlp_top3);
+  // Update per-source dropdown
+  _updateSourcesDropdown();
 
   // audio source status
   const audioEl = document.getElementById('audio-status');
