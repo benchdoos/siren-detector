@@ -312,7 +312,7 @@ class YAMNetEngine:
 
         # ── DSP pre-filter: skip YAMNet for confident background ────────
         dsp_result = None
-        if dsp is not None:
+        if dsp is not None and settings_mod.settings.get("dsp_enabled", 1):
             new_audio = waveform[-INFERENCE_HOP_SAMPLES:]
             dsp_result = dsp.process(new_audio, source.dsp_feature_buf)
 

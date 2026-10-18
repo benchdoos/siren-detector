@@ -45,6 +45,7 @@ DEFAULT_SETTINGS = {
     "disabled_sources": [],
     "source_custom_names": {},
     "detection_mode": "round_robin",
+    "dsp_enabled": 1,
     "dsp_bg_threshold": 0.85,
 }
 
