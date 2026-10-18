@@ -482,7 +482,7 @@ async function loadSources() {
           <input type="checkbox" ${enabled ? 'checked' : ''} data-sid="${s.source_id}">
           <span class="slider"></span>
         </label>`;
-      card.querySelector('input').addEventListener('change', (e) => toggleSource(s.source_id, e.target.checked, card));
+      card.querySelector('input[type="checkbox"]').addEventListener('change', (e) => toggleSource(s.source_id, e.target.checked, card));
       list.appendChild(card);
     }
   } catch(e) {
