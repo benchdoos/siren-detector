@@ -208,6 +208,11 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
 - [x] Обновить `docker-compose.yml` — пути к DSP модели.
 - [x] Обновить `Makefile` — `deploy-model` деплоит и DSP файлы.
 - [x] Настройка `dsp_bg_threshold` (default 0.85) — порог уверенности для пропуска YAMNet.
+- [x] Safety valve: `dsp_max_consecutive_skips` (default 20) — после N подряд пропусков
+  для source принудительно запускается YAMNet. Предотвращает блокировку детекции
+  при систематическом предсказании "background" DSP-моделью.
+- [x] Диагностический лог DSP: каждые 10 с для каждого source выводятся label,
+  confidence, skip, полные probabilities — упрощает отладку DSP-каскада.
 - [ ] Задеплоить и протестировать на RPi (`make deploy`).
 - [ ] Подобрать оптимальный `dsp_bg_threshold` на реальных данных.
 - [ ] Добавить DSP метрики в Web UI (dsp label, confidence, skip rate).
