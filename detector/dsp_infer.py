@@ -140,16 +140,38 @@ class DspPreFilter:
         enter_threshold: float,
         release_threshold: float,
         confirm_windows: int,
+        max_consecutive_skips: int = 0,
     ) -> bool:
-        """Apply per-source background hysteresis to the DSP prediction."""
+        """Apply per-source background hysteresis to the DSP prediction.
+
+        Gate state per source: (was_skipping, background_streak, consecutive_skips).
+        When *max_consecutive_skips* > 0 and the source has been skipping for
+        that many windows in a row, force one YAMNet pass (return False) and
+        reset the gate.  This prevents a noisy DSP model from permanently
+        blocking detection.
+        """
         with self._stats_lock:
-            was_skipping, background_streak = self._source_gate_state.get(source_id, (False, 0))
+            was_skipping, background_streak, consecutive_skips = (
+                self._source_gate_state.get(source_id, (False, 0, 0))
+            )
+
+            # Safety valve: force YAMNet after too many consecutive skips
+            if was_skipping and max_consecutive_skips > 0 and consecutive_skips >= max_consecutive_skips:
+                print(
+                    f"[dsp] source {source_id}: forced YAMNet pass after "
+                    f"{consecutive_skips} consecutive skips "
+                    f"(bg_conf={background_confidence:.2f}, label={label})",
+                    flush=True,
+                )
+                self._source_gate_state[source_id] = (False, 0, 0)
+                return False
+
             if was_skipping:
                 skipping = label == "background" and background_confidence >= release_threshold
                 if skipping:
-                    self._source_gate_state[source_id] = (True, background_streak)
+                    self._source_gate_state[source_id] = (True, background_streak, consecutive_skips + 1)
                 else:
-                    self._source_gate_state[source_id] = (False, 0)
+                    self._source_gate_state[source_id] = (False, 0, 0)
                 return skipping
 
             if label == "background" and background_confidence >= enter_threshold:
@@ -157,13 +179,13 @@ class DspPreFilter:
             else:
                 background_streak = 0
             skipping = background_streak >= max(1, confirm_windows)
-            self._source_gate_state[source_id] = (skipping, background_streak)
+            self._source_gate_state[source_id] = (skipping, background_streak, 1 if skipping else 0)
             return skipping
 
     def reset_source_gate(self, source_id: int) -> None:
         """Forget DSP gate state when a source switches to the global bypass."""
         with self._stats_lock:
-            self._source_gate_state[source_id] = (False, 0)
+            self._source_gate_state[source_id] = (False, 0, 0)
             self._source_skip_state[source_id] = (False, time.monotonic())
 
     def stats_snapshot(self) -> dict:

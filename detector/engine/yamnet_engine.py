@@ -361,14 +361,32 @@ class YAMNetEngine:
                 bg_confirm_windows = dsp_override.get(
                     "bg_confirm_windows", settings_mod.settings.get("dsp_bg_confirm_windows", 2),
                 )
+                max_consecutive_skips = dsp_override.get(
+                    "max_consecutive_skips",
+                    settings_mod.settings.get("dsp_max_consecutive_skips", 20),
+                )
                 dsp_label = dsp_result["label"]
                 dsp_conf = dsp_result["confidence"]
                 bg_conf = dsp_result["probs"].get("background", 0.0)
                 skip_yamnet = dsp.should_skip_yamnet(
                     source.source_id, dsp_label, bg_conf, bg_threshold,
                     bg_release_threshold, bg_confirm_windows,
+                    max_consecutive_skips,
                 )
                 dsp.record_decision(source.source_id, dsp_result["probs"], skip_yamnet)
+
+                # Periodic DSP diagnostic log (every 10s per source)
+                now_mono = time.monotonic()
+                if now_mono - source.dsp_last_log >= 10.0:
+                    source.dsp_last_log = now_mono
+                    probs_str = " ".join(
+                        f"{k}={v:.2f}" for k, v in sorted(dsp_result["probs"].items())
+                    )
+                    print(
+                        f"[dsp] src={source.source_id} label={dsp_label} "
+                        f"conf={dsp_conf:.2f} skip={skip_yamnet} | {probs_str}",
+                        flush=True,
+                    )
 
                 if skip_yamnet:
                     # Confident background — skip YAMNet, broadcast minimal score
