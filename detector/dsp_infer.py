@@ -130,6 +130,17 @@ class DspPreFilter:
                 self._consecutive_yamnet_skips += 1
             else:
                 self._consecutive_yamnet_skips = 0
+                # The caller can veto a DSP skip (for example, through the
+                # event gate) after should_skip_yamnet has advanced this
+                # source's gate state. Keep the background gate armed, but
+                # count only windows that actually skipped YAMNet.
+                was_skipping, background_streak, _ = self._source_gate_state.get(
+                    source_id, (False, 0, 0),
+                )
+                if was_skipping:
+                    self._source_gate_state[source_id] = (
+                        True, background_streak, 0,
+                    )
             self._source_skip_state[source_id] = (skipped_yamnet, time.monotonic())
 
     def should_skip_yamnet(
