@@ -365,14 +365,36 @@ class YAMNetEngine:
                     "max_consecutive_skips",
                     settings_mod.settings.get("dsp_max_consecutive_skips", 20),
                 )
+                dsp_event_gate = dsp_override.get(
+                    "event_gate",
+                    settings_mod.settings.get("dsp_event_gate", 0.08),
+                )
                 dsp_label = dsp_result["label"]
                 dsp_conf = dsp_result["confidence"]
                 bg_conf = dsp_result["probs"].get("background", 0.0)
+
+                # Event gate: if any event class has notable probability,
+                # force YAMNet regardless of background confidence
+                event_max = max(
+                    (v for k, v in dsp_result["probs"].items() if k != "background"),
+                    default=0.0,
+                )
+
+                # Smoother lock: never skip YAMNet while any detector is
+                # actively tracking an event (possible / confirmed)
+                smoother_active = any(
+                    source.smoothers[det].state != "idle"
+                    for det in DETECTORS
+                )
+
+                # Update gate state (always), then override skip decision
                 skip_yamnet = dsp.should_skip_yamnet(
                     source.source_id, dsp_label, bg_conf, bg_threshold,
                     bg_release_threshold, bg_confirm_windows,
                     max_consecutive_skips,
                 )
+                if smoother_active or (event_max >= dsp_event_gate > 0):
+                    skip_yamnet = False
                 dsp.record_decision(source.source_id, dsp_result["probs"], skip_yamnet)
 
                 # Periodic DSP diagnostic log (every 10s per source)
@@ -382,9 +404,16 @@ class YAMNetEngine:
                     probs_str = " ".join(
                         f"{k}={v:.2f}" for k, v in sorted(dsp_result["probs"].items())
                     )
+                    override = ""
+                    if smoother_active:
+                        active = [d for d in DETECTORS if source.smoothers[d].state != "idle"]
+                        override = f" OVERRIDE:smoother({','.join(active)})"
+                    elif event_max >= dsp_event_gate > 0:
+                        override = f" OVERRIDE:event_gate"
                     print(
                         f"[dsp] src={source.source_id} label={dsp_label} "
-                        f"conf={dsp_conf:.2f} skip={skip_yamnet} | {probs_str}",
+                        f"conf={dsp_conf:.2f} skip={skip_yamnet} "
+                        f"event_max={event_max:.3f}{override} | {probs_str}",
                         flush=True,
                     )
 

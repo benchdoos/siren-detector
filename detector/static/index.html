@@ -74,6 +74,13 @@
   .top-dropdown .dsp-summary-header:hover .dsp-summary-title { color: #fff; }
   .top-dropdown .dsp-summary-detail { display: none; padding-top: 10px; }
   .top-dropdown .dsp-summary-detail.open { display: block; }
+  .top-dropdown .dsp-now { margin-bottom: 10px; }
+  .top-dropdown .dsp-now-source { margin-bottom: 8px; }
+  .top-dropdown .dsp-now-header { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #888; margin-bottom: 4px; }
+  .top-dropdown .dsp-now-label { color: #ccc; font-weight: 600; }
+  .top-dropdown .dsp-now-skip { font-size: 11px; padding: 1px 5px; border-radius: 3px; }
+  .top-dropdown .dsp-now-skip.skipped { background: #3a2a00; color: #ffa726; }
+  .top-dropdown .dsp-now-skip.passed { background: #1a3a1a; color: #4caf50; }
   .top-dropdown .dsp-bg-confidence { color: #888; font-size: 12px; margin-bottom: 10px; }
 
   .score-panel { padding: 20px 24px; border-bottom: 1px solid #222; }
@@ -477,7 +484,7 @@ function _updateSourcesDropdown() {
     summary.className = 'dsp-summary';
     summary.dataset.dspSummary = '';
     summary.innerHTML = '<div class="dsp-summary-header" role="button" tabindex="0" aria-expanded="false"><span class="dsp-summary-title"></span></div>'
-      + '<div class="dsp-summary-detail"><div class="dsp-bg-confidence"></div><h3>Classes (top 3)</h3><div class="dsp-classes"></div></div>';
+      + '<div class="dsp-summary-detail"><div class="dsp-now"></div><h3 style="color:#666;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin:8px 0 4px">Avg</h3><div class="dsp-bg-confidence"></div><div class="dsp-classes"></div></div>';
     const header = summary.querySelector('.dsp-summary-header');
     summary.querySelector('.dsp-summary-detail').onclick = (event) => event.stopPropagation();
     const toggleDetails = (event) => {
@@ -509,6 +516,30 @@ function _updateSourcesDropdown() {
       .sort((a, b) => b.score - a.score)
       .slice(0, 3);
     summary.querySelector('.dsp-classes').innerHTML = _renderTop3Html(topClasses, true);
+    // Current DSP state per source
+    const nowEl = summary.querySelector('.dsp-now');
+    const dspSources = Object.values(_sourceScores).filter(s => s.dsp);
+    if (dspSources.length) {
+      nowEl.innerHTML = '<h3 style="color:#666;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 4px">Now</h3>'
+        + dspSources.map(s => {
+          const label = s.dsp_label || '—';
+          const conf = s.dsp_confidence != null ? Math.round(s.dsp_confidence * 100) + '%' : '';
+          const skipped = s.dsp_skipped_yamnet;
+          const skipBadge = skipped
+            ? '<span class="dsp-now-skip skipped">skip</span>'
+            : '<span class="dsp-now-skip passed">yamnet</span>';
+          const srcName = dspSources.length > 1 ? `<span style="color:#666">${esc(s.source || 'src-' + s.source_id)}</span> ` : '';
+          const probs = Object.entries(s.dsp || {})
+            .map(([name, score]) => ({ name, score }))
+            .sort((a, b) => b.score - a.score);
+          return '<div class="dsp-now-source">'
+            + `<div class="dsp-now-header">${srcName}<span class="dsp-now-label">${esc(label)}</span> ${conf} ${skipBadge}</div>`
+            + _renderTop3Html(probs, true)
+            + '</div>';
+        }).join('');
+    } else {
+      nowEl.innerHTML = '';
+    }
     summary.hidden = false;
   } else {
     summary.hidden = true;

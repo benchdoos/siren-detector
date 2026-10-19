@@ -46,10 +46,11 @@ DEFAULT_SETTINGS = {
     "detection_mode": "round_robin",
     "inference_interval_seconds": 0.5,
     "dsp_enabled": 1,
-    "dsp_bg_threshold": 0.85,
-    "dsp_bg_release_threshold": 0.85,
+    "dsp_bg_threshold": 0.92,
+    "dsp_bg_release_threshold": 0.90,
     "dsp_bg_confirm_windows": 2,
-    "dsp_max_consecutive_skips": 20,
+    "dsp_max_consecutive_skips": 4,
+    "dsp_event_gate": 0.08,
     "dsp_source_overrides": {},
 }
 

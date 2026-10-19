@@ -82,6 +82,7 @@ async def post_settings(body: dict):
         "dsp_bg_release_threshold": (0.5, 1.0),
         "dsp_bg_confirm_windows": (1, 10),
         "dsp_max_consecutive_skips": (0, 200),
+        "dsp_event_gate": (0.0, 0.5),
         "yamnet_min_gate": (0.0, 1.0),
         "clip_seconds": (5, 60),
         "clip_from_possible": (0, 1),
@@ -107,6 +108,7 @@ async def post_settings(body: dict):
                         "bg_release_threshold": (0.5, 1.0),
                         "bg_confirm_windows": (1, 10),
                         "max_consecutive_skips": (0, 200),
+                        "event_gate": (0.0, 0.5),
                     }
                     for source_id, override in body[k].items():
                         if not str(source_id).isdigit() or not isinstance(override, dict):
