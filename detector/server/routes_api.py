@@ -170,7 +170,13 @@ async def get_metrics():
     metrics_path = Path("/models/val_metrics.json")
     if not metrics_path.exists():
         return {"error": "no metrics available"}
-    return json.loads(metrics_path.read_text(encoding="utf-8"))
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    dsp_metrics_path = Path("/models/dsp_metrics.json")
+    metrics["dsp_metrics"] = (
+        json.loads(dsp_metrics_path.read_text(encoding="utf-8"))
+        if dsp_metrics_path.exists() else None
+    )
+    return metrics
 
 
 @router.get("/api/audits", dependencies=[Depends(require_viewer)])

@@ -25,6 +25,7 @@ import json
 import random
 import re
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -356,22 +357,49 @@ def train():
 
     # 9. Evaluate
     print("\n9. Evaluation on val set...")
-    y_pred = model.predict(X_val, verbose=0).argmax(axis=1)
+    y_val_probs = model.predict(X_val, verbose=0)
+    y_pred = y_val_probs.argmax(axis=1)
+    confusion_matrix = np.zeros((len(LABELS), len(LABELS)), dtype=int)
+    for truth, predicted in zip(y_val, y_pred):
+        confusion_matrix[int(truth), int(predicted)] += 1
+
+    class_metrics = []
     for i, label in enumerate(LABELS):
         mask = y_val == i
         if mask.sum() == 0:
             print(f"   {label:15s} — no val samples")
             continue
-        acc = (y_pred[mask] == i).mean()
-        print(f"   {label:15s} {mask.sum():5d} windows  acc={acc:.3f}")
+        precision = confusion_matrix[i, i] / max(1, confusion_matrix[:, i].sum())
+        recall = confusion_matrix[i, i] / max(1, confusion_matrix[i, :].sum())
+        f1 = 2 * precision * recall / max(1e-12, precision + recall)
+        class_metrics.append({
+            "label": label,
+            "windows": int(mask.sum()),
+            "precision": round(float(precision), 4),
+            "recall": round(float(recall), 4),
+            "f1": round(float(f1), 4),
+        })
+        print(f"   {label:15s} {mask.sum():5d} windows  "
+              f"precision={precision:.3f} recall={recall:.3f} f1={f1:.3f}")
+
+    overall_accuracy = float((y_pred == y_val).mean()) if len(y_val) else 0.0
+    siren_idx = LABELS.index("siren")
+    background_idx = LABELS.index("background")
+    siren_mask = y_val == siren_idx
+    siren_confident_background_rate = (
+        float((y_val_probs[siren_mask, background_idx] >= 0.92).mean())
+        if siren_mask.any() else None
+    )
+    siren_argmax_background_rate = (
+        float((y_pred[siren_mask] == background_idx).mean())
+        if siren_mask.any() else None
+    )
 
     # Print confusion matrix
     print("\n   Confusion matrix (rows=true, cols=predicted):")
     print(f'           {"  ".join(f"{l:>10s}" for l in LABELS)}')
     for i, label in enumerate(LABELS):
-        row = [(y_val == i) & (y_pred == j) for j in range(len(LABELS))]
-        counts = [r.sum() for r in row]
-        print(f'   {label:>10s}  {"  ".join(f"{v:10d}" for v in counts)}')
+        print(f'   {label:>10s}  {"  ".join(f"{v:10d}" for v in confusion_matrix[i])}')
 
     # 10. Save
     RESULTS.mkdir(parents=True, exist_ok=True)
@@ -409,6 +437,28 @@ def train():
     tflite_path = RESULTS / "dsp_classifier_int8.tflite"
     tflite_path.write_bytes(tflite_model)
     print(f"   TFLite INT8: {tflite_path} ({len(tflite_model)} bytes)")
+
+    dsp_metrics = {
+        "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "labels": LABELS,
+        "validation_windows": int(len(y_val)),
+        "accuracy": round(overall_accuracy, 4),
+        "classes": class_metrics,
+        "confusion_matrix": confusion_matrix.tolist(),
+        "background_gate_threshold": 0.92,
+        "siren_confident_background_rate": (
+            round(siren_confident_background_rate, 4)
+            if siren_confident_background_rate is not None else None
+        ),
+        "siren_argmax_background_rate": (
+            round(siren_argmax_background_rate, 4)
+            if siren_argmax_background_rate is not None else None
+        ),
+        "quantized_model_size_bytes": len(tflite_model),
+    }
+    metrics_path = RESULTS / "dsp_metrics.json"
+    metrics_path.write_text(json.dumps(dsp_metrics, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"   DSP metrics: {metrics_path}")
 
     # Also export float32 for comparison
     converter_f32 = tf.lite.TFLiteConverter.from_keras_model(model)
