@@ -40,6 +40,8 @@ DEFAULT_SETTINGS = {
     "smoothing_window_seconds": 30,
     "yamnet_min_gate": 0.01,
     "clip_seconds": 10,
+    "user_event_clip_seconds": 15,
+    "save_background_segments": False,
     "clip_from_possible": 0,
     "disabled_sources": [],
     "source_custom_names": {},

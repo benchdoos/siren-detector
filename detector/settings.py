@@ -40,7 +40,10 @@ def save_settings() -> None:
 
 def apply_clip_seconds(bus: EventBus) -> None:
     """Resize all ClipBuffers when clip_seconds setting changes."""
-    new_seconds = settings.get("clip_seconds", CLIP_SECONDS)
+    new_seconds = max(
+        settings.get("clip_seconds", CLIP_SECONDS),
+        settings.get("user_event_clip_seconds", 15),
+    )
     new_maxlen = int(new_seconds * SAMPLE_RATE)
     for source_id, clip_buf in bus.clip_bufs.items():
         if clip_buf._buf.maxlen != new_maxlen:
