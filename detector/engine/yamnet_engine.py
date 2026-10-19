@@ -78,7 +78,9 @@ def _create_source(source_id: int, name: str) -> SourceState:
     """Create a fresh SourceState with buffers and smoothers from current settings."""
     s = settings_mod.settings
     inference_buf = AudioRingBuffer(capacity=int(ANALYSIS_SECONDS * SAMPLE_RATE))
-    clip_buf = ClipBuffer(seconds=s.get("clip_seconds", CLIP_SECONDS))
+    clip_buf = ClipBuffer(seconds=max(
+        s.get("clip_seconds", CLIP_SECONDS), s.get("user_event_clip_seconds", 15),
+    ))
 
     smoothers: dict[str, TemporalSmoother] = {}
     inference_interval = min(2.0, max(0.25, float(s.get("inference_interval_seconds", 0.5))))

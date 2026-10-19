@@ -85,11 +85,17 @@ async def post_settings(body: dict):
         "dsp_event_gate": (0.0, 0.5),
         "yamnet_min_gate": (0.0, 1.0),
         "clip_seconds": (5, 60),
+        "user_event_clip_seconds": (5, 60),
         "clip_from_possible": (0, 1),
     }
     updated = {}
     for k, default_val in DEFAULT_SETTINGS.items():
         if k in body:
+            if isinstance(default_val, bool):
+                if not isinstance(body[k], bool):
+                    raise HTTPException(status_code=400, detail=f"{k} must be a boolean")
+                updated[k] = body[k]
+                continue
             # list-type settings (e.g. disabled_sources)
             if isinstance(default_val, list):
                 if not isinstance(body[k], list):
@@ -245,7 +251,8 @@ async def feedback(body: dict):
     if segments:
         # Re-save segment slices (they may have landed in a different label dir before)
         _save_segment_slices(src, segments)
-        _save_gap_slices(src, segments, label, dst_dir)
+        if label != "background" or settings_mod.settings.get("save_background_segments", False):
+            _save_gap_slices(src, segments, label, dst_dir)
     else:
         shutil.copy2(str(src), str(dst_dir / src.name))
 
@@ -379,7 +386,8 @@ async def feedback_segments(body: dict):
         dst_dir = DATASET_DIR / current_label
         dst_dir.mkdir(parents=True, exist_ok=True)
         if clean:
-            _save_gap_slices(src, clean, current_label, dst_dir)
+            if current_label != "background" or settings_mod.settings.get("save_background_segments", False):
+                _save_gap_slices(src, clean, current_label, dst_dir)
         else:
             # No segments left — restore full copy
             shutil.copy2(str(src), str(dst_dir / src.name))
@@ -577,7 +585,8 @@ async def manual_event(body: dict | None = Body(None)):
         raise HTTPException(status_code=404, detail=f"Source {source_id} not found")
     ts = datetime.now(timezone.utc)
     clip_name = f"manual-{ts.strftime('%Y%m%d-%H%M%S')}.wav"
-    clip_buf.save(CLIP_DIR / clip_name)
+    clip_seconds = settings_mod.settings.get("user_event_clip_seconds", 15)
+    clip_buf.save(CLIP_DIR / clip_name, last_seconds=clip_seconds)
     clip_url = f"/clips/{clip_name}"
     ts_iso = ts.isoformat(timespec="seconds")
     meta = {

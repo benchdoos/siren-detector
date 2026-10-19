@@ -227,6 +227,13 @@
         <div class="s-tooltip" data-tip="clip_seconds"><strong>Clip Length</strong><br>Duration of saved audio clip. Shorter = less noise for retraining.<hr><span class="s-tip-range">Range: <b>5 – 60 sec</b></span><br><span class="s-tip-default">Default: <b>10</b></span></div>
         <div class="s-row"><label>Clip from possible <span class="s-help" onclick="toggleTip(this)">?</span></label><select id="s-clip_from_possible"><option value="0">Off</option><option value="1">On</option></select><span class="s-default" data-key="clip_from_possible"></span></div>
         <div class="s-tooltip" data-tip="clip_from_possible"><strong>Clip From Possible</strong><br>When On, clip captures from the moment event reaches "possible" (+ 2s pre-buffer) instead of last N seconds before "confirmed". Includes per-window scores in metadata.<hr><span class="s-tip-default">Default: <b>Off</b></span></div>
+        <div class="s-section" style="margin-top:18px">
+          <div class="s-title">User-Created Events</div>
+          <div class="s-row"><label>Clip length (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-user_event_clip_seconds" step="1" min="5" max="60"><span class="s-default" data-key="user_event_clip_seconds"></span></div>
+          <div class="s-tooltip" data-tip="user_event_clip_seconds"><strong>User Event Clip Length</strong><br>Duration saved when you create an event manually.<hr><span class="s-tip-range">Range: <b>5 – 60 sec</b></span><br><span class="s-tip-default">Default: <b>15</b></span></div>
+          <div class="s-row"><label>Save background segments <span class="s-help" onclick="toggleTip(this)">?</span></label><select id="s-save_background_segments"><option value="false">Off</option><option value="true">On</option></select><span class="s-default" data-key="save_background_segments"></span></div>
+          <div class="s-tooltip" data-tip="save_background_segments"><strong>Save Background Segments</strong><br>When audio segments are labeled, save the remaining unmarked parts as background training data.<hr><span class="s-tip-default">Default: <b>Off</b></span></div>
+        </div>
       </div>
       <div class="sp-panel-footer">
         <button class="btn-reset-panel" onclick="resetPanelDefaults('sp-clips')">Reset section to defaults</button>
@@ -332,13 +339,13 @@ const SETTINGS_KEYS = [
   'dsp_enabled','dsp_bg_threshold','dsp_bg_release_threshold','dsp_bg_confirm_windows','dsp_event_gate','dsp_max_consecutive_skips',
   'possible_triggers','confirmed_triggers','smoothing_window_seconds',
   'cooldown_seconds','refractory_seconds','yamnet_min_gate',
-  'clip_seconds','clip_from_possible'
+  'clip_seconds','clip_from_possible','user_event_clip_seconds','save_background_segments'
 ];
 
 const PANEL_KEYS = {
   'sp-detection': ['detection_mode','inference_interval_seconds','siren_threshold','explosion_threshold','motorcycle_threshold','dsp_enabled','dsp_bg_threshold','dsp_bg_release_threshold','dsp_bg_confirm_windows','dsp_event_gate','dsp_max_consecutive_skips','yamnet_min_gate'],
   'sp-smoothing': ['possible_triggers','confirmed_triggers','smoothing_window_seconds','cooldown_seconds','refractory_seconds'],
-  'sp-clips': ['clip_seconds','clip_from_possible'],
+  'sp-clips': ['clip_seconds','clip_from_possible','user_event_clip_seconds','save_background_segments'],
 };
 
 let _defaults = {};
@@ -408,7 +415,7 @@ async function loadSettings() {
         def.style.pointerEvents = dspUnavailable ? 'none' : '';
         def.style.opacity = dspUnavailable ? '0.45' : '';
         const label = input.tagName === 'SELECT'
-          ? (input.querySelector(`option[value="${_defaults[k]}"]`)?.textContent ?? _defaults[k])
+          ? (input.querySelector(`option[value="${String(_defaults[k])}"]`)?.textContent ?? _defaults[k])
           : _defaults[k];
         def.innerHTML = `<span style="margin-right:2px">↺</span>${label}`;
         def.title = 'Reset to default';
@@ -430,8 +437,12 @@ async function saveSettings() {
     if (k === 'dsp_enabled' && !_dspAvailable) continue;
     const el = document.getElementById('s-' + k);
     if (!el) continue;
-    const v = parseFloat(el.value);
-    body[k] = isNaN(v) ? el.value : v;
+    if (k === 'save_background_segments') {
+      body[k] = el.value === 'true';
+    } else {
+      const v = parseFloat(el.value);
+      body[k] = isNaN(v) ? el.value : v;
+    }
   }
   try {
     const res = await fetch('/api/settings', {

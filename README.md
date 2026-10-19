@@ -1226,7 +1226,8 @@ Hub (fan-out relay, RPi :9000)
 - Labeling buttons: clicking copies the clip to `/dataset/{label}/` for retraining
 - Segment labeling: drag on spectrogram → select range + label → `POST /feedback/segments` slices WAV and copies to dataset
 - Filters by type, history of 100 events
-- Dedicated **Settings page**: thresholds, detection mode, microphone management (enable/disable individual sources, custom display names)
+- Dedicated **Settings page**: thresholds, detection mode, microphone management (enable/disable individual sources, custom display names), and user-created event clip options (5–60 seconds, default 15)
+- Segment labeling can optionally save unmarked audio as background training data; this is off by default
 - **Background calibration**: record ambient audio from a specific source → saves to `/dataset/background/{source_name}/` → `make retrain`. Recordings list with spectrogram player and delete button in Settings → Calibration
 - Admin auth: viewing/listening — no token required; labeling, settings — require `ADMIN_TOKEN`
 - Mobile-friendly: audio listening and layout work on mobile devices
