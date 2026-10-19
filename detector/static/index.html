@@ -51,7 +51,7 @@
     .player-controls audio { min-width: 0; width: 100%; }
   }
 
-  .top-dropdown { display: none; position: absolute; left: 50%; transform: translateX(-50%); top: calc(100% + 4px); background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 14px 16px; min-width: 280px; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,.5); font-size: 13px; cursor: default; }
+  .top-dropdown { display: none; position: absolute; left: 50%; transform: translateX(-50%); top: calc(100% + 4px); background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 14px 16px; min-width: 280px; width: 340px; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,.5); font-size: 13px; cursor: default; }
   .top-dropdown.open { display: block; }
   .top-dropdown h3 { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; font-weight: 600; }
   .top-dropdown h3:not(:first-child) { margin-top: 12px; border-top: 1px solid #222; padding-top: 10px; }
@@ -78,7 +78,7 @@
   .top-dropdown .dsp-now-source { margin-bottom: 8px; }
   .top-dropdown .dsp-now-header { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #888; margin-bottom: 4px; }
   .top-dropdown .dsp-now-label { color: #ccc; font-weight: 600; }
-  .top-dropdown .dsp-now-skip { font-size: 11px; padding: 1px 5px; border-radius: 3px; }
+  .top-dropdown .dsp-now-skip { font-size: 11px; padding: 1px 5px; border-radius: 3px; display: inline-block; min-width: 48px; text-align: center; }
   .top-dropdown .dsp-now-skip.skipped { background: #3a2a00; color: #ffa726; }
   .top-dropdown .dsp-now-skip.passed { background: #1a3a1a; color: #4caf50; }
   .top-dropdown .dsp-bg-confidence { color: #888; font-size: 12px; margin-bottom: 10px; }
@@ -540,9 +540,10 @@ function _updateSourcesDropdown() {
     } else {
       nowEl.innerHTML = '';
     }
-    summary.hidden = false;
   } else {
-    summary.hidden = true;
+    summary.querySelector('.dsp-summary-title').textContent = 'DSP: waiting…';
+    summary.querySelector('.dsp-summary-detail').classList.remove('open');
+    summary.querySelector('.dsp-summary-header').setAttribute('aria-expanded', 'false');
   }
 
   const sourceIds = new Set([...Object.keys(_knownSources), ...Object.keys(_sourceScores)]);
