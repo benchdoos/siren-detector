@@ -1,75 +1,75 @@
 {
-  "audit_timestamp": "2026-10-19T09:02:25+00:00",
-  "model_trained_at": "2026-10-19T09:02:21+00:00",
+  "audit_timestamp": "2026-10-19T10:19:15+00:00",
+  "model_trained_at": "2026-10-19T10:19:11+00:00",
   "dsp_metrics": {
-    "trained_at": "2026-10-19T09:01:34+00:00",
+    "trained_at": "2026-10-19T10:18:31+00:00",
     "labels": [
       "siren",
       "background",
       "explosion",
       "motorcycle"
     ],
-    "validation_windows": 2815,
-    "accuracy": 0.8668,
+    "validation_windows": 2808,
+    "accuracy": 0.8672,
     "classes": [
       {
         "label": "siren",
-        "windows": 317,
-        "precision": 0.6071,
-        "recall": 0.429,
-        "f1": 0.5028
+        "windows": 322,
+        "precision": 0.6453,
+        "recall": 0.4689,
+        "f1": 0.5432
       },
       {
         "label": "background",
         "windows": 2160,
-        "precision": 0.9306,
-        "recall": 0.944,
-        "f1": 0.9373
+        "precision": 0.9335,
+        "recall": 0.9417,
+        "f1": 0.9375
       },
       {
         "label": "explosion",
-        "windows": 190,
-        "precision": 0.7407,
-        "recall": 0.8421,
-        "f1": 0.7882
+        "windows": 196,
+        "precision": 0.6787,
+        "recall": 0.8622,
+        "f1": 0.7596
       },
       {
         "label": "motorcycle",
-        "windows": 148,
-        "precision": 0.5707,
-        "recall": 0.7095,
-        "f1": 0.6325
+        "windows": 130,
+        "precision": 0.5548,
+        "recall": 0.6231,
+        "f1": 0.587
       }
     ],
     "confusion_matrix": [
       [
-        136,
-        123,
-        15,
-        43
+        151,
+        120,
+        21,
+        30
       ],
       [
-        80,
-        2039,
-        22,
+        70,
+        2034,
+        40,
+        16
+      ],
+      [
+        0,
+        8,
+        169,
         19
       ],
       [
-        1,
-        12,
-        160,
-        17
-      ],
-      [
-        7,
+        13,
         17,
         19,
-        105
+        81
       ]
     ],
     "background_gate_threshold": 0.92,
-    "siren_confident_background_rate": 0.0158,
-    "siren_argmax_background_rate": 0.388,
+    "siren_confident_background_rate": 0.0559,
+    "siren_argmax_background_rate": 0.3727,
     "quantized_model_size_bytes": 29968
   },
   "labels": [
@@ -80,56 +80,56 @@
   ],
   "val_accuracy": {
     "siren": {
-      "accuracy": 0.796,
+      "accuracy": 0.795,
       "windows": 3689
     },
     "background": {
-      "accuracy": 0.811,
+      "accuracy": 0.852,
       "windows": 8700
     },
     "explosion": {
-      "accuracy": 0.712,
+      "accuracy": 0.649,
       "windows": 927
     },
     "motorcycle": {
-      "accuracy": 0.651,
+      "accuracy": 0.666,
       "windows": 518
     }
   },
   "confusion_matrix": [
     [
-      2936,
-      329,
-      98,
-      326
+      2933,
+      393,
+      66,
+      297
     ],
     [
-      816,
-      7060,
-      541,
-      283
+      706,
+      7412,
+      348,
+      234
     ],
     [
-      47,
-      188,
-      660,
-      32
+      58,
+      239,
+      602,
+      28
     ],
     [
-      63,
-      44,
-      74,
-      337
+      56,
+      68,
+      49,
+      345
     ]
   ],
   "file_counts": {
     "siren": {
-      "total": 285,
-      "real": 113,
+      "total": 287,
+      "real": 115,
       "aug": 172,
-      "aug_pct": 60.4,
+      "aug_pct": 59.9,
       "aug_real_ratio": 1.5,
-      "max_recommended_aug": 226
+      "max_recommended_aug": 230
     },
     "background": {
       "total": 862,
@@ -140,20 +140,20 @@
       "max_recommended_aug": 1724
     },
     "explosion": {
-      "total": 426,
-      "real": 276,
+      "total": 428,
+      "real": 278,
       "aug": 150,
-      "aug_pct": 35.2,
+      "aug_pct": 35.0,
       "aug_real_ratio": 0.5,
-      "max_recommended_aug": 552
+      "max_recommended_aug": 556
     },
     "motorcycle": {
-      "total": 297,
-      "real": 137,
+      "total": 300,
+      "real": 140,
       "aug": 160,
-      "aug_pct": 53.9,
-      "aug_real_ratio": 1.2,
-      "max_recommended_aug": 274
+      "aug_pct": 53.3,
+      "aug_real_ratio": 1.1,
+      "max_recommended_aug": 280
     }
   },
   "issues": [
