@@ -63,6 +63,10 @@ sync-dataset:
 train:
 	ml/.venv/bin/python ml/train_classifier.py
 
+## Train DSP pre-filter on local dataset
+train-dsp:
+	ml/.venv/bin/python ml/train_dsp_classifier.py
+
 ## Deploy trained model weights to RPi and restart detector
 deploy-model:
 	scp ml/results/classifier_weights.npz ml/results/classifier_labels.json \
@@ -86,6 +90,7 @@ retrain:
 	$(MAKE) _wait-calibration
 	$(MAKE) sync-dataset
 	$(MAKE) augment
+	$(MAKE) train-dsp
 	$(MAKE) train
 	$(MAKE) audit
 	-$(MAKE) audit-compare
@@ -238,8 +243,9 @@ help:
 	@echo "  ML"
 	@echo "    make sync-dataset    Sync labeled data from RPi"
 	@echo "    make train           Train MLP classifier"
+	@echo "    make train-dsp       Train DSP pre-filter"
 	@echo "    make deploy-model    Push weights to RPi + restart"
-	@echo "    make retrain         Full cycle: sync → train → deploy"
+	@echo "    make retrain         Full cycle: sync → train DSP + MLP → deploy"
 	@echo "    make clean-clips     Delete saved clips on RPi"
 	@echo "    make clean-dataset   Delete labeled WAVs on RPi"
 	@echo "    make clean-docker    Prune Docker images/cache (keeps volumes)"
@@ -257,7 +263,7 @@ help:
 	@echo ""
 
 .PHONY: deploy deploy-audio deploy-ui deploy-firmware logs-esp deploy-compose restart logs \
-        sync-dataset train deploy-model retrain _merge-recorder _wait-calibration _clean-trained \
+        sync-dataset train train-dsp deploy-model retrain _merge-recorder _wait-calibration _clean-trained \
         clean-clips clean-dataset clean-docker \
         augment augment-siren augment-explosion augment-motorcycle \
         audit audit-compare \

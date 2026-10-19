@@ -380,10 +380,12 @@ class YAMNetEngine:
                     default=0.0,
                 )
 
-                # Smoother lock: never skip YAMNet while any detector is
-                # actively tracking an event (possible / confirmed)
+                # Keep YAMNet on every window while a detector is possible,
+                # so DSP skips cannot decay the trigger count before confirm.
+                # Once confirmed, return to the regular DSP cadence and its
+                # periodic forced YAMNet passes.
                 smoother_active = any(
-                    source.smoothers[det].state != "idle"
+                    source.smoothers[det].state == "possible"
                     for det in DETECTORS
                 )
 
