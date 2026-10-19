@@ -176,8 +176,10 @@
         <div class="s-tooltip" data-tip="dsp_bg_release_threshold"><strong>DSP Background Release Threshold</strong><br>While DSP is skipping YAMNet, it resumes YAMNet when background confidence drops below this value. Higher values release background sooner; lower values keep skipping longer.<hr><span class="s-tip-range">Range: <b>0.50 – 1.00</b></span><br><span class="s-tip-default">Default: <b>0.85</b></span></div>
         <div class="s-row"><label>BG confirm windows <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-dsp_bg_confirm_windows" step="1" min="1" max="10"><span class="s-default" data-key="dsp_bg_confirm_windows"></span></div>
         <div class="s-tooltip" data-tip="dsp_bg_confirm_windows"><strong>DSP Background Confirm Windows</strong><br>Number of consecutive confident background predictions required before DSP starts skipping YAMNet. Higher values prevent it from returning to background too quickly but run YAMNet more often.<hr><span class="s-tip-range">Range: <b>1 – 10 windows</b></span><br><span class="s-tip-default">Default: <b>2</b></span></div>
+        <div class="s-row"><label>Event gate <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-dsp_event_gate" step="0.01" min="0" max="0.5"><span class="s-default" data-key="dsp_event_gate"></span></div>
+        <div class="s-tooltip" data-tip="dsp_event_gate"><strong>DSP Event Gate</strong><br>If any event class (siren, explosion, motorcycle) has DSP probability above this threshold, always run YAMNet even if background confidence is high. Lower = more sensitive, catches quieter events. Set to 0 to disable.<hr><span class="s-tip-range">Range: <b>0.00 – 0.50</b></span><br><span class="s-tip-default">Default: <b>0.08</b></span></div>
         <div class="s-row"><label>Max consecutive skips <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-dsp_max_consecutive_skips" step="1" min="0" max="200"><span class="s-default" data-key="dsp_max_consecutive_skips"></span></div>
-        <div class="s-tooltip" data-tip="dsp_max_consecutive_skips"><strong>DSP Max Consecutive Skips</strong><br>Safety valve: after this many consecutive DSP skips for a source, force one YAMNet pass. Prevents a noisy DSP model from permanently blocking detection. Set to 0 to disable the limit.<hr><span class="s-tip-range">Range: <b>0 – 200</b></span><br><span class="s-tip-default">Default: <b>20</b> (~10 seconds)</span></div>
+        <div class="s-tooltip" data-tip="dsp_max_consecutive_skips"><strong>DSP Max Consecutive Skips</strong><br>After this many consecutive DSP skips for a source, force one YAMNet pass. Low values (3-5) let YAMNet catch events quickly despite DSP's slow 5s window. Higher values save more CPU but delay detection. Set to 0 to disable.<hr><span class="s-tip-range">Range: <b>0 – 200</b></span><br><span class="s-tip-default">Default: <b>4</b> (~2 seconds)</span></div>
       </div>
       <div class="s-section">
         <div class="s-title">MLP Gate</div>
@@ -327,14 +329,14 @@ function adminHeaders() {
 const SETTINGS_KEYS = [
   'detection_mode','inference_interval_seconds',
   'siren_threshold','explosion_threshold','motorcycle_threshold',
-  'dsp_enabled','dsp_bg_threshold','dsp_bg_release_threshold','dsp_bg_confirm_windows','dsp_max_consecutive_skips',
+  'dsp_enabled','dsp_bg_threshold','dsp_bg_release_threshold','dsp_bg_confirm_windows','dsp_event_gate','dsp_max_consecutive_skips',
   'possible_triggers','confirmed_triggers','smoothing_window_seconds',
   'cooldown_seconds','refractory_seconds','yamnet_min_gate',
   'clip_seconds','clip_from_possible'
 ];
 
 const PANEL_KEYS = {
-  'sp-detection': ['detection_mode','inference_interval_seconds','siren_threshold','explosion_threshold','motorcycle_threshold','dsp_enabled','dsp_bg_threshold','dsp_bg_release_threshold','dsp_bg_confirm_windows','dsp_max_consecutive_skips','yamnet_min_gate'],
+  'sp-detection': ['detection_mode','inference_interval_seconds','siren_threshold','explosion_threshold','motorcycle_threshold','dsp_enabled','dsp_bg_threshold','dsp_bg_release_threshold','dsp_bg_confirm_windows','dsp_event_gate','dsp_max_consecutive_skips','yamnet_min_gate'],
   'sp-smoothing': ['possible_triggers','confirmed_triggers','smoothing_window_seconds','cooldown_seconds','refractory_seconds'],
   'sp-clips': ['clip_seconds','clip_from_possible'],
 };
