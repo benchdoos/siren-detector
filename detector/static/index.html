@@ -1330,12 +1330,14 @@ async function loadAudits() {
   try {
     const res = await fetch('/api/audits', { headers: adminHeaders() });
     const d = await res.json();
-    if (!d.audits || !d.audits.length) {
+    // Skip the first (most recent) audit — it duplicates the current metrics shown above.
+    const audits = (d.audits || []).slice(1);
+    if (!audits.length) {
       section.innerHTML = '';
       return;
     }
     let html = '<div class="audit-section"><h3>Audit History</h3>';
-    d.audits.forEach((a, i) => { html += renderAuditItem(a, i); });
+    audits.forEach((a, i) => { html += renderAuditItem(a, i); });
     html += '</div>';
     section.innerHTML = html;
   } catch(e) {
