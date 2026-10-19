@@ -71,7 +71,11 @@ train-dsp:
 deploy-model:
 	scp ml/results/classifier_weights.npz ml/results/classifier_labels.json \
 		ml/results/val_metrics.json \
+		ml/results/model_card.json \
 		$(RPI):$(RPI_BASE)/ml/results/
+	@if [ -f ml/results/dsp_metrics.json ]; then \
+		scp ml/results/dsp_metrics.json $(RPI):$(RPI_BASE)/ml/results/; \
+	fi
 	@if ls ml/results/dsp_classifier_int8.tflite ml/results/dsp_norm_stats.npz ml/results/dsp_classifier_labels.json >/dev/null 2>&1; then \
 		echo "Deploying DSP model..."; \
 		scp ml/results/dsp_classifier_int8.tflite ml/results/dsp_norm_stats.npz \

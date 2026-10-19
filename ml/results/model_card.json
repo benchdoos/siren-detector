@@ -1,6 +1,77 @@
 {
-  "audit_timestamp": "2026-10-19T08:43:45+00:00",
-  "model_trained_at": "2026-10-19T08:43:40+00:00",
+  "audit_timestamp": "2026-10-19T09:02:25+00:00",
+  "model_trained_at": "2026-10-19T09:02:21+00:00",
+  "dsp_metrics": {
+    "trained_at": "2026-10-19T09:01:34+00:00",
+    "labels": [
+      "siren",
+      "background",
+      "explosion",
+      "motorcycle"
+    ],
+    "validation_windows": 2815,
+    "accuracy": 0.8668,
+    "classes": [
+      {
+        "label": "siren",
+        "windows": 317,
+        "precision": 0.6071,
+        "recall": 0.429,
+        "f1": 0.5028
+      },
+      {
+        "label": "background",
+        "windows": 2160,
+        "precision": 0.9306,
+        "recall": 0.944,
+        "f1": 0.9373
+      },
+      {
+        "label": "explosion",
+        "windows": 190,
+        "precision": 0.7407,
+        "recall": 0.8421,
+        "f1": 0.7882
+      },
+      {
+        "label": "motorcycle",
+        "windows": 148,
+        "precision": 0.5707,
+        "recall": 0.7095,
+        "f1": 0.6325
+      }
+    ],
+    "confusion_matrix": [
+      [
+        136,
+        123,
+        15,
+        43
+      ],
+      [
+        80,
+        2039,
+        22,
+        19
+      ],
+      [
+        1,
+        12,
+        160,
+        17
+      ],
+      [
+        7,
+        17,
+        19,
+        105
+      ]
+    ],
+    "background_gate_threshold": 0.92,
+    "siren_confident_background_rate": 0.0158,
+    "siren_argmax_background_rate": 0.388,
+    "quantized_model_size_bytes": 29968
+  },
   "labels": [
     "siren",
     "background",
@@ -9,56 +80,56 @@
   ],
   "val_accuracy": {
     "siren": {
-      "accuracy": 0.785,
+      "accuracy": 0.796,
       "windows": 3689
     },
     "background": {
-      "accuracy": 0.816,
+      "accuracy": 0.811,
       "windows": 8700
     },
     "explosion": {
-      "accuracy": 0.661,
+      "accuracy": 0.712,
       "windows": 927
     },
     "motorcycle": {
-      "accuracy": 0.629,
+      "accuracy": 0.651,
       "windows": 518
     }
   },
   "confusion_matrix": [
     [
-      2897,
-      366,
-      81,
-      345
-    ],
-    [
-      841,
-      7095,
-      474,
-      290
-    ],
-    [
-      55,
-      226,
-      613,
-      33
-    ],
-    [
-      71,
-      62,
-      59,
+      2936,
+      329,
+      98,
       326
+    ],
+    [
+      816,
+      7060,
+      541,
+      283
+    ],
+    [
+      47,
+      188,
+      660,
+      32
+    ],
+    [
+      63,
+      44,
+      74,
+      337
     ]
   ],
   "file_counts": {
     "siren": {
-      "total": 284,
-      "real": 112,
+      "total": 285,
+      "real": 113,
       "aug": 172,
-      "aug_pct": 60.6,
+      "aug_pct": 60.4,
       "aug_real_ratio": 1.5,
-      "max_recommended_aug": 224
+      "max_recommended_aug": 226
     },
     "background": {
       "total": 862,
@@ -69,20 +140,20 @@
       "max_recommended_aug": 1724
     },
     "explosion": {
-      "total": 423,
-      "real": 273,
+      "total": 426,
+      "real": 276,
       "aug": 150,
-      "aug_pct": 35.5,
+      "aug_pct": 35.2,
       "aug_real_ratio": 0.5,
-      "max_recommended_aug": 546
+      "max_recommended_aug": 552
     },
     "motorcycle": {
-      "total": 293,
-      "real": 133,
+      "total": 297,
+      "real": 137,
       "aug": 160,
-      "aug_pct": 54.6,
+      "aug_pct": 53.9,
       "aug_real_ratio": 1.2,
-      "max_recommended_aug": 266
+      "max_recommended_aug": 274
     }
   },
   "issues": [
