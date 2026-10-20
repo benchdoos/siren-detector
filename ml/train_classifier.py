@@ -44,7 +44,7 @@ VAL_SOURCES_FILE = RESULTS / "val_sources.json"
 
 MODEL_URL = "https://tfhub.dev/google/yamnet/1"
 SAMPLE_RATE = 16_000
-LABELS = ["siren", "background", "explosion", "motorcycle"]
+LABELS = ["siren", "background", "explosion", "uav"]
 VAL_SPLIT = 0.2
 MAX_WINDOWS_PER_FILE = 300          # cap long files so one recording doesn't dominate
 MAX_BG_TRAIN_WINDOWS = 2000         # undersample background: cap at 2-3× avg of other classes

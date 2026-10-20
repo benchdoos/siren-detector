@@ -5,7 +5,7 @@ Drop files (any format ffmpeg can read) into dataset/inbox/downloads/,
 then run:
 
     python3 dataset/convert_downloads.py explosion
-    python3 dataset/convert_downloads.py motorcycle
+    python3 dataset/convert_downloads.py uav
 
 Each file is split into non-overlapping 5-second chunks and saved to
 dataset/<label>/ with a unique name. Originals are moved to
@@ -77,7 +77,7 @@ def convert_and_split(src: Path, label: str) -> int:
 def main() -> int:
     if len(sys.argv) < 2:
         print(f"Usage: {sys.argv[0]} <label>", file=sys.stderr)
-        print("  label: explosion, motorcycle, siren, background, unknown", file=sys.stderr)
+        print("  label: explosion, uav, siren, background, unknown", file=sys.stderr)
         return 1
 
     label = sys.argv[1]

@@ -13,7 +13,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
-LABELS = ("siren", "explosion", "motorcycle", "background", "unknown")
+LABELS = ("siren", "explosion", "uav", "background", "unknown")
 MANIFEST_FIELDS = (
     "source_file",
     "output_file",

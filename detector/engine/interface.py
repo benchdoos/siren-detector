@@ -44,7 +44,7 @@ Your engine must push messages via ``bus.broadcast(msg)`` in these formats.
         "mlp_top3": [{"name": "siren", "score": 0.42}, ...],
     }
 
-Where ``<name>`` is each key in ``config.DETECTORS`` (siren, explosion, motorcycle).
+Where ``<name>`` is each key in ``config.DETECTORS`` (siren, explosion, uav).
 
 **Event message** (sent on state transitions to possible/confirmed):
 

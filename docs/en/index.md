@@ -1,6 +1,6 @@
 # Siren Detector
 
-An open-source, non-commercial project for detecting civil-alert sirens, explosions, and nearby motorcycles used as a proxy for UAV-like sound. An ESP32-S3 audio node streams microphone audio to a Linux host, where the detector analyzes it and exposes events through a web interface and optional MQTT integration.
+An open-source, non-commercial project for detecting civil-alert sirens, explosions, and nearby uavs used as a proxy for UAV-like sound. An ESP32-S3 audio node streams microphone audio to a Linux host, where the detector analyzes it and exposes events through a web interface and optional MQTT integration.
 
 > [!WARNING]
 > This project and all its components are intended exclusively for peaceful purposes. Any military, harmful, or destructive use is prohibited.

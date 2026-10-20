@@ -2,11 +2,11 @@
 
 ## Dataset layout
 
-Keep first-party recordings separate from external reference audio. The main labels are `siren`, `explosion`, `motorcycle`, `background`, and `unknown`; long unreviewed recordings belong in `dataset/inbox/`.
+Keep first-party recordings separate from external reference audio. The main labels are `siren`, `explosion`, `uav`, `background`, and `unknown`; long unreviewed recordings belong in `dataset/inbox/`.
 
 ```text
 dataset/
-├── siren/  explosion/  motorcycle/  background/  unknown/
+├── siren/  explosion/  uav/  background/  unknown/
 ├── inbox/
 └── external/esc50/
 ```

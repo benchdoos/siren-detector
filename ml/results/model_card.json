@@ -7,7 +7,7 @@
       "siren",
       "background",
       "explosion",
-      "motorcycle"
+      "uav"
     ],
     "validation_windows": 2893,
     "accuracy": 0.8873,
@@ -34,7 +34,7 @@
         "f1": 0.7405
       },
       {
-        "label": "motorcycle",
+        "label": "uav",
         "windows": 212,
         "precision": 0.74,
         "recall": 0.6981,
@@ -76,7 +76,7 @@
     "siren",
     "background",
     "explosion",
-    "motorcycle"
+    "uav"
   ],
   "val_accuracy": {
     "siren": {
@@ -91,7 +91,7 @@
       "accuracy": 0.662,
       "windows": 967
     },
-    "motorcycle": {
+    "uav": {
       "accuracy": 0.703,
       "windows": 528
     }
@@ -147,7 +147,7 @@
       "aug_real_ratio": 0.5,
       "max_recommended_aug": 564
     },
-    "motorcycle": {
+    "uav": {
       "total": 305,
       "real": 145,
       "aug": 160,

@@ -6,7 +6,7 @@
 
 <p align="right"><b>English</b> • <a href="README.ru.md">Русский</a></p>
 
-Open-source project for detecting civil-alert sirens, explosions, and nearby motorcycle sounds. An ESP32-S3 captures audio; a Linux host runs inference and exposes events through a web interface and optional MQTT.
+Open-source project for detecting civil-alert sirens, explosions, and nearby UAV sounds. An ESP32-S3 captures audio; a Linux host runs inference and exposes events through a web interface and optional MQTT.
 
 > [!WARNING]
 > This project and all its components are intended exclusively for peaceful purposes. Military, harmful, or destructive use is prohibited.
