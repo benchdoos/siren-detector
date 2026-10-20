@@ -32,7 +32,7 @@ docker compose logs -f detector
 
 ## Web UI and settings
 
-The web UI is served at `http://<host>:8080`. It displays live scores, sources, event history, and saved clips. The settings page controls class thresholds, smoothing, cooldowns, audio sources, and inference mode. Persistent detector settings and clips are stored in the Docker `clips` volume.
+The web UI is served at `http://<host>:8080`. It displays live scores, sources, event history, and saved clips. The settings page controls class thresholds, smoothing, cooldowns, audio sources, and inference mode. Persistent detector settings and clips are stored in the Docker `clips` volume. Defaults, valid ranges, and parameter descriptions are listed in the [settings reference](settings.md).
 
 Authentication is controlled by `AUTH_ENABLED` and `ADMIN_TOKEN` in `hub/.env`. If authentication is enabled and no token is set, the detector generates a token at startup; check container logs. Keep the token private.
 
@@ -41,6 +41,8 @@ Authentication is controlled by `AUTH_ENABLED` and `ADMIN_TOKEN` in `hub/.env`. 
 MQTT is optional. Set `MQTT_HOST`, `MQTT_PORT`, and, if needed, `MQTT_USER`/`MQTT_PASSWORD` in `hub/.env`, then recreate the detector container. The integration publishes detector state and event information under the `sound_detector` topic namespace and supports Home Assistant discovery when a broker is available.
 
 ## HTTP and WebSocket API
+
+The [API reference](api.md) lists routes and access rules. FastAPI's interactive REST docs are at `http://<host>:8080/docs`; the OpenAPI specification is at `http://<host>:8080/openapi.json`.
 
 The API shares the web UI port. Key routes include:
 
@@ -57,7 +59,7 @@ The API shares the web UI port. Key routes include:
 | `/ws` | WebSocket | Live events, scores, and status |
 | `/ws/audio` | WebSocket | Live PCM audio stream |
 
-Viewer routes require a valid token when authentication is enabled; state-changing routes require admin access. See the route definitions in `detector/server/` for request and response schemas.
+Viewer routes require a valid token when authentication is enabled; state-changing routes require admin access. See the [API reference](api.md) and the running server's Swagger UI for routes and request/response schemas.
 
 ## Troubleshooting
 

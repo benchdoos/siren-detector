@@ -23,7 +23,7 @@ The Hub is a small UDP fan-out relay. It forwards incoming packets to the detect
 
 The current engine loads YAMNet once and uses its audio embeddings with an optional project-trained MLP classifier. An optional DSP/TFLite model can pre-filter background windows to reduce YAMNet work. The event smoother combines repeated window scores before confirming an event. Thresholds and timing settings can be changed from the web UI.
 
-The Python detector is split into transport, engine, server, and integration layers, connected by an in-process `EventBus`. A custom engine can implement the contract in `detector/engine/interface.py`.
+The Python detector is split into transport, engine, server, and integration layers, connected by an in-process `EventBus`. Project modules can be replaced with custom implementations as long as they preserve the relevant API/contracts: an inference engine implements `detector/engine/interface.py`, while an audio source sends SDR1 packets expected by the transport. See the [settings reference](settings.md) for runtime options and the [API reference](api.md) for HTTP and WebSocket interfaces.
 
 ## Audio protocol
 
@@ -45,4 +45,4 @@ The ESP32 firmware currently captures two optional INMP441 microphones on separa
 
 ## Inference modes
 
-The detector supports `round_robin` inference (one inference loop cycles over active sources) and `parallel` inference (a loop per source). Parallel mode can improve per-source latency at the cost of CPU and memory as source count grows. It can be selected in detector settings. Neither mode runs inference on the ESP32.
+The detector supports `round_robin` inference (one inference loop cycles over active sources) and `parallel` inference (a loop per source). Parallel mode can improve per-source latency at the cost of CPU and memory as source count grows. It can be selected in detector settings. Neither mode runs inference on the ESP32. See [inference modes and settings](settings.md#processing-modes) for details.
