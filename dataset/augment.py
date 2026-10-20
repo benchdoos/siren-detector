@@ -103,9 +103,9 @@ def collect_sources(label: str) -> list[Path]:
                 sorted(p for p in exp_dir.glob("dl_*.wav"))
             )
 
-    # Motorcycle sources (Freesound + Label Studio segments)
-    if label == "motorcycle":
-        moto_dir = DATASET / "motorcycle"
+    # UAVs sources (Freesound + Label Studio segments)
+    if label == "uav":
+        moto_dir = DATASET / "uav"
         if moto_dir.exists():
             sources.extend(
                 sorted(p for p in moto_dir.glob("dl_*.wav"))
@@ -234,7 +234,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Augment clean audio with INMP441 conditions"
     )
-    parser.add_argument("label", choices=["siren", "explosion", "motorcycle"])
+    parser.add_argument("label", choices=["siren", "explosion", "uav"])
     parser.add_argument(
         "--count", type=int, default=100,
         help="Number of augmented samples to generate (default: 100)"

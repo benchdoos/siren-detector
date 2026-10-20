@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Dangerous sound detector** (sirens, explosions, motorcycles). ESP32-S3 with INMP441 microphone acts as an Audio Node (capture + transport), while a separate Detection Engine (currently YAMNet + MLP on Raspberry Pi) handles ML inference. Target classes: `siren`, `explosion`, `motorcycle`, `background`, `unknown`.
+**Dangerous sound detector** (sirens, explosions, UAVs). ESP32-S3 with INMP441 microphone acts as an Audio Node (capture + transport), while a separate Detection Engine (currently YAMNet + MLP on Raspberry Pi) handles ML inference. Target classes: `siren`, `explosion`, `uav`, `background`, `unknown`.
 
 ## Repository Structure
 
@@ -80,7 +80,7 @@ python3 dataset/annotate_recording.py dataset/inbox/<recording>.wav \
 cd ~/Projects/esphome/recorder
 docker compose build
 
-# Record labeled audio (labels: siren, explosion, motorcycle, background, unknown, inbox)
+# Record labeled audio (labels: siren, explosion, uav, background, unknown, inbox)
 LABEL=background DURATION=30 docker compose run --rm recorder
 LABEL=siren DURATION=10 docker compose run --rm recorder
 # Continuous recording to inbox until Ctrl-C:

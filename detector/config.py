@@ -17,7 +17,7 @@ ANALYSIS_SECONDS = 2.0
 DETECTORS = {
     "siren":      (("Siren",), 0.10, ""),
     "explosion":  (("Explosion", "Burst, pop", "Gunshot, gunfire"), 0.15, "exp-"),
-    "motorcycle": (("Motorcycle",), 0.15, "moto-"),
+    "uav": (("Motorcycle",), 0.15, "uav-"),
 }
 
 CLIP_SECONDS = 10
@@ -25,14 +25,14 @@ CLIP_DIR = Path("/clips")
 WEB_PORT = 8080
 
 DATASET_DIR = Path("/dataset")
-VALID_LABELS = {"siren", "background", "motorcycle", "explosion", "unknown"}
+VALID_LABELS = {"siren", "background", "uav", "explosion", "unknown"}
 
 SETTINGS_PATH = CLIP_DIR / "settings.json"
 
 DEFAULT_SETTINGS = {
     "siren_threshold": 0.10,
     "explosion_threshold": 0.15,
-    "motorcycle_threshold": 0.15,
+    "uav_threshold": 0.15,
     "possible_triggers": 4,
     "confirmed_triggers": 8,
     "cooldown_seconds": 60,

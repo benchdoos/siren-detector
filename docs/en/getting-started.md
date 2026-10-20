@@ -23,7 +23,20 @@ Keep real Wi-Fi credentials, admin tokens, and passwords out of Git.
 
 ## 2. Flash the ESP32
 
-Copy `esp32/siren-detector.yaml` and your `secrets.yaml` to the ESPHome host. Validate, compile, then flash the device with ESPHome. The default microphone wiring is documented in [Multi-microphone setup](multi-microphone.md).
+From the repository root on a machine with the ESPHome CLI installed, validate and compile the configuration:
+
+```bash
+esphome config esp32/siren-detector.yaml
+esphome compile esp32/siren-detector.yaml
+```
+
+Keep `esp32/secrets.yaml` beside the YAML configuration. It must define `wifi_ssid`, `wifi_password`, `ap_password`, `udp_target_ip`, and `udp_target_port` (see `esp32/secrets.yaml.example`). For the first flash, connect the ESP32-S3 over USB and run:
+
+```bash
+esphome run esp32/siren-detector.yaml
+```
+
+Select the device's serial port when ESPHome prompts you. Later updates can use OTA when the device is online. If compiling on another host, copy both files and preserve their relative locations. See [Multi-microphone setup](multi-microphone.md) for wiring and the [settings reference](settings.md) for firmware and detector options.
 
 ## 3. Start the Hub and detector
 
@@ -50,4 +63,5 @@ The detector can also run directly with Python. Install dependencies from `detec
 
 - Add a USB microphone using [Multi-microphone setup](multi-microphone.md).
 - Review [Operations](operations.md) for settings, MQTT, and deployment commands.
+- Read the [detector settings reference](settings.md) and the [HTTP/WebSocket API reference](api.md).
 - Use [Data and models](data-and-models.md) to record examples and retrain the classifier.

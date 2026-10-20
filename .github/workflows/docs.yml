@@ -1,13 +1,9 @@
 name: Build and deploy documentation
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "docs/**"
-      - "mkdocs.yml"
-      - ".github/workflows/docs.yml"
-  workflow_dispatch:
+  # Disabled: runs only if someone explicitly sends this custom event.
+  repository_dispatch:
+    types: [docs-deploy-disabled]
 
 permissions:
   contents: read
