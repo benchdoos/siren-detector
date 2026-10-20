@@ -1,75 +1,75 @@
 {
-  "audit_timestamp": "2026-10-20T13:56:33+00:00",
-  "model_trained_at": "2026-10-20T13:56:29+00:00",
+  "audit_timestamp": "2026-10-20T14:09:19+00:00",
+  "model_trained_at": "2026-10-20T14:09:15+00:00",
   "dsp_metrics": {
-    "trained_at": "2026-10-20T13:55:57+00:00",
+    "trained_at": "2026-10-20T14:08:41+00:00",
     "labels": [
       "siren",
       "background",
       "explosion",
       "motorcycle"
     ],
-    "validation_windows": 2859,
-    "accuracy": 0.8636,
+    "validation_windows": 2893,
+    "accuracy": 0.8873,
     "classes": [
       {
         "label": "siren",
-        "windows": 306,
-        "precision": 0.5371,
-        "recall": 0.6144,
-        "f1": 0.5732
+        "windows": 318,
+        "precision": 0.6938,
+        "recall": 0.5629,
+        "f1": 0.6215
       },
       {
         "label": "background",
         "windows": 2185,
-        "precision": 0.9339,
-        "recall": 0.9309,
-        "f1": 0.9324
+        "precision": 0.9376,
+        "recall": 0.9625,
+        "f1": 0.9499
       },
       {
         "label": "explosion",
-        "windows": 153,
-        "precision": 0.7115,
-        "recall": 0.7255,
-        "f1": 0.7184
+        "windows": 178,
+        "precision": 0.7135,
+        "recall": 0.7697,
+        "f1": 0.7405
       },
       {
         "label": "motorcycle",
-        "windows": 215,
-        "precision": 0.7771,
-        "recall": 0.6326,
-        "f1": 0.6974
+        "windows": 212,
+        "precision": 0.74,
+        "recall": 0.6981,
+        "f1": 0.7184
       }
     ],
     "confusion_matrix": [
       [
-        188,
-        114,
-        4,
-        0
+        179,
+        119,
+        6,
+        14
       ],
       [
-        123,
-        2034,
+        48,
+        2103,
+        14,
+        20
+      ],
+      [
         7,
-        21
-      ],
-      [
-        8,
         16,
-        111,
+        137,
         18
       ],
       [
-        31,
-        14,
-        34,
-        136
+        24,
+        5,
+        35,
+        148
       ]
     ],
     "background_gate_threshold": 0.92,
-    "siren_confident_background_rate": 0.0098,
-    "siren_argmax_background_rate": 0.3725,
+    "siren_confident_background_rate": 0.0,
+    "siren_argmax_background_rate": 0.3742,
     "quantized_model_size_bytes": 29968
   },
   "labels": [
@@ -80,46 +80,46 @@
   ],
   "val_accuracy": {
     "siren": {
-      "accuracy": 0.767,
+      "accuracy": 0.769,
       "windows": 3669
     },
     "background": {
-      "accuracy": 0.798,
+      "accuracy": 0.811,
       "windows": 8700
     },
     "explosion": {
-      "accuracy": 0.695,
+      "accuracy": 0.662,
       "windows": 967
     },
     "motorcycle": {
-      "accuracy": 0.716,
+      "accuracy": 0.703,
       "windows": 528
     }
   },
   "confusion_matrix": [
     [
-      2814,
-      314,
-      92,
-      449
+      2823,
+      341,
+      107,
+      398
     ],
     [
-      963,
-      6946,
-      547,
-      244
+      784,
+      7057,
+      612,
+      247
     ],
     [
-      64,
-      203,
-      672,
-      28
+      48,
+      253,
+      640,
+      26
     ],
     [
-      52,
-      44,
-      54,
-      378
+      41,
+      70,
+      46,
+      371
     ]
   ],
   "file_counts": {
@@ -140,20 +140,20 @@
       "max_recommended_aug": 1758
     },
     "explosion": {
-      "total": 431,
-      "real": 281,
+      "total": 432,
+      "real": 282,
       "aug": 150,
-      "aug_pct": 34.8,
+      "aug_pct": 34.7,
       "aug_real_ratio": 0.5,
-      "max_recommended_aug": 562
+      "max_recommended_aug": 564
     },
     "motorcycle": {
-      "total": 304,
-      "real": 144,
+      "total": 305,
+      "real": 145,
       "aug": 160,
-      "aug_pct": 52.6,
+      "aug_pct": 52.5,
       "aug_real_ratio": 1.1,
-      "max_recommended_aug": 288
+      "max_recommended_aug": 290
     }
   },
   "issues": [
