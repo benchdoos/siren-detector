@@ -976,6 +976,11 @@ async function loadCalRecordings() {
     const res = await fetch('/api/calibrate/recordings', { headers: adminHeaders() });
     const data = await res.json();
     const recs = data.recordings || [];
+    const currentPaths = [...container.querySelectorAll('.cal-rec')].map(card => card.dataset.path);
+    const nextPaths = recs.map(r => r.path);
+    if (nextPaths.length > 0 && currentPaths.length === nextPaths.length && currentPaths.every((path, i) => path === nextPaths[i])) return;
+    // Avoid replacing a player while a recording is being listened to.
+    if ([...container.querySelectorAll('audio')].some(audio => !audio.paused)) return;
     if (recs.length === 0) {
       container.innerHTML = '<div style="font-size:13px;color:#666">No recordings yet. Use the form above to record background audio.</div>';
       return;
@@ -984,6 +989,7 @@ async function loadCalRecordings() {
     for (const r of recs) {
       const card = document.createElement('div');
       card.className = 'cal-rec';
+      card.dataset.path = r.path;
       const audioUrl = `/calibrate-audio/${encodeURIComponent(r.source)}/${encodeURIComponent(r.filename)}`;
       const specUrl = audioUrl + '/spectrogram';
       const tokenParam = _adminToken ? '?token=' + encodeURIComponent(_adminToken) : '';
@@ -1056,6 +1062,7 @@ loadSettings();
 loadCalibrationSources();
 loadSources();
 loadCalRecordings();
+setInterval(loadCalRecordings, 15000);
 
 (async function init() {
   // Check if calibration is in progress — if so, open Calibration panel

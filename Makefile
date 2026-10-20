@@ -154,7 +154,14 @@ _clean-trained:
 		for subdir in dataset/$$label/*/; do \
 			[ -d "$$subdir" ] || continue; \
 			subname=$$(basename "$$subdir"); \
-			if [ "$$label" = "background" ]; then continue; fi; \
+			if [ "$$label" = "background" ]; then \
+				if ls "$$subdir"calibration_*.wav >/dev/null 2>&1; then \
+					NAMES=$$(cd "$$subdir" && ls calibration_*.wav | tr '\n' ' '); \
+					ssh $(RPI) "cd $(RPI_BASE)/dataset/background/$$subname && rm -f $$NAMES" && \
+					count=$$((count + $$(echo $$NAMES | wc -w))); \
+				fi; \
+				continue; \
+			fi; \
 			if ls "$$subdir"*.wav >/dev/null 2>&1; then \
 				NAMES=$$(cd "$$subdir" && ls *.wav | tr '\n' ' '); \
 				ssh $(RPI) "cd $(RPI_BASE)/dataset/$$label/$$subname && rm -f $$NAMES" && \
