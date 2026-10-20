@@ -64,21 +64,23 @@ train:
 	ml/.venv/bin/python ml/train_classifier.py
 
 ## Train DSP pre-filter on local dataset
+DSP_TRAIN_ARGS ?=
 train-dsp:
-	ml/.venv/bin/python ml/train_dsp_classifier.py
+	ml/.venv/bin/python ml/train_dsp_classifier.py $(DSP_TRAIN_ARGS)
 
-## Deploy trained model weights to RPi and restart detector
+## Deploy trained model weights and refresh detector compose configuration on RPi
 deploy-model:
 	scp ml/results/classifier_weights.npz ml/results/classifier_labels.json \
 		ml/results/val_metrics.json \
 		ml/results/model_card.json \
 		$(RPI):$(RPI_BASE)/ml/results/
+	scp hub/docker-compose.yml $(RPI):$(RPI_BASE)/hub/docker-compose.yml
 	@if [ -f ml/results/dsp_metrics.json ]; then \
 		scp ml/results/dsp_metrics.json $(RPI):$(RPI_BASE)/ml/results/; \
 	fi
-	@if ls ml/results/dsp_classifier_int8.tflite ml/results/dsp_norm_stats.npz ml/results/dsp_classifier_labels.json >/dev/null 2>&1; then \
-		echo "Deploying DSP model..."; \
-		scp ml/results/dsp_classifier_int8.tflite ml/results/dsp_norm_stats.npz \
+	@if ls ml/results/dsp_classifier_f32.tflite ml/results/dsp_norm_stats.npz ml/results/dsp_classifier_labels.json >/dev/null 2>&1; then \
+		echo "Deploying DSP float32 model..."; \
+		scp ml/results/dsp_classifier_f32.tflite ml/results/dsp_norm_stats.npz \
 			ml/results/dsp_classifier_labels.json \
 			$(RPI):$(RPI_BASE)/ml/results/; \
 	fi
@@ -86,7 +88,7 @@ deploy-model:
 		ssh $(RPI) "mkdir -p $(RPI_BASE)/ml/results/audits"; \
 		scp ml/results/audits/audit_*.json $(RPI):$(RPI_BASE)/ml/results/audits/; \
 	fi
-	ssh $(RPI) "docker restart $(CONTAINER)"
+	ssh $(RPI) "cd $(RPI_BASE)/hub && docker compose up -d detector"
 
 ## Full retrain cycle: merge recorder → sync dataset → train → audit → clean synced → deploy model (restart)
 retrain:
@@ -152,6 +154,7 @@ _clean-trained:
 		for subdir in dataset/$$label/*/; do \
 			[ -d "$$subdir" ] || continue; \
 			subname=$$(basename "$$subdir"); \
+			if [ "$$label" = "background" ]; then continue; fi; \
 			if ls "$$subdir"*.wav >/dev/null 2>&1; then \
 				NAMES=$$(cd "$$subdir" && ls *.wav | tr '\n' ' '); \
 				ssh $(RPI) "cd $(RPI_BASE)/dataset/$$label/$$subname && rm -f $$NAMES" && \
@@ -223,6 +226,11 @@ endif
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
+## Dump current runtime settings from detector (JSON, pipe to jq for pretty-print)
+settings:
+	@_token=$${ADMIN_TOKEN:-$$(grep '^ADMIN_TOKEN=' hub/.env 2>/dev/null | cut -d= -f2)}; \
+	curl -sf -H "Authorization: Bearer $$_token" "$(WEB_UI)/api/settings" | python3 -m json.tool
+
 ## Open Web UI in browser
 open:
 	open $(WEB_UI)
@@ -255,6 +263,7 @@ help:
 	@echo "    make clean-docker    Prune Docker images/cache (keeps volumes)"
 	@echo ""
 	@echo "  Other"
+	@echo "    make settings        Dump current runtime settings (JSON)"
 	@echo "    make unlock          Unlock SSH key for 10 min"
 	@echo "    make open            Open Web UI in browser"
 	@echo "    make fetch-esc50     Download ESC-50 dataset
@@ -266,7 +275,7 @@ help:
 	@echo "    make audit-compare   Compare latest vs previous audit"
 	@echo ""
 
-.PHONY: deploy deploy-audio deploy-ui deploy-firmware logs-esp deploy-compose restart logs \
+.PHONY: deploy deploy-audio deploy-ui deploy-firmware logs-esp deploy-compose restart logs settings \
         sync-dataset train train-dsp deploy-model retrain _merge-recorder _wait-calibration _clean-trained \
         clean-clips clean-dataset clean-docker \
         augment augment-siren augment-explosion augment-motorcycle \

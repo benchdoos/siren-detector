@@ -114,6 +114,7 @@ def run(
             channels=1,
             dtype="float32",
             blocksize=chunk_samples,
+            latency="high",
             callback=audio_callback,
         ):
             print("Streaming... (Ctrl+C to stop)", flush=True)
@@ -178,6 +179,7 @@ def record(
             channels=1,
             dtype="float32",
             blocksize=chunk_samples,
+            latency="high",
             callback=audio_callback,
         ):
             while True:

@@ -68,10 +68,12 @@
   .src-dsp-settings { width: 100%; border-top: 1px solid #292929; padding-top: 9px; margin-top: 2px; }
   .src-dsp-heading { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #aaa; }
   .src-dsp-heading select, .src-dsp-fields select, .src-dsp-fields input { background: #222; border: 1px solid #444; color: #ddd; border-radius: 4px; padding: 4px 7px; font-size: 12px; }
-  .src-dsp-fields { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 9px; }
+  .src-dsp-fields { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 9px; }
   .src-dsp-fields[hidden] { display: none; }
-  .src-dsp-control { display: flex; align-items: center; gap: 5px; color: #777; font-size: 11px; }
-  .src-dsp-control input { width: 66px; }
+  .src-dsp-control-group { display: grid; grid-template-columns: 150px 80px; align-items: center; column-gap: 10px; row-gap: 5px; width: 100%; }
+  .src-dsp-control-label { display: flex; align-items: center; gap: 5px; color: #777; font-size: 11px; }
+  .src-dsp-control-group input, .src-dsp-control-group select { width: 80px; min-width: 0; background: #222; border: 1px solid #444; color: #ddd; border-radius: 4px; padding: 4px 7px; font-size: 12px; }
+  .src-dsp-control-group .s-tooltip { grid-column: 1 / -1; margin: 0 0 3px; }
   .src-dsp-save { background: none; border: 1px solid #4caf50; color: #4caf50; padding: 4px 9px; border-radius: 4px; cursor: pointer; font-size: 11px; }
   .src-dsp-status { font-size: 11px; color: #4caf50; }
   .src-card.disabled { opacity: 0.5; }
@@ -182,6 +184,16 @@
         <div class="s-tooltip" data-tip="dsp_max_consecutive_skips"><strong>DSP Max Consecutive Skips</strong><br>After this many consecutive DSP skips for a source, force one YAMNet pass. Low values (3-5) let YAMNet catch events quickly despite DSP's slow 5s window. Higher values save more CPU but delay detection. Set to 0 to disable.<hr><span class="s-tip-range">Range: <b>0 – 200</b></span><br><span class="s-tip-default">Default: <b>4</b> (~2 seconds)</span></div>
       </div>
       <div class="s-section">
+        <div class="s-title">Click Removal</div>
+        <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Suppresses impulse noise (clicks, pops) from INMP441 before inference. Prevents false "Explosion" detections from electrical interference.</p>
+        <div class="s-row"><label>Click removal <span class="s-help" onclick="toggleTip(this)">?</span></label><select id="s-click_removal_enabled"><option value="1">On</option><option value="0">Off</option></select><span class="s-default" data-key="click_removal_enabled"></span></div>
+        <div class="s-tooltip" data-tip="click_removal_enabled"><strong>Click Removal</strong><br>When On, detects impulse noise (1-5 sample spikes from electrical interference) and replaces them with interpolated values before YAMNet inference. Real explosions span hundreds of samples and are not affected.<hr><span class="s-tip-default">Default: <b>On</b></span></div>
+        <div class="s-row"><label>Threshold (MADs) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-click_removal_threshold" step="0.5" min="3" max="50"><span class="s-default" data-key="click_removal_threshold"></span></div>
+        <div class="s-tooltip" data-tip="click_removal_threshold"><strong>Click Removal Threshold</strong><br>How many median absolute deviations a sample must exceed to be classified as a click. Lower = more aggressive removal (may clip loud sounds). Higher = only catches extreme spikes.<hr><span class="s-tip-range">Range: <b>3.0 – 50.0</b></span><br><span class="s-tip-default">Default: <b>10.0</b></span></div>
+        <div class="s-row"><label>Max click width <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-click_removal_max_width" step="1" min="1" max="20"><span class="s-default" data-key="click_removal_max_width"></span></div>
+        <div class="s-tooltip" data-tip="click_removal_max_width"><strong>Max Click Width</strong><br>Maximum number of consecutive outlier samples to treat as a click. Groups longer than this are left untouched (likely real audio). INMP441 clicks are typically 1-5 samples.<hr><span class="s-tip-range">Range: <b>1 – 20 samples</b></span><br><span class="s-tip-default">Default: <b>5</b></span></div>
+      </div>
+      <div class="s-section">
         <div class="s-title">MLP Gate</div>
         <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Controls when to trust the MLP classifier for siren detection.</p>
         <div class="s-row"><label>YAMNet min gate <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-yamnet_min_gate" step="0.001" min="0" max="1"><span class="s-default" data-key="yamnet_min_gate"></span></div>
@@ -245,7 +257,7 @@
     <div class="sp-panel" id="sp-sources">
       <div class="s-section">
         <div class="s-title">Audio Sources</div>
-        <p style="font-size:12px;color:#555;margin:0 0 12px 0;line-height:1.5">Enable or disable detection for each microphone. Disabled sources still receive audio (available for calibration) but their events are discarded. DSP settings inherit the global defaults unless you add a source override.</p>
+        <p style="font-size:12px;color:#555;margin:0 0 12px 0;line-height:1.5">Enable or disable detection for each microphone. Disabled sources still receive audio (available for calibration) but their events are discarded. DSP and Click Removal settings inherit the global defaults unless you add a source override.</p>
         <div id="sources-list" style="display:flex;flex-direction:column;gap:8px">
           <div style="font-size:13px;color:#666">Loading sources...</div>
         </div>
@@ -337,13 +349,14 @@ const SETTINGS_KEYS = [
   'detection_mode','inference_interval_seconds',
   'siren_threshold','explosion_threshold','motorcycle_threshold',
   'dsp_enabled','dsp_bg_threshold','dsp_bg_release_threshold','dsp_bg_confirm_windows','dsp_event_gate','dsp_max_consecutive_skips',
+  'click_removal_enabled','click_removal_threshold','click_removal_max_width',
   'possible_triggers','confirmed_triggers','smoothing_window_seconds',
   'cooldown_seconds','refractory_seconds','yamnet_min_gate',
   'clip_seconds','clip_from_possible','user_event_clip_seconds','save_background_segments'
 ];
 
 const PANEL_KEYS = {
-  'sp-detection': ['detection_mode','inference_interval_seconds','siren_threshold','explosion_threshold','motorcycle_threshold','dsp_enabled','dsp_bg_threshold','dsp_bg_release_threshold','dsp_bg_confirm_windows','dsp_event_gate','dsp_max_consecutive_skips','yamnet_min_gate'],
+  'sp-detection': ['detection_mode','inference_interval_seconds','siren_threshold','explosion_threshold','motorcycle_threshold','dsp_enabled','dsp_bg_threshold','dsp_bg_release_threshold','dsp_bg_confirm_windows','dsp_event_gate','dsp_max_consecutive_skips','click_removal_enabled','click_removal_threshold','click_removal_max_width','yamnet_min_gate'],
   'sp-smoothing': ['possible_triggers','confirmed_triggers','smoothing_window_seconds','cooldown_seconds','refractory_seconds'],
   'sp-clips': ['clip_seconds','clip_from_possible','user_event_clip_seconds','save_background_segments'],
 };
@@ -377,8 +390,10 @@ function goBack() {
 
 /* ── Tooltips ── */
 function toggleTip(helpBtn) {
-  const row = helpBtn.closest('.s-row');
-  const tip = row.nextElementSibling;
+  const row = helpBtn.closest('.s-row, .s-title, .src-dsp-heading, .src-dsp-control-group');
+  const tip = row.classList.contains('src-dsp-control-group')
+    ? row.querySelector('.s-tooltip')
+    : row.nextElementSibling;
   if (!tip || !tip.classList.contains('s-tooltip')) return;
   const wasOpen = tip.classList.contains('open');
   document.querySelectorAll('.s-tooltip.open').forEach(t => t.classList.remove('open'));
@@ -513,6 +528,7 @@ async function loadSources() {
     const setData = await setRes.json();
     const disabled = setData.disabled_sources || [];
     const dspOverrides = setData.dsp_source_overrides || {};
+    const crOverrides = setData.click_removal_source_overrides || {};
     const sources = srcData.sources || [];
     if (sources.length === 0) {
       list.innerHTML = '<div style="font-size:13px;color:#666">No sources connected yet.</div>';
@@ -522,13 +538,18 @@ async function loadSources() {
     for (const s of sources) {
       const enabled = !disabled.includes(s.source_id);
       const override = dspOverrides[String(s.source_id)] || null;
+      const crOverride = crOverrides[String(s.source_id)] || null;
       const useOverride = !!override;
+      const useCrOverride = !!crOverride;
       const dspEnabled = override?.dsp_enabled ?? setData.dsp_enabled ?? 1;
       const bgThreshold = override?.bg_threshold ?? setData.dsp_bg_threshold ?? 0.85;
       const bgRelease = override?.bg_release_threshold ?? setData.dsp_bg_release_threshold ?? 0.85;
       const bgWindows = override?.bg_confirm_windows ?? setData.dsp_bg_confirm_windows ?? 2;
       const eventGate = override?.event_gate ?? setData.dsp_event_gate ?? 0.08;
       const maxSkips = override?.max_consecutive_skips ?? setData.dsp_max_consecutive_skips ?? 4;
+      const crEnabled = crOverride?.enabled ?? setData.click_removal_enabled ?? 1;
+      const crThreshold = crOverride?.threshold ?? setData.click_removal_threshold ?? 10.0;
+      const crMaxWidth = crOverride?.max_width ?? setData.click_removal_max_width ?? 5;
       const card = document.createElement('div');
       card.className = 'src-card' + (enabled ? '' : ' disabled');
       card.innerHTML = `
@@ -550,18 +571,32 @@ async function loadSources() {
           <span class="slider"></span>
         </label></div>
         <div class="src-dsp-settings">
-          <div class="src-dsp-heading">DSP <select class="src-dsp-mode" data-sid="${s.source_id}" onchange="toggleSourceDspOverride(this)">
+          <div class="src-dsp-heading">DSP <span class="s-help" onclick="toggleTip(this)">?</span><select class="src-dsp-mode" data-sid="${s.source_id}" onchange="toggleSourceDspOverride(this)">
             <option value="global" ${useOverride ? '' : 'selected'}>Use global defaults</option>
             <option value="override" ${useOverride ? 'selected' : ''}>Override for this source</option>
           </select><span class="src-dsp-status" data-sid="${s.source_id}"></span></div>
+          <div class="s-tooltip"><strong>DSP for this source</strong><br>Choose whether this microphone uses the global DSP settings or its own override. Source overrides take effect after saving.</div>
           <div class="src-dsp-fields" data-sid="${s.source_id}" ${useOverride ? '' : 'hidden'}>
-            <label class="src-dsp-control">Enabled <select data-dsp-field="dsp_enabled"><option value="1" ${Number(dspEnabled) ? 'selected' : ''}>On</option><option value="0" ${Number(dspEnabled) ? '' : 'selected'}>Off</option></select></label>
-            <label class="src-dsp-control">BG threshold <input type="number" data-dsp-field="bg_threshold" min="0.5" max="1" step="0.01" value="${bgThreshold}"></label>
-            <label class="src-dsp-control">BG release <input type="number" data-dsp-field="bg_release_threshold" min="0.5" max="1" step="0.01" value="${bgRelease}"></label>
-            <label class="src-dsp-control">BG windows <input type="number" data-dsp-field="bg_confirm_windows" min="1" max="10" step="1" value="${bgWindows}"></label>
-            <label class="src-dsp-control">Event gate <input type="number" data-dsp-field="event_gate" min="0" max="0.5" step="0.01" value="${eventGate}"></label>
-            <label class="src-dsp-control">Max skips <input type="number" data-dsp-field="max_consecutive_skips" min="0" max="200" step="1" value="${maxSkips}"></label>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">Enabled <span class="s-help" onclick="toggleTip(this)">?</span></div><select data-dsp-field="dsp_enabled"><option value="1" ${Number(dspEnabled) ? 'selected' : ''}>On</option><option value="0" ${Number(dspEnabled) ? '' : 'selected'}>Off</option></select><div class="s-tooltip"><strong>DSP enabled</strong><br>When on, the lightweight DSP classifier pre-screens audio before YAMNet. Confident background is skipped to reduce CPU use; turn it off to always run full inference.</div></div>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">BG threshold <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="bg_threshold" min="0.5" max="1" step="0.01" value="${bgThreshold}"><div class="s-tooltip"><strong>BG threshold</strong><br>Minimum DSP confidence needed to skip YAMNet. Higher values skip less often and are more conservative; lower values save more CPU but may miss events.</div></div>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">BG release <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="bg_release_threshold" min="0.5" max="1" step="0.01" value="${bgRelease}"><div class="s-tooltip"><strong>BG release threshold</strong><br>While YAMNet is being skipped, it resumes when background confidence drops below this value. Higher values resume sooner; lower values keep skipping longer.</div></div>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">BG windows <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="bg_confirm_windows" min="1" max="10" step="1" value="${bgWindows}"><div class="s-tooltip"><strong>BG confirm windows</strong><br>Consecutive background predictions required before DSP starts skipping YAMNet. Higher values add caution but reduce CPU savings.</div></div>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">Event gate <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="event_gate" min="0" max="0.5" step="0.01" value="${eventGate}"><div class="s-tooltip"><strong>Event gate</strong><br>If a siren, explosion, or motorcycle probability exceeds this value, YAMNet runs even when background confidence is high. Lower values are more sensitive. Set to 0 to disable.</div></div>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">Max skips <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="max_consecutive_skips" min="0" max="200" step="1" value="${maxSkips}"><div class="s-tooltip"><strong>Max consecutive skips</strong><br>After this many consecutive DSP skips, force one YAMNet pass. Lower values catch events sooner; higher values save more CPU. Set to 0 to disable.</div></div>
             <button class="src-dsp-save" onclick="saveSourceDspOverride(this, ${s.source_id})">Save</button>
+          </div>
+        </div>
+        <div class="src-dsp-settings">
+          <div class="src-dsp-heading">Click Removal <span class="s-help" onclick="toggleTip(this)">?</span><select class="src-cr-mode" data-sid="${s.source_id}" onchange="toggleSourceCrOverride(this)">
+            <option value="global" ${useCrOverride ? '' : 'selected'}>Use global defaults</option>
+            <option value="override" ${useCrOverride ? 'selected' : ''}>Override for this source</option>
+          </select><span class="src-cr-status" data-sid="${s.source_id}"></span></div>
+          <div class="s-tooltip"><strong>Click Removal for this source</strong><br>Choose whether this microphone uses the global click removal settings or its own override. Threshold controls click detection sensitivity; max width limits the duration of clicks that are removed. Source overrides take effect after saving.</div>
+          <div class="src-dsp-fields src-cr-fields" data-sid="${s.source_id}" ${useCrOverride ? '' : 'hidden'}>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">Enabled <span class="s-help" onclick="toggleTip(this)">?</span></div><select data-cr-field="enabled"><option value="1" ${Number(crEnabled) ? 'selected' : ''}>On</option><option value="0" ${Number(crEnabled) ? '' : 'selected'}>Off</option></select><div class="s-tooltip"><strong>Click removal enabled</strong><br>Detect impulse noise such as electrical clicks and replace spikes with interpolated audio before inference.</div></div>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">Threshold <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-cr-field="threshold" min="3" max="50" step="0.5" value="${crThreshold}"><div class="s-tooltip"><strong>Threshold (MADs)</strong><br>How far a sample must exceed the local median absolute deviation to count as a click. Lower removes more spikes but may clip loud sounds; higher catches only extreme spikes.</div></div>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">Max width <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-cr-field="max_width" min="1" max="20" step="1" value="${crMaxWidth}"><div class="s-tooltip"><strong>Max width</strong><br>Longest impulse, in samples, that can be removed. Wider sounds are left intact.</div></div>
+            <button class="src-dsp-save" onclick="saveSourceCrOverride(this, ${s.source_id})">Save</button>
           </div>
         </div>`;
       card.querySelector('input[type="checkbox"]').addEventListener('change', (e) => toggleSource(s.source_id, e.target.checked, card));
@@ -610,6 +645,58 @@ async function updateSourceDspOverride(sourceId, override, statusEl) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...adminHeaders() },
       body: JSON.stringify({ dsp_source_overrides: overrides }),
+    });
+    if (saveRes.status === 401) { alert('Auth required.'); return; }
+    if (!saveRes.ok) {
+      const err = await saveRes.json();
+      throw new Error(err.detail || 'Save failed');
+    }
+    statusEl.textContent = override ? 'Saved' : 'Using global defaults';
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+  } catch (e) {
+    statusEl.textContent = e.message || 'Network error';
+    statusEl.style.color = '#ef5350';
+  }
+}
+
+/* ── Click Removal source overrides ── */
+function toggleSourceCrOverride(select) {
+  const fields = select.closest('.src-dsp-settings').querySelector('.src-cr-fields');
+  if (select.value === 'override') {
+    fields.hidden = false;
+    return;
+  }
+  clearSourceCrOverride(select, Number(select.dataset.sid));
+}
+
+async function saveSourceCrOverride(button, sourceId) {
+  const card = button.closest('.src-card');
+  const fields = card.querySelector('.src-cr-fields');
+  const override = {};
+  fields.querySelectorAll('[data-cr-field]').forEach(input => {
+    override[input.dataset.crField] = Number(input.value);
+  });
+  const status = card.querySelector('.src-cr-status');
+  await updateSourceCrOverride(sourceId, override, status);
+}
+
+async function clearSourceCrOverride(select, sourceId) {
+  const status = select.closest('.src-dsp-settings').querySelector('.src-cr-status');
+  await updateSourceCrOverride(sourceId, null, status);
+  select.closest('.src-dsp-settings').querySelector('.src-cr-fields').hidden = true;
+}
+
+async function updateSourceCrOverride(sourceId, override, statusEl) {
+  try {
+    const getRes = await fetch('/api/settings', { headers: adminHeaders() });
+    const data = await getRes.json();
+    const overrides = data.click_removal_source_overrides || {};
+    if (override) overrides[String(sourceId)] = override;
+    else delete overrides[String(sourceId)];
+    const saveRes = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify({ click_removal_source_overrides: overrides }),
     });
     if (saveRes.status === 401) { alert('Auth required.'); return; }
     if (!saveRes.ok) {

@@ -1214,6 +1214,7 @@ Hub (fan-out relay, RPi :9000)
 **Detector** (`http://<your_rpi_ip>:8080`):
 - YAMNet (frozen, TF Hub) extracts 1024-dim embeddings every 0.5 s
 - MLP classifier (`siren` / `background` / `explosion` / `motorcycle`) on top of embeddings
+- Click removal: MAD-based impulse noise suppression before inference (removes INMP441 electrical clicks that cause false "Explosion" detections). Configurable per-source with threshold and max click width settings
 - Temporal smoother: 4 triggers → possible, 8 → confirmed (window 30 s, cooldown 60 s)
 - On confirmed: WAV clip saved to `/clips/` (two recording modes, see below)
 - WebSocket broadcast: score every 0.5 s + events
@@ -1285,6 +1286,7 @@ make clean-docker    # Clean Docker cache on RPi (volumes untouched)
 ### Other
 
 ```bash
+make settings        # Dump current runtime settings as JSON
 make fetch-esc50     # Download ESC-50 dataset
 make open            # Open Web UI in browser
 make unlock          # Unlock SSH key for 10 minutes

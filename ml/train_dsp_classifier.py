@@ -21,6 +21,7 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import json
 import random
 import re
@@ -29,7 +30,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
-import soundfile as sf
+# import soundfile as sf
 import tensorflow as tf
 
 from dsp_features import extract_features, load_mono_16k, LABELS, HOP_SIZE, SAMPLE_RATE
@@ -52,6 +53,8 @@ WINDOW_FRAMES = 250        # 5 seconds at 50 fps — captures full siren sweep c
 WINDOW_HOP_FRAMES = 50     # 1 second hop between windows
 N_FEATURES = 16            # 8 raw + 8 delta (rate of change)
 MAX_FILES_PER_CLASS = 500   # cap files to avoid OOM
+CALIBRATION_DIVERSITY_ENABLED = True
+CALIBRATION_WINDOWS_PER_RECORDING = 16
 MIXUP_ALPHA = 0.0           # Beta(α, α) mixup; 0 disables
 MAX_BG_TRAIN_WINDOWS = 3000
 EPOCHS = 100
@@ -77,16 +80,49 @@ def is_augmented(filename: str) -> bool:
     return Path(filename).name.startswith("aug_")
 
 
+def is_calibration(path_or_source: Path | str) -> bool:
+    """Return whether a WAV path or source key is a calibration recording."""
+    name = Path(path_or_source).name
+    return name.startswith("calibration_")
+
+
+def prioritize_calibrations(files: list[Path], label_dir: Path) -> list[Path]:
+    """Put recent calibration recordings first, interleaved by source folder."""
+    by_source: dict[str, list[Path]] = defaultdict(list)
+    other_files = []
+    for path in files:
+        if is_calibration(path):
+            source = str(path.parent.relative_to(label_dir))
+            by_source[source].append(path)
+        else:
+            other_files.append(path)
+
+    for paths in by_source.values():
+        paths.sort(key=lambda path: path.name, reverse=True)
+
+    calibration_files = []
+    sources = sorted(by_source)
+    while any(by_source.values()):
+        for source in sources:
+            if by_source[source]:
+                calibration_files.append(by_source[source].pop(0))
+
+    return calibration_files + sorted(other_files)
+
+
 # ── feature caching ────────────────────────────────────────────────────────────
 
-def _cached_features(path: Path) -> np.ndarray:
-    """Extract features with disk caching keyed by file mtime."""
+def _cached_features(path: Path, include_full_calibration: bool = True) -> np.ndarray:
+    """Extract features, using full calibration audio when diversity is enabled."""
     DSP_CACHE.mkdir(parents=True, exist_ok=True)
-    cache_key = f"{path.stem}_{int(path.stat().st_mtime)}.npy"
+    full_calibration = include_full_calibration and is_calibration(path)
+    max_seconds = None if full_calibration else 30
+    duration_key = "_full" if full_calibration else ""
+    cache_key = f"{path.stem}_{int(path.stat().st_mtime)}{duration_key}.npy"
     cache_file = DSP_CACHE / cache_key
     if cache_file.exists():
         return np.load(cache_file)
-    audio = load_mono_16k(path, max_seconds=30)
+    audio = load_mono_16k(path, max_seconds=max_seconds)
     feats = add_deltas(extract_features(audio))
     np.save(cache_file, feats)
     return feats
@@ -104,6 +140,34 @@ def normalize_features(features: np.ndarray, mean: np.ndarray, std: np.ndarray) 
     return (features - mean) / std
 
 
+def _select_diverse_calibration_windows(
+    windows: list[tuple[np.ndarray, float, str, np.ndarray]],
+    max_windows: int,
+) -> list[tuple[np.ndarray, float, str, np.ndarray]]:
+    """Keep quiet, typical, loud, and acoustically distinct calibration chunks."""
+    if len(windows) <= max_windows:
+        return windows
+
+    descriptors = np.stack([item[3] for item in windows])
+    rms = descriptors[:, 1]
+    selected = [int(np.argmin(rms)), int(np.argmax(rms))]
+    selected.append(int(np.argmin(np.abs(rms - np.median(rms)))))
+    selected = list(dict.fromkeys(selected))
+
+    scale = descriptors.std(axis=0)
+    scale[scale < 1e-6] = 1.0
+    normalized = (descriptors - descriptors.mean(axis=0)) / scale
+    distances = ((normalized[:, None, :] - normalized[None, :, :]) ** 2).sum(axis=2)
+
+    while len(selected) < max_windows:
+        nearest = distances[:, selected].min(axis=1)
+        nearest[selected] = -1.0
+        selected.append(int(np.argmax(nearest)))
+
+    selected_set = set(selected)
+    return [item for index, item in enumerate(windows) if index in selected_set]
+
+
 # ── dataset building ───────────────────────────────────────────────────────────
 
 def collect_files() -> dict[str, list[Path]]:
@@ -113,13 +177,19 @@ def collect_files() -> dict[str, list[Path]]:
         label_dir = DATASET / label
         if not label_dir.exists():
             continue
-        files = sorted(label_dir.rglob("*.wav"))[:MAX_FILES_PER_CLASS]
+        files = sorted(label_dir.rglob("*.wav"))
+        if label == "background":
+            files = prioritize_calibrations(files, label_dir)
+        files = files[:MAX_FILES_PER_CLASS]
         if files:
             files_by_label[label] = files
     return files_by_label
 
 
-def extract_all_features(files_by_label: dict[str, list[Path]]) -> tuple[
+def extract_all_features(
+    files_by_label: dict[str, list[Path]],
+    calibration_diversity_enabled: bool = CALIBRATION_DIVERSITY_ENABLED,
+) -> tuple[
     dict[str, list[tuple[np.ndarray, str, bool]]], dict[str, set[str]]
 ]:
     """Extract DSP features from all files.
@@ -135,7 +205,9 @@ def extract_all_features(files_by_label: dict[str, list[Path]]) -> tuple[
         print(f"  Extracting {label}: {len(files)} files...", end="", flush=True)
         for f in files:
             try:
-                feats = _cached_features(f)
+                feats = _cached_features(
+                    f, include_full_calibration=calibration_diversity_enabled,
+                )
                 if len(feats) < WINDOW_FRAMES:
                     continue
                 src = source_name(f.name)
@@ -161,7 +233,16 @@ def split_train_val(
     for sources in sources_by_label.values():
         all_sources |= sources
 
-    val_sources = set(rng.sample(sorted(all_sources), max(1, int(len(all_sources) * VAL_SPLIT))))
+    # Calibration audio is collected specifically to teach the model each
+    # microphone's current background, so keep those recordings in training.
+    # Validation remains recording-disjoint and is drawn from the other files.
+    val_candidates = sorted(src for src in all_sources if not is_calibration(src))
+    if not val_candidates:
+        val_candidates = sorted(all_sources)
+    val_count = min(len(val_candidates), int(len(all_sources) * VAL_SPLIT))
+    if val_candidates and val_count == 0:
+        val_count = 1
+    val_sources = set(rng.sample(val_candidates, val_count))
 
     train_data: dict[str, list] = defaultdict(list)
     val_data: dict[str, list] = defaultdict(list)
@@ -181,6 +262,7 @@ def make_windows(
     norm_mean: np.ndarray,
     norm_std: np.ndarray,
     cap_bg: int | None = None,
+    calibration_diversity_enabled: bool = CALIBRATION_DIVERSITY_ENABLED,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Slice feature arrays into fixed-size windows.
 
@@ -192,21 +274,56 @@ def make_windows(
 
     for label, items in data.items():
         label_i = LABELS.index(label)
-        label_windows = []
+        label_windows: list[tuple[np.ndarray, float, str, np.ndarray | None]] = []
 
         for feats, src, aug in items:
             feats_norm = normalize_features(feats, norm_mean, norm_std)
-            # Sliding window
-            for start in range(0, len(feats_norm) - WINDOW_FRAMES + 1, WINDOW_HOP_FRAMES):
+            is_calibration_background = (
+                calibration_diversity_enabled
+                and label == "background"
+                and is_calibration(src)
+            )
+            # Non-overlapping chunks provide distinct candidates from long captures.
+            hop_frames = WINDOW_FRAMES if is_calibration_background else WINDOW_HOP_FRAMES
+            for start in range(0, len(feats_norm) - WINDOW_FRAMES + 1, hop_frames):
+                raw_window = feats[start:start + WINDOW_FRAMES]
                 win = feats_norm[start:start + WINDOW_FRAMES]
-                label_windows.append((win, 0.4 if aug else 1.0))
+                descriptor = None
+                if is_calibration_background:
+                    base_features = raw_window[:, :8]
+                    descriptor = np.concatenate((
+                        base_features.mean(axis=0),
+                        base_features[:, [1, 2, 4, 6]].std(axis=0),
+                    ))
+                label_windows.append((win, 0.4 if aug else 1.0, src, descriptor))
+
+        if calibration_diversity_enabled and label == "background":
+            windows_by_calibration: dict[str, list[tuple[np.ndarray, float, str, np.ndarray]]] = defaultdict(list)
+            other_windows = []
+            for item in label_windows:
+                if item[3] is not None:
+                    windows_by_calibration[item[2]].append(item)
+                else:
+                    other_windows.append(item)
+            label_windows = other_windows
+            for src in sorted(windows_by_calibration):
+                label_windows.extend(_select_diverse_calibration_windows(
+                    windows_by_calibration[src], CALIBRATION_WINDOWS_PER_RECORDING,
+                ))
 
         # Cap background windows to prevent class imbalance
         if cap_bg and label == "background" and len(label_windows) > cap_bg:
             rng = random.Random(RANDOM_SEED)
-            label_windows = rng.sample(label_windows, cap_bg)
+            calibration_windows = [item for item in label_windows if is_calibration(item[2])]
+            other_windows = [item for item in label_windows if not is_calibration(item[2])]
+            if len(calibration_windows) > cap_bg:
+                label_windows = rng.sample(calibration_windows, cap_bg)
+            else:
+                label_windows = calibration_windows + rng.sample(
+                    other_windows, cap_bg - len(calibration_windows),
+                )
 
-        for win, w in label_windows:
+        for win, w, _src, _descriptor in label_windows:
             windows.append(win)
             labels_idx.append(label_i)
             weights.append(w)
@@ -267,18 +384,29 @@ def build_model() -> tf.keras.Model:
 
 # ── training ───────────────────────────────────────────────────────────────────
 
-def train():
+def train(calibration_diversity_enabled: bool = CALIBRATION_DIVERSITY_ENABLED):
     print("=== DSP Feature Classifier Training ===\n")
+    if calibration_diversity_enabled:
+        print("Calibration diversity: enabled (full captures, diverse 5s windows)\n")
+    else:
+        print("Calibration diversity: disabled (30s maximum per file)\n")
 
     # 1. Collect files
     print("1. Collecting files...")
     files_by_label = collect_files()
     for label, files in files_by_label.items():
-        print(f"   {label}: {len(files)} files")
+        detail = ""
+        if label == "background":
+            calibration_count = sum(is_calibration(path) for path in files)
+            detail = f" ({calibration_count} calibration files prioritized)"
+        print(f"   {label}: {len(files)} files{detail}")
 
     # 2. Extract features
     print("\n2. Extracting DSP features...")
-    features_by_label, sources_by_label = extract_all_features(files_by_label)
+    features_by_label, sources_by_label = extract_all_features(
+        files_by_label,
+        calibration_diversity_enabled=calibration_diversity_enabled,
+    )
 
     # 3. Train/val split by source
     print("\n3. Splitting train/val by source...")
@@ -301,8 +429,14 @@ def train():
 
     # 5. Build windows
     print("\n5. Building windows...")
-    X_train, y_train, w_train = make_windows(train_data, norm_mean, norm_std, cap_bg=MAX_BG_TRAIN_WINDOWS)
-    X_val, y_val, w_val = make_windows(val_data, norm_mean, norm_std)
+    X_train, y_train, w_train = make_windows(
+        train_data, norm_mean, norm_std, cap_bg=MAX_BG_TRAIN_WINDOWS,
+        calibration_diversity_enabled=calibration_diversity_enabled,
+    )
+    X_val, y_val, w_val = make_windows(
+        val_data, norm_mean, norm_std,
+        calibration_diversity_enabled=calibration_diversity_enabled,
+    )
     print(f"   Train: {len(X_train)} windows")
     print(f"   Val:   {len(X_val)} windows")
     for i, label in enumerate(LABELS):
@@ -471,4 +605,14 @@ def train():
 
 
 if __name__ == "__main__":
-    train()
+    parser = argparse.ArgumentParser(description="Train the DSP sound classifier.")
+    parser.add_argument(
+        "--calibration-diversity",
+        action=argparse.BooleanOptionalAction,
+        default=CALIBRATION_DIVERSITY_ENABLED,
+        help=(
+            "Use full calibration recordings and select diverse 5-second "
+            "background windows (enabled by default)."
+        ),
+    )
+    train(calibration_diversity_enabled=parser.parse_args().calibration_diversity)
