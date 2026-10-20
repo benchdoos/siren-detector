@@ -51,7 +51,7 @@
     .player-controls audio { min-width: 0; width: 100%; }
   }
 
-  .top-dropdown { display: none; position: absolute; left: 50%; transform: translateX(-50%); top: calc(100% + 4px); background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 14px 16px; min-width: 280px; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,.5); font-size: 13px; cursor: default; }
+  .top-dropdown { display: none; position: absolute; left: 50%; transform: translateX(-50%); top: calc(100% + 4px); background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 14px 16px; min-width: 280px; width: 340px; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,.5); font-size: 13px; cursor: default; }
   .top-dropdown.open { display: block; }
   .top-dropdown h3 { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; font-weight: 600; }
   .top-dropdown h3:not(:first-child) { margin-top: 12px; border-top: 1px solid #222; padding-top: 10px; }
@@ -68,6 +68,20 @@
   .top-dropdown .src-stats { color: #666; font-variant-numeric: tabular-nums; }
   .top-dropdown .src-detail { display: none; margin-top: 8px; padding-top: 6px; border-top: 1px solid #2a2a2a; }
   .top-dropdown .src-detail.open { display: block; }
+  .top-dropdown .dsp-summary { padding-bottom: 10px; margin-bottom: 4px; border-bottom: 1px solid #222; }
+  .top-dropdown .dsp-summary-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .top-dropdown .dsp-summary-title { color: #ccc; font-weight: 600; }
+  .top-dropdown .dsp-summary-header:hover .dsp-summary-title { color: #fff; }
+  .top-dropdown .dsp-summary-detail { display: none; padding-top: 10px; }
+  .top-dropdown .dsp-summary-detail.open { display: block; }
+  .top-dropdown .dsp-now { margin-bottom: 10px; }
+  .top-dropdown .dsp-now-source { margin-bottom: 8px; }
+  .top-dropdown .dsp-now-header { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #888; margin-bottom: 4px; }
+  .top-dropdown .dsp-now-label { color: #ccc; font-weight: 600; }
+  .top-dropdown .dsp-now-skip { font-size: 11px; padding: 1px 5px; border-radius: 3px; display: inline-block; min-width: 48px; text-align: center; }
+  .top-dropdown .dsp-now-skip.skipped { background: #3a2a00; color: #ffa726; }
+  .top-dropdown .dsp-now-skip.passed { background: #1a3a1a; color: #4caf50; }
+  .top-dropdown .dsp-bg-confidence { color: #888; font-size: 12px; margin-bottom: 10px; }
 
   .score-panel { padding: 20px 24px; border-bottom: 1px solid #222; }
   .score-label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
@@ -195,6 +209,15 @@
   .metrics-table th { text-align: left; color: #888; font-weight: 600; padding: 4px 8px; border-bottom: 1px solid #333; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
   .metrics-table td { padding: 5px 8px; }
   .metrics-table .acc-bar { display: inline-block; height: 12px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+  .dsp-summary-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; margin: 8px 0 14px; }
+  .dsp-summary-table th, .dsp-summary-table td { padding: 6px 8px; border-bottom: 1px solid #222; text-align: left; }
+  .dsp-summary-table th { width: 42%; color: #888; font-weight: 500; }
+  .dsp-summary-table td { color: #ccc; }
+  .dsp-summary-table .acc-bar { display: inline-block; height: 12px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+  .dsp-no-data { display: flex; align-items: flex-start; gap: 10px; margin: 8px 0 14px; padding: 12px; border: 1px solid #34302a; border-radius: 7px; background: #1d1a15; }
+  .dsp-no-data-icon { flex: 0 0 20px; width: 20px; height: 20px; border: 1px solid #8a6938; border-radius: 50%; color: #d4a55c; font-size: 12px; line-height: 18px; font-weight: 700; text-align: center; }
+  .dsp-no-data-title { color: #d4a55c; font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+  .dsp-no-data-detail { color: #898176; font-size: 11px; line-height: 1.45; }
   .cm-section { margin-top: 4px; }
   .cm-section h3 { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; font-weight: 600; }
   .cm-table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; width: 100%; }
@@ -414,6 +437,7 @@ const VALID_LABELS = ['siren', 'background', 'motorcycle', 'explosion', 'unknown
 const _knownSources = {};  // source_id → display name (custom or original)
 const _sourceCustomNames = {};  // source_id → custom name (from settings, survives heartbeat)
 const _sourceScores = {};  // source_id → last score message (for multi-source aggregation)
+let _dspStats = null;  // aggregate DSP decisions across all sources
 const _STATE_PRIORITY = { idle: 0, possible: 1, confirmed: 2 };
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
@@ -463,14 +487,89 @@ function updateDetector(name, score, state, triggers, possibleNeeded, confirmedN
 
 function _updateSourcesDropdown() {
   const container = document.getElementById('dd-sources');
-  const sources = Object.values(_sourceScores);
+  let summary = container.querySelector('[data-dsp-summary]');
+  if (!summary) {
+    summary = document.createElement('div');
+    summary.className = 'dsp-summary';
+    summary.dataset.dspSummary = '';
+    summary.innerHTML = '<div class="dsp-summary-header" role="button" tabindex="0" aria-expanded="false"><span class="dsp-summary-title"></span></div>'
+      + '<div class="dsp-summary-detail"><div class="dsp-now"></div><h3 style="color:#666;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin:8px 0 4px">Avg</h3><div class="dsp-bg-confidence"></div><div class="dsp-classes"></div></div>';
+    const header = summary.querySelector('.dsp-summary-header');
+    summary.querySelector('.dsp-summary-detail').onclick = (event) => event.stopPropagation();
+    const toggleDetails = (event) => {
+      event.stopPropagation();
+      const detail = summary.querySelector('.dsp-summary-detail');
+      const open = detail.classList.toggle('open');
+      header.setAttribute('aria-expanded', String(open));
+    };
+    header.onclick = toggleDetails;
+    header.onkeydown = (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggleDetails(event);
+      }
+    };
+    container.prepend(summary);
+  }
+  if (_dspStats && _dspStats.checks > 0) {
+    const checks = _dspStats.checks;
+    const skips = _dspStats.yamnet_skips;
+    const pct = Math.round(skips / checks * 100);
+    const bgAvg = _dspStats.background_confidence_avg;
+    summary.querySelector('.dsp-summary-title').textContent = `DSP skipped YAMNet: ${pct}%`;
+    summary.querySelector('.dsp-bg-confidence').textContent = bgAvg == null
+      ? 'background confidence (avg): —'
+      : `background confidence (avg): ${Math.round(bgAvg * 100)}%`;
+    const topClasses = Object.entries(_dspStats.class_avg_probs || {})
+      .map(([name, score]) => ({ name, score }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
+    summary.querySelector('.dsp-classes').innerHTML = _renderTop3Html(topClasses, true);
+    // Current DSP state per source
+    const nowEl = summary.querySelector('.dsp-now');
+    const dspSources = Object.values(_sourceScores).filter(s => s.dsp);
+    if (dspSources.length) {
+      nowEl.innerHTML = '<h3 style="color:#666;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 4px">Now</h3>'
+        + dspSources.map(s => {
+          const label = s.dsp_label || '—';
+          const conf = s.dsp_confidence != null ? Math.round(s.dsp_confidence * 100) + '%' : '';
+          const skipped = s.dsp_skipped_yamnet;
+          const skipBadge = skipped
+            ? '<span class="dsp-now-skip skipped">skip</span>'
+            : '<span class="dsp-now-skip passed">yamnet</span>';
+          const srcName = dspSources.length > 1 ? `<span style="color:#666">${esc(s.source || 'src-' + s.source_id)}</span> ` : '';
+          const probs = Object.entries(s.dsp || {})
+            .map(([name, score]) => ({ name, score }))
+            .sort((a, b) => b.score - a.score);
+          return '<div class="dsp-now-source">'
+            + `<div class="dsp-now-header">${srcName}<span class="dsp-now-label">${esc(label)}</span> ${conf} ${skipBadge}</div>`
+            + _renderTop3Html(probs, true)
+            + '</div>';
+        }).join('');
+    } else {
+      nowEl.innerHTML = '';
+    }
+  } else {
+    summary.querySelector('.dsp-summary-title').textContent = 'DSP: waiting…';
+    summary.querySelector('.dsp-summary-detail').classList.remove('open');
+    summary.querySelector('.dsp-summary-header').setAttribute('aria-expanded', 'false');
+  }
+
+  const sourceIds = new Set([...Object.keys(_knownSources), ...Object.keys(_sourceScores)]);
+  const sources = [...sourceIds].map(sid => _sourceScores[sid] || {
+    source_id: Number(sid), source: _knownSources[sid],
+  });
   if (sources.length <= 1 && sources.length > 0) {
     const s = sources[0];
     // Single source: ensure structure exists, then update in-place
-    if (!container.querySelector('[data-single]')) {
-      container.innerHTML = '<div data-single><h3>YAMNet</h3><div class="dd-yam"></div><h3>MLP</h3><div class="dd-mlp"></div></div>';
+    let wrap = container.querySelector('[data-single]');
+    if (!wrap) {
+      container.querySelectorAll('.src-section').forEach(section => section.remove());
+      wrap = document.createElement('div');
+      wrap.dataset.single = '';
+      wrap.innerHTML = '<h3>YAMNet</h3><div class="dd-yam"></div><h3>MLP</h3><div class="dd-mlp"></div>';
+      container.appendChild(wrap);
     }
-    const wrap = container.querySelector('[data-single]');
     if (s.yamnet_top3) wrap.querySelector('.dd-yam').innerHTML = _renderTop3Html(s.yamnet_top3);
     if (s.mlp_top3) wrap.querySelector('.dd-mlp').innerHTML = _renderTop3Html(s.mlp_top3);
     return;
@@ -500,10 +599,12 @@ function _updateSourcesDropdown() {
   }
 }
 
-function _renderTop3Html(items) {
+function _renderTop3Html(items, precise = false) {
   return items.map(it => {
-    const pct = Math.round(it.score * 100);
-    return `<div class="row"><span class="row-name">${esc(it.name)}</span><div class="row-bar"><div class="row-fill" style="width:${pct}%"></div></div><span class="row-pct">${pct}%</span></div>`;
+    const rawPct = it.score * 100;
+    const pct = Math.round(rawPct);
+    const label = precise && rawPct < 10 ? rawPct.toFixed(1) : String(pct);
+    return `<div class="row"><span class="row-name">${esc(it.name)}</span><div class="row-bar"><div class="row-fill" style="width:${pct}%"></div></div><span class="row-pct">${label}%</span></div>`;
   }).join('');
 }
 
@@ -526,10 +627,13 @@ function updateScores(msg) {
       if (!_sourceCustomNames[sid]) _knownSources[sid] = name;
     }
   }
+  if (msg.dsp_stats) _dspStats = msg.dsp_stats;
 
-  const sources = Object.keys(_sourceScores).length > 0
+  const scoredSources = Object.keys(_sourceScores).length > 0
     ? Object.values(_sourceScores)
     : [msg];
+  const sourceCount = new Set([...Object.keys(_knownSources), ...Object.keys(_sourceScores)]).size;
+  const sources = scoredSources;
 
   // Aggregate per detector: worst state, max score, max triggers
   for (const name of DETECTOR_NAMES) {
@@ -554,12 +658,18 @@ function updateScores(msg) {
 
   // Top info: average across all sources
   const parts = [];
-  if (sources.length === 1) {
+  const dspAllActive = _dspStats && _dspStats.enabled
+    && _dspStats.source_count > 0
+    && _dspStats.active_sources >= _dspStats.source_count;
+  if (dspAllActive) {
+    parts.push(`<span class="top-label">DSP active</span> (${_dspStats.consecutive_yamnet_skips || 0} windows skipped)`);
+    parts.push(`<span class="top-label">src:</span> ${_dspStats.source_count}`);
+  } else if (sourceCount <= 1) {
     const s = sources[0];
     if (s.top) parts.push(`<span class="top-label">top:</span> ${esc(s.top)}`);
     if (s.yamnet != null) parts.push(`<span class="top-label">yamnet:</span> ${(s.yamnet * 100).toFixed(0)}%`);
     if (s.mlp != null) parts.push(`<span class="top-label">mlp:</span> ${(s.mlp * 100).toFixed(0)}%`);
-  } else if (sources.length > 1) {
+  } else if (sourceCount > 1) {
     let yamSum = 0, yamN = 0, mlpSum = 0, mlpN = 0;
     for (const s of sources) {
       if (s.yamnet != null) { yamSum += s.yamnet; yamN++; }
@@ -567,7 +677,7 @@ function updateScores(msg) {
     }
     if (yamN) parts.push(`<span class="top-label">yamnet:</span> ${(yamSum / yamN * 100).toFixed(0)}%`);
     if (mlpN) parts.push(`<span class="top-label">mlp:</span> ${(mlpSum / mlpN * 100).toFixed(0)}%`);
-    parts.push(`<span class="top-label">src:</span> ${sources.length}`);
+    parts.push(`<span class="top-label">src:</span> ${sourceCount}`);
   }
   document.getElementById('top-text').innerHTML = parts.join(' &nbsp;·&nbsp; ');
 
@@ -1024,6 +1134,21 @@ function connect() {
     }
     if (msg.type === 'score') updateScores(msg);
     if (msg.type === 'event') addEvent(msg);
+    if (msg.type === 'feedback_update') {
+      const card = [...eventsEl.querySelectorAll('.event-card')]
+        .find(card => card.dataset.filename === msg.filename);
+      if (card) applyCardLabel(card, msg.label);
+    }
+    if (msg.type === 'segments_update') {
+      const card = [...eventsEl.querySelectorAll('.event-card')]
+        .find(card => card.dataset.filename === msg.filename);
+      if (card) {
+        card._segments = Array.isArray(msg.segments) ? msg.segments : [];
+        renderSegments(card);
+        const player = card.querySelector('.clip-player');
+        if (player) _redraw(player);
+      }
+    }
   };
 }
 connect();
@@ -1081,11 +1206,70 @@ async function showMetrics() {
       }
       html += '</table></div>';
     }
+    html += renderDspMetrics(d.dsp_metrics);
     body.innerHTML = html;
     loadAudits();
   } catch(e) {
     body.innerHTML = `<span style="color:#ef5350">Failed to load metrics</span>`;
   }
+}
+function renderDspMetrics(metrics) {
+  let html = '<div class="cm-section"><h3>DSP Pre-filter</h3>';
+  if (!metrics) {
+    return html + '<div class="dsp-no-data"><span class="dsp-no-data-icon">i</span>'
+      + '<div><div class="dsp-no-data-title">DSP: no data provided</div>'
+      + '<div class="dsp-no-data-detail">Validation metrics will appear here after the DSP model is trained.</div></div></div></div>';
+  }
+
+  const trainedAt = metrics.trained_at
+    ? new Date(metrics.trained_at).toLocaleString('en-GB', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+      })
+    : '—';
+  const sirenBgRate = metrics.siren_confident_background_rate;
+  html += `<div class="modal-date">DSP trained: ${esc(trainedAt)}</div>`;
+  const overallAccuracy = metrics.accuracy;
+  const accuracyPct = overallAccuracy != null ? Math.round(overallAccuracy * 100) : 0;
+  const accuracyColor = accuracyPct >= 90 ? '#4caf50' : accuracyPct >= 70 ? '#ffa726' : '#ef5350';
+  html += '<table class="dsp-summary-table"><tbody>';
+  html += `<tr><th>Validation accuracy</th><td>${overallAccuracy != null
+    ? `<span class="acc-bar" style="width:${accuracyPct * 0.6}px;background:${accuracyColor}"></span>${(overallAccuracy * 100).toFixed(1)}%` : '—'}</td></tr>`;
+  html += `<tr><th>Windows</th><td>${metrics.validation_windows ?? '—'}</td></tr>`;
+  html += `<tr><th>INT8 size</th><td>${metrics.quantized_model_size_bytes != null
+    ? (metrics.quantized_model_size_bytes / 1024).toFixed(1) + ' KB' : '—'}</td></tr>`;
+  html += `<tr><th>Siren → confident background</th><td>${sirenBgRate != null
+    ? `${(sirenBgRate * 100).toFixed(1)}% <span style="color:#666">(threshold ${Number(metrics.background_gate_threshold ?? 0.92).toFixed(2)})</span>`
+    : '—'}</td></tr>`;
+  html += '</tbody></table>';
+  if (metrics.classes?.length) {
+    html += '<table class="metrics-table"><tr><th>Class</th><th>Windows</th><th>Precision</th><th>Recall</th><th>F1</th></tr>';
+    for (const c of metrics.classes) {
+      const recallPct = Math.round(c.recall * 100);
+      const recallColor = recallPct >= 90 ? '#4caf50' : recallPct >= 70 ? '#ffa726' : '#ef5350';
+      html += `<tr><td>${esc(c.label)}</td><td style="color:#888">${c.windows}</td>`
+        + `<td>${(c.precision * 100).toFixed(1)}%</td>`
+        + `<td><span class="acc-bar" style="width:${recallPct * 0.6}px;background:${recallColor}"></span>${(c.recall * 100).toFixed(1)}%</td>`
+        + `<td>${(c.f1 * 100).toFixed(1)}%</td></tr>`;
+    }
+    html += '</table>';
+  }
+  if (metrics.confusion_matrix && metrics.labels) {
+    html += '<div class="cm-section"><h3>DSP Confusion Matrix</h3><table class="cm-table"><tr><th></th>';
+    for (const label of metrics.labels) html += `<th>${esc(label.slice(0, 8))}</th>`;
+    html += '</tr>';
+    for (let i = 0; i < metrics.labels.length; i++) {
+      html += `<tr><td class="cm-label">${esc(metrics.labels[i])}</td>`;
+      for (let j = 0; j < metrics.labels.length; j++) {
+        const value = metrics.confusion_matrix[i]?.[j] ?? 0;
+        const cls = value === 0 ? 'cm-zero' : i === j ? 'cm-diag' : 'cm-off';
+        html += `<td class="${cls}">${value}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</table></div>';
+  }
+  return html + '</div>';
 }
 function renderAuditItem(audit, index) {
   const ts = new Date(audit.timestamp || audit.audit_timestamp);
@@ -1128,6 +1312,8 @@ function renderAuditItem(audit, index) {
     }
     body += '</table>';
   }
+
+  body += renderDspMetrics(audit.dsp_metrics);
 
   // Issues
   const issues = audit.issues || [];
@@ -1418,6 +1604,15 @@ function fmtSec(s) { return s.toFixed(1) + 's'; }
 function renderSegments(card) {
   const list = card.querySelector('.seg-list');
   const segs = card._segments || [];
+  const body = card.querySelector('.seg-body');
+  const toggle = card.querySelector('.seg-toggle');
+  if (segs.length) {
+    body.classList.add('open');
+    toggle.textContent = 'segments ▾';
+  } else {
+    body.classList.remove('open');
+    toggle.textContent = 'segments ▸';
+  }
   if (!segs.length) { list.innerHTML = ''; return; }
   list.innerHTML = segs.map((s, i) => {
     const c = SEG_COLORS[s.label] || { stroke: '#888' };

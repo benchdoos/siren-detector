@@ -5,7 +5,7 @@
 #   docker compose up -d
 #
 # Configure via .env or environment variables.
-# See docs/MULTI_MIC.md for setup instructions.
+# See docs/en/multi-microphone.md for setup instructions.
 
 services:
   audio-source:

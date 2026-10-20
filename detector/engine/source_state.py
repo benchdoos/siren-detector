@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import collections
 from dataclasses import dataclass, field
 
 from ..audio import AudioRingBuffer, ClipBuffer
@@ -24,3 +25,5 @@ class SourceState:
     peaks: dict[str, dict] = field(default_factory=dict)
     possible_start: dict[str, float | None] = field(default_factory=dict)
     window_scores: dict[str, list[dict]] = field(default_factory=dict)
+    dsp_feature_buf: collections.deque = field(default_factory=lambda: collections.deque(maxlen=250))
+    dsp_last_log: float = 0.0

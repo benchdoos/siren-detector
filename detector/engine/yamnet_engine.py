@@ -34,7 +34,9 @@ from ..config import (
     CLIP_DIR,
     CLIP_SECONDS,
     DETECTORS,
-    INFERENCE_HOP_SAMPLES,
+    DSP_LABELS_PATH,
+    DSP_MODEL_PATH,
+    DSP_NORM_STATS_PATH,
     MODEL_URL,
     SAMPLE_RATE,
 )
@@ -46,19 +48,95 @@ from .. import settings as settings_mod
 
 _EMPTY_PEAK = {"score": 0.0, "yamnet": 0.0, "mlp": None, "top": "", "yamnet_top3": [], "mlp_top3": []}
 
+# ── Click removal (impulse noise suppression) ─────────────────────────
+# MAD-based outlier detection: finds samples that deviate > threshold * MAD
+# from the median and replaces short groups (≤ max_width) with linear
+# interpolation.  Real explosions span hundreds of samples and are untouched.
+
+def _remove_clicks(waveform: np.ndarray, threshold: float = 10.0,
+                   max_width: int = 5) -> tuple[np.ndarray, int]:
+    """Remove impulse noise (clicks) from *waveform* in-place style.
+
+    Returns (cleaned_waveform, clicks_removed).
+    """
+    if len(waveform) < 10:
+        return waveform, 0
+
+    median = np.median(waveform)
+    mad = np.median(np.abs(waveform - median))
+    if mad < 1e-10:
+        # Nearly-silent signal — use absolute threshold instead
+        mad = 1e-5
+
+    # 1.4826 scales MAD to be consistent with std for normal distributions
+    cutoff = threshold * mad * 1.4826
+    outliers = np.abs(waveform - median) > cutoff
+
+    if not np.any(outliers):
+        return waveform, 0
+
+    result = waveform.copy()
+    indices = np.where(outliers)[0]
+
+    # Split into groups of consecutive indices
+    groups = np.split(indices, np.where(np.diff(indices) > 1)[0] + 1)
+
+    clicks_removed = 0
+    for group in groups:
+        if len(group) == 0 or len(group) > max_width:
+            continue
+        start = int(group[0])
+        end = int(group[-1])
+        left = float(result[start - 1]) if start > 0 else 0.0
+        right = float(result[end + 1]) if end + 1 < len(result) else 0.0
+        n = end - start + 1
+        for i, idx in enumerate(group):
+            result[idx] = left + (right - left) * (i + 1) / (n + 1)
+        clicks_removed += 1
+
+    return result, clicks_removed
+
+
+def _inference_hop_samples() -> int:
+    interval = float(settings_mod.settings.get("inference_interval_seconds", 0.5))
+    return int(SAMPLE_RATE * min(2.0, max(0.25, interval)))
+
+
+def _dsp_stats_snapshot(dsp, sources: dict) -> dict | None:
+    if dsp is None:
+        return None
+    stats = dsp.stats_snapshot()
+    disabled = set(settings_mod.settings.get("disabled_sources", []))
+    active_source_ids = set(sources) - disabled
+    overrides = settings_mod.settings.get("dsp_source_overrides", {})
+    dsp_source_ids = {
+        sid for sid in active_source_ids
+        if bool(overrides.get(str(sid), {}).get(
+            "dsp_enabled", settings_mod.settings.get("dsp_enabled", 1),
+        ))
+    }
+    skipping_ids = set(stats.pop("skipping_source_ids", []))
+    stats["source_count"] = len(dsp_source_ids)
+    stats["active_sources"] = len(dsp_source_ids & skipping_ids)
+    stats["enabled"] = bool(dsp_source_ids)
+    return stats
+
 
 def _create_source(source_id: int, name: str) -> SourceState:
     """Create a fresh SourceState with buffers and smoothers from current settings."""
     s = settings_mod.settings
     inference_buf = AudioRingBuffer(capacity=int(ANALYSIS_SECONDS * SAMPLE_RATE))
-    clip_buf = ClipBuffer(seconds=s.get("clip_seconds", CLIP_SECONDS))
+    clip_buf = ClipBuffer(seconds=max(
+        s.get("clip_seconds", CLIP_SECONDS), s.get("user_event_clip_seconds", 15),
+    ))
 
     smoothers: dict[str, TemporalSmoother] = {}
+    inference_interval = min(2.0, max(0.25, float(s.get("inference_interval_seconds", 0.5))))
     for det_name in DETECTORS:
         thr_key = f"{det_name}_threshold"
         smoothers[det_name] = TemporalSmoother(
             window_seconds=s["smoothing_window_seconds"],
-            hop_seconds=0.5,
+            hop_seconds=inference_interval,
             threshold=s.get(thr_key, 0.15),
             possible=s["possible_triggers"],
             confirmed=s["confirmed_triggers"],
@@ -92,6 +170,14 @@ class YAMNetEngine:
             "--source-name", action="append", default=None,
             help="Map source_id to name, e.g. '0=esp32-main' (repeatable)",
         )
+        parser.add_argument("--dsp-model", default=DSP_MODEL_PATH,
+                            help="Path to DSP TFLite model (.tflite)")
+        parser.add_argument("--dsp-norm-stats", default=DSP_NORM_STATS_PATH,
+                            help="Path to DSP normalisation stats (.npz)")
+        parser.add_argument("--dsp-labels", default=DSP_LABELS_PATH,
+                            help="Path to DSP classifier labels (.json)")
+        parser.add_argument("--no-dsp", action="store_true",
+                            help="Disable DSP pre-filter even if model files exist")
 
     def start(self, bus: EventBus, settings: dict, args: argparse.Namespace) -> None:
         settings_mod.settings.update(settings)
@@ -132,6 +218,21 @@ class YAMNetEngine:
             print(f"Classifier loaded: {clf.labels}", flush=True)
         else:
             print("No classifier weights — using raw YAMNet siren score.", flush=True)
+
+        # ── Load DSP pre-filter (optional cascade) ──────────────────────
+        dsp = None
+        if not args.no_dsp:
+            dsp_model = Path(args.dsp_model)
+            dsp_stats = Path(args.dsp_norm_stats)
+            dsp_labels = Path(args.dsp_labels)
+            if dsp_model.exists() and dsp_stats.exists() and dsp_labels.exists():
+                from ..dsp_infer import DspPreFilter
+                dsp = DspPreFilter(dsp_model, dsp_stats, dsp_labels)
+                det_engine = f"dsp+{det_engine}"
+                print(f"[dsp] Pre-filter enabled (cascade mode)", flush=True)
+            else:
+                missing = [p.name for p in (dsp_model, dsp_stats, dsp_labels) if not p.exists()]
+                print(f"[dsp] Pre-filter disabled — missing: {missing}", flush=True)
 
         # ── Source registry ───────────────────────────────────────────────
         sources: dict[int, SourceState] = {}
@@ -187,7 +288,7 @@ class YAMNetEngine:
             """Inference loop for a single source (used in parallel mode)."""
             while not stop.is_set():
                 disabled = settings_mod.settings.get("disabled_sources", [])
-                waveform = source.inference_buf.consume(INFERENCE_HOP_SAMPLES)
+                waveform = source.inference_buf.consume(_inference_hop_samples())
                 if waveform is None:
                     stop.wait(0.05)
                     continue
@@ -195,7 +296,7 @@ class YAMNetEngine:
                     continue
                 self._process_source(
                     source, waveform, yamnet, class_names, detector_indices,
-                    clf, det_engine, bus, args, sources,
+                    clf, det_engine, bus, args, sources, dsp,
                 )
 
         def _stop_parallel():
@@ -236,6 +337,8 @@ class YAMNetEngine:
                 if now - _last_heartbeat >= 1.0:
                     heartbeat = self._build_heartbeat(sources)
                     heartbeat.update(udp_stats_snapshot(bus.source_names))
+                    if dsp is not None:
+                        heartbeat["dsp_stats"] = _dsp_stats_snapshot(dsp, sources)
                     bus.broadcast(heartbeat)
                     _last_heartbeat = now
                 time.sleep(0.5)
@@ -244,7 +347,7 @@ class YAMNetEngine:
                 any_data = False
                 disabled = settings_mod.settings.get("disabled_sources", [])
                 for source in list(sources.values()):
-                    waveform = source.inference_buf.consume(INFERENCE_HOP_SAMPLES)
+                    waveform = source.inference_buf.consume(_inference_hop_samples())
                     if waveform is None:
                         continue
                     any_data = True
@@ -252,7 +355,7 @@ class YAMNetEngine:
                         continue
                     self._process_source(
                         source, waveform, yamnet, class_names, detector_indices,
-                        clf, det_engine, bus, args, sources,
+                        clf, det_engine, bus, args, sources, dsp,
                     )
 
                 now = time.monotonic()
@@ -261,6 +364,8 @@ class YAMNetEngine:
                     if now - _last_heartbeat >= 1.0:
                         heartbeat = self._build_heartbeat(sources)
                         heartbeat.update(udp_stats_snapshot(bus.source_names))
+                        if dsp is not None:
+                            heartbeat["dsp_stats"] = _dsp_stats_snapshot(dsp, sources)
                         bus.broadcast(heartbeat)
                         _last_heartbeat = now
                 else:
@@ -280,8 +385,146 @@ class YAMNetEngine:
         bus: EventBus,
         args: argparse.Namespace,
         sources: dict | None = None,
+        dsp=None,
     ) -> None:
         waveform = np.clip(waveform, -1.0, 1.0)
+
+        # ── Click removal: suppress impulse noise before inference ──────
+        cr_override = settings_mod.settings.get(
+            "click_removal_source_overrides", {},
+        ).get(str(source.source_id), {})
+        cr_enabled = cr_override.get(
+            "enabled", settings_mod.settings.get("click_removal_enabled", 1),
+        )
+        if cr_enabled:
+            cr_threshold = cr_override.get(
+                "threshold",
+                settings_mod.settings.get("click_removal_threshold", 10.0),
+            )
+            cr_max_width = cr_override.get(
+                "max_width",
+                settings_mod.settings.get("click_removal_max_width", 5),
+            )
+            waveform, n_clicks = _remove_clicks(
+                waveform, threshold=cr_threshold, max_width=cr_max_width,
+            )
+            if n_clicks:
+                print(
+                    f"[click-removal] source {source.source_id}: "
+                    f"removed {n_clicks} click(s)",
+                    flush=True,
+                )
+
+        # ── DSP pre-filter: skip YAMNet for confident background ────────
+        dsp_result = None
+        dsp_override = settings_mod.settings.get("dsp_source_overrides", {}).get(
+            str(source.source_id), {},
+        )
+        source_dsp_enabled = dsp_override.get(
+            "dsp_enabled", settings_mod.settings.get("dsp_enabled", 1),
+        )
+        if dsp is not None and source_dsp_enabled:
+            new_audio = waveform[-_inference_hop_samples():]
+            dsp_result = dsp.process(new_audio, source.dsp_feature_buf)
+
+            if dsp_result["ready"]:
+                bg_threshold = dsp_override.get(
+                    "bg_threshold", settings_mod.settings.get("dsp_bg_threshold", 0.85),
+                )
+                bg_release_threshold = dsp_override.get(
+                    "bg_release_threshold", settings_mod.settings.get("dsp_bg_release_threshold", 0.85),
+                )
+                bg_confirm_windows = dsp_override.get(
+                    "bg_confirm_windows", settings_mod.settings.get("dsp_bg_confirm_windows", 2),
+                )
+                max_consecutive_skips = dsp_override.get(
+                    "max_consecutive_skips",
+                    settings_mod.settings.get("dsp_max_consecutive_skips", 20),
+                )
+                dsp_event_gate = dsp_override.get(
+                    "event_gate",
+                    settings_mod.settings.get("dsp_event_gate", 0.08),
+                )
+                dsp_label = dsp_result["label"]
+                dsp_conf = dsp_result["confidence"]
+                bg_conf = dsp_result["probs"].get("background", 0.0)
+
+                # Event gate: if any event class has notable probability,
+                # force YAMNet regardless of background confidence
+                event_max = max(
+                    (v for k, v in dsp_result["probs"].items() if k != "background"),
+                    default=0.0,
+                )
+
+                # Keep YAMNet on every window while a detector is possible,
+                # so DSP skips cannot decay the trigger count before confirm.
+                # Once confirmed, return to the regular DSP cadence and its
+                # periodic forced YAMNet passes.
+                smoother_active = any(
+                    source.smoothers[det].state == "possible"
+                    for det in DETECTORS
+                )
+
+                # Update gate state (always), then override skip decision
+                skip_yamnet = dsp.should_skip_yamnet(
+                    source.source_id, dsp_label, bg_conf, bg_threshold,
+                    bg_release_threshold, bg_confirm_windows,
+                    max_consecutive_skips,
+                )
+                if smoother_active or (event_max >= dsp_event_gate > 0):
+                    skip_yamnet = False
+                dsp.record_decision(source.source_id, dsp_result["probs"], skip_yamnet)
+
+                # Periodic DSP diagnostic log (every 10s per source)
+                now_mono = time.monotonic()
+                if now_mono - source.dsp_last_log >= 10.0:
+                    source.dsp_last_log = now_mono
+                    probs_str = " ".join(
+                        f"{k}={v:.2f}" for k, v in sorted(dsp_result["probs"].items())
+                    )
+                    override = ""
+                    if smoother_active:
+                        active = [d for d in DETECTORS if source.smoothers[d].state != "idle"]
+                        override = f" OVERRIDE:smoother({','.join(active)})"
+                    elif event_max >= dsp_event_gate > 0:
+                        override = f" OVERRIDE:event_gate"
+                    print(
+                        f"[dsp] src={source.source_id} label={dsp_label} "
+                        f"conf={dsp_conf:.2f} skip={skip_yamnet} "
+                        f"event_max={event_max:.3f}{override} | {probs_str}",
+                        flush=True,
+                    )
+
+                if skip_yamnet:
+                    # Confident background — skip YAMNet, broadcast minimal score
+                    score_msg: dict = {
+                        "type": "score", "top": "(dsp:background)",
+                        "source": source.name, "source_id": source.source_id,
+                        "dsp": dsp_result["probs"],
+                        "dsp_label": dsp_label,
+                        "dsp_confidence": round(dsp_conf, 3),
+                        "dsp_skipped_yamnet": True,
+                    }
+                    for name in DETECTORS:
+                        score_msg[f"{name}_score"] = 0.0
+                        score_msg[f"{name}_state"] = source.smoothers[name].state
+                        score_msg[f"{name}_triggers"] = source.smoothers[name].trigger_count
+                        score_msg[f"{name}_possible_needed"] = source.smoothers[name].possible_needed
+                        score_msg[f"{name}_confirmed_needed"] = source.smoothers[name].confirmed_needed
+                        score_msg[f"{name}_cooldown"] = round(source.smoothers[name].cooldown_remaining, 1)
+                        score_msg[f"{name}_refractory"] = round(source.smoothers[name].refractory_remaining, 1)
+                        # Push zero score through smoothers (decays triggers)
+                        source.smoothers[name].push(0.0)
+                    score_msg.update(udp_stats_snapshot(bus.source_names))
+                    score_msg["dsp_stats"] = _dsp_stats_snapshot(dsp, sources or {source.source_id: source})
+                    if sources:
+                        score_msg["source_names"] = {sid: src.name for sid, src in sources.items()}
+                    bus.broadcast(score_msg)
+                    return
+        elif dsp is not None:
+            source.dsp_feature_buf.clear()
+            dsp.reset_source_gate(source.source_id)
+
         scores, embeddings, _ = yamnet(waveform)
         scores_np = scores.numpy()
         top_idx = int(scores_np.mean(axis=0).argmax())
@@ -381,6 +624,14 @@ class YAMNetEngine:
         score_msg["yamnet_top3"] = cur_yamnet_top3
         if cur_mlp_top3:
             score_msg["mlp_top3"] = cur_mlp_top3
+
+        if dsp_result and dsp_result["ready"]:
+            score_msg["dsp"] = dsp_result["probs"]
+            score_msg["dsp_label"] = dsp_result["label"]
+            score_msg["dsp_confidence"] = round(dsp_result["confidence"], 3)
+            score_msg["dsp_skipped_yamnet"] = False
+        if dsp is not None:
+            score_msg["dsp_stats"] = _dsp_stats_snapshot(dsp, sources or {source.source_id: source})
 
         score_msg.update(udp_stats_snapshot(bus.source_names))
         if sources:

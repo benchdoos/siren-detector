@@ -40,7 +40,10 @@ def save_settings() -> None:
 
 def apply_clip_seconds(bus: EventBus) -> None:
     """Resize all ClipBuffers when clip_seconds setting changes."""
-    new_seconds = settings.get("clip_seconds", CLIP_SECONDS)
+    new_seconds = max(
+        settings.get("clip_seconds", CLIP_SECONDS),
+        settings.get("user_event_clip_seconds", 15),
+    )
     new_maxlen = int(new_seconds * SAMPLE_RATE)
     for source_id, clip_buf in bus.clip_bufs.items():
         if clip_buf._buf.maxlen != new_maxlen:
@@ -64,6 +67,7 @@ def apply_settings_to_smoothers() -> None:
         smoother._confirmed = settings["confirmed_triggers"]
         smoother._cooldown_seconds = settings["cooldown_seconds"]
         smoother._refractory_seconds = settings["refractory_seconds"]
-        new_maxlen = int(settings["smoothing_window_seconds"] / 0.5) + 1
+        inference_interval = max(0.25, min(2.0, float(settings.get("inference_interval_seconds", 0.5))))
+        new_maxlen = int(settings["smoothing_window_seconds"] / inference_interval) + 1
         if smoother._scores.maxlen != new_maxlen:
             smoother._scores = collections.deque(smoother._scores, maxlen=new_maxlen)
