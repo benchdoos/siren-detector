@@ -70,7 +70,9 @@ function loadSpectrogram(player, spectrogramUrl) {
 
       player._specImage = off;
       player._specDuration = spec.duration;
-      drawSpecFrame(canvas, off, 0, spec.duration);
+      // Draw overlays on the initial frame too (the first animation redraw
+      // otherwise happens only when audio starts playing or is sought).
+      drawSpecFrame(canvas, off, 0, spec.duration, player._drawOpts || {});
     })
     .catch(() => {
       ctx.fillStyle = '#1a1a1a';
