@@ -64,6 +64,10 @@ async def ws_audio_endpoint(ws: WebSocket):
 @router.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
+    # Subscribe before replaying history so events arriving during the replay
+    # are queued instead of being lost. The UI de-duplicates replay/live copies.
+    queue: asyncio.Queue = asyncio.Queue()
+    _bus.client_queues[ws] = queue
     await ws.send_json({"type": "session", "started_at": _bus.started_at})
     await ws.send_json(_bus.last_score)
     for ev in list(_bus.event_history):
@@ -78,9 +82,6 @@ async def ws_endpoint(ws: WebSocket):
         if filename in _bus.feedback:
             ev_out["label"] = _bus.feedback[filename]
         await ws.send_json(ev_out)
-
-    queue: asyncio.Queue = asyncio.Queue()
-    _bus.client_queues[ws] = queue
 
     async def sender():
         while True:

@@ -44,6 +44,8 @@ plugins:
             Operations: Эксплуатация
             Data and models: Данные и модели
             Multi-microphone: Несколько микрофонов
+            Settings reference: Настройки
+            API reference: API
 
 nav:
   - Home: index.md
@@ -52,6 +54,8 @@ nav:
   - Operations: operations.md
   - Data and models: data-and-models.md
   - Multi-microphone: multi-microphone.md
+  - Settings reference: settings.md
+  - API reference: api.md
 
 markdown_extensions:
   - admonition

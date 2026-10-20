@@ -135,7 +135,7 @@
   .badge { font-size: 13px; padding: 3px 10px; border-radius: 4px; font-weight: 600; }
   .badge.confirmed, .badge.siren { background: #5a1a1a; color: #ef5350; }
   .badge.explosion  { background: #3a1a00; color: #ff7043; }
-  .badge.motorcycle { background: #2a2a00; color: #ffd54f; }
+  .badge.uav { background: #2a2a00; color: #ffd54f; }
   .badge.unknown   { background: #2a2a2a; color: #888; }
   .badge.possible  { background: #3a2a00; color: #ffa726; }
   .event-time { font-size: 14px; color: #666; }
@@ -337,16 +337,16 @@
       <span id="timer-explosion"></span>
     </div>
   </div>
-  <div class="detector-row" data-detector="motorcycle" style="margin-top:12px">
-    <div class="score-label">Motorcycle</div>
+  <div class="detector-row" data-detector="uav" style="margin-top:12px">
+    <div class="score-label">UAVs</div>
     <div class="score-bar-wrap">
-      <div class="score-bar" id="bar-motorcycle"></div>
-      <span class="score-value" id="val-motorcycle">—</span>
+      <div class="score-bar" id="bar-uav"></div>
+      <span class="score-value" id="val-uav">—</span>
     </div>
     <div class="detector-info">
-      <span class="state-badge" id="badge-motorcycle">idle</span>
-      <span class="trigger-progress" id="triggers-motorcycle"></span>
-      <span id="timer-motorcycle"></span>
+      <span class="state-badge" id="badge-uav">idle</span>
+      <span class="trigger-progress" id="triggers-uav"></span>
+      <span id="timer-uav"></span>
     </div>
   </div>
 </div>
@@ -363,7 +363,7 @@
   <span id="selected-count">0</span><span>selected:</span>
   <button class="lbtn" onclick="batchLabel('siren')">siren</button>
   <button class="lbtn" onclick="batchLabel('background')">background</button>
-  <button class="lbtn" onclick="batchLabel('motorcycle')">motorcycle</button>
+  <button class="lbtn" onclick="batchLabel('uav')">UAVs</button>
   <button class="lbtn" onclick="batchLabel('explosion')">explosion</button>
   <button class="lbtn" onclick="batchLabel('unknown')">unknown</button>
 </div>
@@ -372,7 +372,7 @@
   <button class="fbtn" data-filter="untagged" onclick="setFilter(this)">untagged</button>
   <button class="fbtn" data-filter="siren" onclick="setFilter(this)"><span style="color:#ef5350">•</span> siren</button>
   <button class="fbtn" data-filter="background" onclick="setFilter(this)"><span style="color:#4caf50">•</span> background</button>
-  <button class="fbtn" data-filter="motorcycle" onclick="setFilter(this)"><span style="color:#ffd54f">•</span> motorcycle</button>
+  <button class="fbtn" data-filter="uav" onclick="setFilter(this)"><span style="color:#ffd54f">•</span> UAVs</button>
   <button class="fbtn" data-filter="explosion" onclick="setFilter(this)"><span style="color:#ff7043">•</span> explosion</button>
   <button class="fbtn" data-filter="unknown" onclick="setFilter(this)"><span style="color:#888">•</span> unknown</button>
 </div>
@@ -409,7 +409,7 @@
     <p><span class="help-term">Cooldown</span> — seconds remaining until detector re-arms after a confirmed event.</p>
     <p><span class="help-term">Refractory</span> — after cooldown, waits for score to drop below threshold (or timeout) before allowing new detections.</p>
     <hr>
-    <p style="color:#666">Each detector (siren, explosion, motorcycle) has its own independent counters and timers.</p>
+    <p style="color:#666">Each detector (siren, explosion, UAVs) has its own independent counters and timers.</p>
   </div>
 </div>
 
@@ -430,10 +430,10 @@ const eventsEl   = document.getElementById('events');
 let   emptyEl    = document.getElementById('empty');
 let   currentAudio = null;
 const seenEvents = new Set();
-const DETECTOR_NAMES = ['siren', 'explosion', 'motorcycle'];
-const DETECTOR_THRESHOLDS = { siren: 0.10, explosion: 0.15, motorcycle: 0.15 };
+const DETECTOR_NAMES = ['siren', 'explosion', 'uav'];
+const DETECTOR_THRESHOLDS = { siren: 0.10, explosion: 0.15, uav: 0.15 };
 const _cooldownStart = {};  // track when cooldown first began per detector
-const VALID_LABELS = ['siren', 'background', 'motorcycle', 'explosion', 'unknown'];
+const VALID_LABELS = ['siren', 'background', 'uav', 'explosion', 'unknown'];
 const _knownSources = {};  // source_id → display name (custom or original)
 const _sourceCustomNames = {};  // source_id → custom name (from settings, survives heartbeat)
 const _sourceScores = {};  // source_id → last score message (for multi-source aggregation)
@@ -860,7 +860,7 @@ function addEvent(ev) {
         <div class="seg-list"></div>
         <div class="seg-add-row">
           <select class="seg-label-select">
-            ${['siren','explosion','motorcycle'].map(l => `<option value="${l}">${l}</option>`).join('')}
+            ${['siren','explosion','uav'].map(l => `<option value="${l}">${l}</option>`).join('')}
           </select>
           <input class="seg-time-input seg-start" placeholder="from" readonly>
           <span style="color:#555">–</span>
@@ -897,7 +897,7 @@ function addEvent(ev) {
 const LABEL_COLORS = {
   siren:      { border: '#5a1a1a', bg: '#2a0a0a', text: '#ef5350' },
   background: { border: '#1a3a2a', bg: '#0a1a10', text: '#4caf50' },
-  motorcycle: { border: '#2a2a00', bg: '#1a1a00', text: '#ffd54f' },
+  uav: { border: '#2a2a00', bg: '#1a1a00', text: '#ffd54f' },
   explosion:  { border: '#3a1a00', bg: '#1a0a00', text: '#ff7043' },
   unknown:    { border: '#2a2a2a', bg: '#1a1a1a', text: '#888'    },
 };
@@ -1157,7 +1157,7 @@ connect();
 fetch('/api/settings', { headers: adminHeaders() }).then(r => r.json()).then(d => {
   if (d.siren_threshold) DETECTOR_THRESHOLDS.siren = d.siren_threshold;
   if (d.explosion_threshold) DETECTOR_THRESHOLDS.explosion = d.explosion_threshold;
-  if (d.motorcycle_threshold) DETECTOR_THRESHOLDS.motorcycle = d.motorcycle_threshold;
+  if (d.uav_threshold) DETECTOR_THRESHOLDS.uav = d.uav_threshold;
   // Apply custom source names (these take priority over engine names)
   const cn = d.source_custom_names || {};
   for (const [sid, name] of Object.entries(cn)) {
@@ -1475,7 +1475,7 @@ function closeSettings() { /* noop — settings is a separate page now */ }
 const SEG_COLORS = {
   siren:      { fill: 'rgba(239,83,80,0.25)', stroke: 'rgba(239,83,80,0.7)' },
   explosion:  { fill: 'rgba(255,112,67,0.25)', stroke: 'rgba(255,112,67,0.7)' },
-  motorcycle: { fill: 'rgba(255,213,79,0.25)', stroke: 'rgba(255,213,79,0.7)' },
+  uav: { fill: 'rgba(255,213,79,0.25)', stroke: 'rgba(255,213,79,0.7)' },
 };
 
 /* Build draw opts for a player (segments + drag state) */

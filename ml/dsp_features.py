@@ -33,7 +33,7 @@ DATASET = REPO_ROOT / "dataset"
 SAMPLE_RATE = 16_000
 FRAME_SIZE = 640      # 40ms window
 HOP_SIZE = 320        # 20ms hop → 50 frames/sec
-LABELS = ["siren", "background", "explosion", "motorcycle"]
+LABELS = ["siren", "background", "explosion", "uav"]
 
 # YIN pitch tracker parameters
 YIN_THRESHOLD = 0.15
@@ -326,8 +326,8 @@ def detect_explosion_rules(features: np.ndarray) -> dict:
     return {"detected": False, "confidence": 0.0, "details": f"rise={max_rise:.1f} decay={decay_amount:.1f} centroid={spike_centroid:.0f}"}
 
 
-def detect_motorcycle_rules(features: np.ndarray) -> dict:
-    """Detect motorcycle/UAV by sustained energy + stable spectral shape.
+def detect_uav_rules(features: np.ndarray) -> dict:
+    """Detect uav/UAV by sustained energy + stable spectral shape.
 
     Through INMP441 mic, motor sounds appear as sustained elevated energy
     with relatively stable spectral centroid — not necessarily tonal enough
@@ -393,7 +393,7 @@ def evaluate_rules(max_files: int = 50) -> None:
     detectors = {
         "siren": detect_siren_rules,
         "explosion": detect_explosion_rules,
-        "motorcycle": detect_motorcycle_rules,
+        "uav": detect_uav_rules,
     }
 
     results: dict[str, dict[str, int]] = {}
@@ -569,7 +569,7 @@ def main():
         print(f"Frames: {len(feats)} ({len(feats) * HOP_SIZE / SAMPLE_RATE:.1f}s)")
         print(f"\nSiren:      {detect_siren_rules(feats)}")
         print(f"Explosion:  {detect_explosion_rules(feats)}")
-        print(f"Motorcycle: {detect_motorcycle_rules(feats)}")
+        print(f"UAVs: {detect_uav_rules(feats)}")
     else:
         print_stats()
 

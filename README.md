@@ -6,14 +6,14 @@
 
 <p align="right"><b>English</b> • <a href="README.ru.md">Русский</a></p>
 
-Open-source project for detecting civil-alert sirens, explosions, and nearby motorcycle sounds. An ESP32-S3 captures audio; a Linux host runs inference and exposes events through a web interface and optional MQTT.
+Open-source project for detecting civil-alert sirens, explosions, and nearby UAV sounds. An ESP32-S3 captures audio; a Linux host runs inference and exposes events through a web interface and optional MQTT.
 
 > [!WARNING]
 > This project and all its components are intended exclusively for peaceful purposes. Military, harmful, or destructive use is prohibited.
 
 ## Documentation
 
-**[Read the documentation](https://benchdoos.github.io/siren-detector/)** for setup, architecture, operation, data and model training, and multi-microphone configuration. The docs are available in English and Russian.
+**[Read the English documentation](docs/en/index.md)** for setup, architecture, operation, data and model training, and multi-microphone configuration. The docs are also available in [Russian](docs/ru/index.md).
 
 ## Quick start
 
@@ -39,7 +39,7 @@ Requirements: ESP32-S3 + INMP441 microphone, a Linux host with Docker Compose, a
 
 4. Open `http://<host-ip>:8080`. On first start, YAMNet is downloaded and cached.
 
-For deployment, configuration, MQTT, and retraining details, see the [documentation](https://benchdoos.github.io/siren-detector/). To build the documentation locally, install `docs/requirements.txt` and run `mkdocs serve`.
+For deployment, configuration, MQTT, and retraining details, see the [documentation](docs/en/index.md). To preview the full bilingual documentation locally, install `docs/requirements.txt` and run `mkdocs serve`.
 
 ## Project layout
 

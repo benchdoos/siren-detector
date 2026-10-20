@@ -9,7 +9,7 @@
 Audio (16kHz mono) → YAMNet (frozen) → 1024-dim embedding (per 0.96s window) → MLP head → class
 ```
 
-YAMNet предобучен на AudioSet (>2M клипов, 521 класс). Мы не дообучаем YAMNet — используем его как feature extractor. MLP-голова учится классифицировать embeddings по нашим классам: `siren`, `explosion`, `motorcycle`, `background`.
+YAMNet предобучен на AudioSet (>2M клипов, 521 класс). Мы не дообучаем YAMNet — используем его как feature extractor. MLP-голова учится классифицировать embeddings по нашим классам: `siren`, `explosion`, `uav`, `background`.
 
 ## Аугментация
 
@@ -29,7 +29,7 @@ YAMNet предобучен на AudioSet (>2M клипов, 521 класс). М
 | 3-5:1 | Diminishing returns, модель начинает учить артефакты аугментации |
 | > 5:1 | **Деградация.** Модель учит распределение синтетики, а не реальных звуков |
 
-**Правило:** aug-файлов не больше чем 2x от реальных. Если 60 реальных motorcycle → максимум 120 aug.
+**Правило:** aug-файлов не больше чем 2x от реальных. Если 60 реальных uav → максимум 120 aug.
 
 ### Domain gap — главная ловушка
 
@@ -54,7 +54,7 @@ YAMNet предобучен на AudioSet (>2M клипов, 521 класс). М
 
 ### Проблема
 
-Типичная ситуация: background ~7000 windows, motorcycle ~200 windows (35:1).
+Типичная ситуация: background ~7000 windows, uav ~200 windows (35:1).
 Модель "ленится" — предсказывает background и получает высокий общий accuracy за счёт доминирующего класса.
 
 ### Решения (от простого к сложному)

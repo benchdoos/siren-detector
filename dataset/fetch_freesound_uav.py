@@ -2,11 +2,11 @@
 """Download moped / scooter / vespa clips from Freesound.
 
 Usage:
-    FREESOUND_API_KEY=<your_key> python3 dataset/fetch_freesound_motorcycle.py
+    FREESOUND_API_KEY=<your_key> python3 dataset/fetch_freesound_uav.py
 
 Get an API key at https://freesound.org/apiv2/apply/
 Only sounds with permissive licenses (CC0, CC BY, CC BY-NC) are downloaded.
-Audio is converted to 16 kHz mono WAV and saved to dataset/motorcycle/.
+Audio is converted to 16 kHz mono WAV and saved to dataset/uav/.
 Already-downloaded Freesound IDs (dl_<id>__* files) are skipped.
 """
 
@@ -24,7 +24,7 @@ import urllib.request
 from pathlib import Path
 
 API_BASE = "https://freesound.org/apiv2"
-DATASET_DIR = Path(__file__).resolve().parent / "motorcycle"
+DATASET_DIR = Path(__file__).resolve().parent / "uav"
 SAMPLE_RATE = 16_000
 MAX_DURATION = 30  # skip clips longer than 30 s
 

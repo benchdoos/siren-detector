@@ -163,8 +163,8 @@
         <div class="s-tooltip" data-tip="siren_threshold"><strong>Siren Threshold</strong><br>MLP confidence score required for a siren detection to count as a trigger. Lower = more sensitive but more false positives.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.10</b></span></div>
         <div class="s-row"><label>Explosion <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-explosion_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="explosion_threshold"></span></div>
         <div class="s-tooltip" data-tip="explosion_threshold"><strong>Explosion Threshold</strong><br>YAMNet confidence for explosion/gunshot/burst. Classes: Explosion, Burst pop, Gunshot gunfire.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.15</b></span></div>
-        <div class="s-row"><label>Motorcycle <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-motorcycle_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="motorcycle_threshold"></span></div>
-        <div class="s-tooltip" data-tip="motorcycle_threshold"><strong>Motorcycle Threshold</strong><br>YAMNet confidence for motorcycle engine sounds.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.15</b></span></div>
+        <div class="s-row"><label>UAVs <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-uav_threshold" step="0.01" min="0" max="1"><span class="s-default" data-key="uav_threshold"></span></div>
+        <div class="s-tooltip" data-tip="uav_threshold"><strong>UAVs Threshold</strong><br>YAMNet confidence for UAV engine sounds.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.15</b></span></div>
       </div>
       <div class="s-section">
         <div class="s-title">DSP Pre-filter</div>
@@ -179,7 +179,7 @@
         <div class="s-row"><label>BG confirm windows <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-dsp_bg_confirm_windows" step="1" min="1" max="10"><span class="s-default" data-key="dsp_bg_confirm_windows"></span></div>
         <div class="s-tooltip" data-tip="dsp_bg_confirm_windows"><strong>DSP Background Confirm Windows</strong><br>Number of consecutive confident background predictions required before DSP starts skipping YAMNet. Higher values prevent it from returning to background too quickly but run YAMNet more often.<hr><span class="s-tip-range">Range: <b>1 – 10 windows</b></span><br><span class="s-tip-default">Default: <b>2</b></span></div>
         <div class="s-row"><label>Event gate <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-dsp_event_gate" step="0.01" min="0" max="0.5"><span class="s-default" data-key="dsp_event_gate"></span></div>
-        <div class="s-tooltip" data-tip="dsp_event_gate"><strong>DSP Event Gate</strong><br>If any event class (siren, explosion, motorcycle) has DSP probability above this threshold, always run YAMNet even if background confidence is high. Lower = more sensitive, catches quieter events. Set to 0 to disable.<hr><span class="s-tip-range">Range: <b>0.00 – 0.50</b></span><br><span class="s-tip-default">Default: <b>0.08</b></span></div>
+        <div class="s-tooltip" data-tip="dsp_event_gate"><strong>DSP Event Gate</strong><br>If any event class (siren, explosion, uav) has DSP probability above this threshold, always run YAMNet even if background confidence is high. Lower = more sensitive, catches quieter events. Set to 0 to disable.<hr><span class="s-tip-range">Range: <b>0.00 – 0.50</b></span><br><span class="s-tip-default">Default: <b>0.08</b></span></div>
         <div class="s-row"><label>Max consecutive skips <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-dsp_max_consecutive_skips" step="1" min="0" max="200"><span class="s-default" data-key="dsp_max_consecutive_skips"></span></div>
         <div class="s-tooltip" data-tip="dsp_max_consecutive_skips"><strong>DSP Max Consecutive Skips</strong><br>After this many consecutive DSP skips for a source, force one YAMNet pass. Low values (3-5) let YAMNet catch events quickly despite DSP's slow 5s window. Higher values save more CPU but delay detection. Set to 0 to disable.<hr><span class="s-tip-range">Range: <b>0 – 200</b></span><br><span class="s-tip-default">Default: <b>4</b> (~2 seconds)</span></div>
       </div>
@@ -321,7 +321,7 @@
           This application and all its components are intended exclusively for peaceful purposes. Any use of this software for military, harmful, or destructive purposes is strictly prohibited.</p>
       </div>
       <p style="font-size:13px;color:#aaa;line-height:1.6;margin-bottom:12px">Universal audio event detection platform. ESP32-S3 captures audio from an INMP441 microphone and streams it to a detection engine powered by YAMNet + MLP.</p>
-      <p style="font-size:13px;color:#aaa;line-height:1.6;margin-bottom:16px">Target classes: <span style="color:#ef5350;font-weight:600">siren</span>, <span style="color:#ff7043;font-weight:600">explosion</span>, <span style="color:#ffd54f;font-weight:600">motorcycle</span>, <span style="color:#4caf50;font-weight:600">background</span>.</p>
+      <p style="font-size:13px;color:#aaa;line-height:1.6;margin-bottom:16px">Target classes: <span style="color:#ef5350;font-weight:600">siren</span>, <span style="color:#ff7043;font-weight:600">explosion</span>, <span style="color:#ffd54f;font-weight:600">UAVs</span>, <span style="color:#4caf50;font-weight:600">background</span>.</p>
       <div style="border-top:1px solid #222;padding-top:12px;margin-bottom:12px">
         <div style="font-size:12px;color:#888;font-weight:600;margin-bottom:4px">Repository</div>
         <a href="https://github.com/benchdoos/siren-detector" target="_blank" rel="noopener" style="color:#4caf50;text-decoration:none;font-size:13px">github.com/benchdoos/siren-detector</a>
@@ -347,7 +347,7 @@ function adminHeaders() {
 /* ── Settings keys & panel mapping ── */
 const SETTINGS_KEYS = [
   'detection_mode','inference_interval_seconds',
-  'siren_threshold','explosion_threshold','motorcycle_threshold',
+  'siren_threshold','explosion_threshold','uav_threshold',
   'dsp_enabled','dsp_bg_threshold','dsp_bg_release_threshold','dsp_bg_confirm_windows','dsp_event_gate','dsp_max_consecutive_skips',
   'click_removal_enabled','click_removal_threshold','click_removal_max_width',
   'possible_triggers','confirmed_triggers','smoothing_window_seconds',
@@ -356,7 +356,7 @@ const SETTINGS_KEYS = [
 ];
 
 const PANEL_KEYS = {
-  'sp-detection': ['detection_mode','inference_interval_seconds','siren_threshold','explosion_threshold','motorcycle_threshold','dsp_enabled','dsp_bg_threshold','dsp_bg_release_threshold','dsp_bg_confirm_windows','dsp_event_gate','dsp_max_consecutive_skips','click_removal_enabled','click_removal_threshold','click_removal_max_width','yamnet_min_gate'],
+  'sp-detection': ['detection_mode','inference_interval_seconds','siren_threshold','explosion_threshold','uav_threshold','dsp_enabled','dsp_bg_threshold','dsp_bg_release_threshold','dsp_bg_confirm_windows','dsp_event_gate','dsp_max_consecutive_skips','click_removal_enabled','click_removal_threshold','click_removal_max_width','yamnet_min_gate'],
   'sp-smoothing': ['possible_triggers','confirmed_triggers','smoothing_window_seconds','cooldown_seconds','refractory_seconds'],
   'sp-clips': ['clip_seconds','clip_from_possible','user_event_clip_seconds','save_background_segments'],
 };
@@ -581,7 +581,7 @@ async function loadSources() {
             <div class="src-dsp-control-group"><div class="src-dsp-control-label">BG threshold <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="bg_threshold" min="0.5" max="1" step="0.01" value="${bgThreshold}"><div class="s-tooltip"><strong>BG threshold</strong><br>Minimum DSP confidence needed to skip YAMNet. Higher values skip less often and are more conservative; lower values save more CPU but may miss events.</div></div>
             <div class="src-dsp-control-group"><div class="src-dsp-control-label">BG release <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="bg_release_threshold" min="0.5" max="1" step="0.01" value="${bgRelease}"><div class="s-tooltip"><strong>BG release threshold</strong><br>While YAMNet is being skipped, it resumes when background confidence drops below this value. Higher values resume sooner; lower values keep skipping longer.</div></div>
             <div class="src-dsp-control-group"><div class="src-dsp-control-label">BG windows <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="bg_confirm_windows" min="1" max="10" step="1" value="${bgWindows}"><div class="s-tooltip"><strong>BG confirm windows</strong><br>Consecutive background predictions required before DSP starts skipping YAMNet. Higher values add caution but reduce CPU savings.</div></div>
-            <div class="src-dsp-control-group"><div class="src-dsp-control-label">Event gate <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="event_gate" min="0" max="0.5" step="0.01" value="${eventGate}"><div class="s-tooltip"><strong>Event gate</strong><br>If a siren, explosion, or motorcycle probability exceeds this value, YAMNet runs even when background confidence is high. Lower values are more sensitive. Set to 0 to disable.</div></div>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">Event gate <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="event_gate" min="0" max="0.5" step="0.01" value="${eventGate}"><div class="s-tooltip"><strong>Event gate</strong><br>If a siren, explosion, or UAV probability exceeds this value, YAMNet runs even when background confidence is high. Lower values are more sensitive. Set to 0 to disable.</div></div>
             <div class="src-dsp-control-group"><div class="src-dsp-control-label">Max skips <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="max_consecutive_skips" min="0" max="200" step="1" value="${maxSkips}"><div class="s-tooltip"><strong>Max consecutive skips</strong><br>After this many consecutive DSP skips, force one YAMNet pass. Lower values catch events sooner; higher values save more CPU. Set to 0 to disable.</div></div>
             <button class="src-dsp-save" onclick="saveSourceDspOverride(this, ${s.source_id})">Save</button>
           </div>

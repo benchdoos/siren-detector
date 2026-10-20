@@ -5,7 +5,7 @@
     <Label value="siren"      background="#FF4444" hotkey="1"/>
     <Label value="background" background="#44AA44" hotkey="2"/>
     <Label value="explosion"  background="#FF8800" hotkey="3"/>
-    <Label value="motorcycle" background="#4488FF" hotkey="4"/>
+    <Label value="uav" background="#4488FF" hotkey="4"/>
     <Label value="unknown"    background="#888888" hotkey="5"/>
   </Labels>
 </View>

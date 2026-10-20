@@ -25,7 +25,7 @@ SCORE_LABELS = (
     "Siren",
     "Alarm",
     "Explosion",
-    "Motorcycle",
+    "UAVs",
     "Vehicle",
     "Speech",
     "Rain",

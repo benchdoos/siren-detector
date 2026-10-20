@@ -6,7 +6,7 @@ RPI         ?= user@192.168.1.100
 RPI_BASE    ?= ~/Projects/esphome
 CONTAINER   ?= siren-detector-engine
 WEB_UI      ?= http://192.168.1.100:8080
-LABELS      = siren background motorcycle explosion unknown
+LABELS      = siren background uav explosion unknown
 
 # ── Deploy ────────────────────────────────────────────────────────────────────
 
@@ -178,7 +178,7 @@ clean-clips:
 
 ## Clean dataset on RPi (all — sync first!)
 clean-dataset:
-	ssh $(RPI) "rm -rf $(RPI_BASE)/dataset/siren/* $(RPI_BASE)/dataset/background/* $(RPI_BASE)/dataset/motorcycle/* $(RPI_BASE)/dataset/explosion/* $(RPI_BASE)/dataset/unknown/*"
+	ssh $(RPI) "rm -rf $(RPI_BASE)/dataset/siren/* $(RPI_BASE)/dataset/background/* $(RPI_BASE)/dataset/uav/* $(RPI_BASE)/dataset/explosion/* $(RPI_BASE)/dataset/unknown/*"
 
 ## Clean Docker build cache and dangling images on RPi (preserves volumes)
 clean-docker:
@@ -192,7 +192,7 @@ fetch-esc50:
 
 ## Remove all augmented files before regenerating
 clean-aug:
-	find dataset/siren dataset/explosion dataset/motorcycle -name 'aug_*' -delete 2>/dev/null || true
+	find dataset/siren dataset/explosion dataset/uav -name 'aug_*' -delete 2>/dev/null || true
 	@echo "Cleaned aug files"
 
 ## Augment siren data (aug ≤ 2× real; 86 real → max 172)
@@ -205,17 +205,17 @@ augment-siren:
 augment-explosion:
 	ml/.venv/bin/python dataset/augment.py explosion --count 150 --noise-profile $(NOISE_PROFILE)
 
-## Augment motorcycle data (aug ≤ 2× real; 80 real → max 160: 120 normal + 40 quiet)
-augment-motorcycle:
-	ml/.venv/bin/python dataset/augment.py motorcycle --count 120 --noise-profile $(NOISE_PROFILE)
-	ml/.venv/bin/python dataset/augment.py motorcycle --count 40 --quiet --noise-profile $(NOISE_PROFILE)
+## Augment uav data (aug ≤ 2× real; 80 real → max 160: 120 normal + 40 quiet)
+augment-uav:
+	ml/.venv/bin/python dataset/augment.py uav --count 120 --noise-profile $(NOISE_PROFILE)
+	ml/.venv/bin/python dataset/augment.py uav --count 40 --quiet --noise-profile $(NOISE_PROFILE)
 
 ## Augment all safety-critical classes (cleans old aug first)
 augment:
 	$(MAKE) clean-aug
 	$(MAKE) augment-siren
 	$(MAKE) augment-explosion
-	$(MAKE) augment-motorcycle
+	$(MAKE) augment-uav
 
 # ── Audit ────────────────────────────────────────────────────────────────────
 
@@ -277,7 +277,7 @@ help:
 	@echo "    make augment         Augment siren + explosion data"
 	@echo "    make augment-siren   Augment siren only"
 	@echo "    make augment-explosion Augment explosion only"
-	@echo "    make augment-motorcycle Augment motorcycle (normal + quiet)"
+	@echo "    make augment-uav Augment uav (normal + quiet)"
 	@echo "    make audit           Run dataset/model audit snapshot"
 	@echo "    make audit-compare   Compare latest vs previous audit"
 	@echo ""
@@ -285,6 +285,6 @@ help:
 .PHONY: deploy deploy-audio deploy-ui deploy-firmware logs-esp deploy-compose restart logs settings \
         sync-dataset train train-dsp deploy-model retrain _merge-recorder _wait-calibration _clean-trained \
         clean-clips clean-dataset clean-docker \
-        augment augment-siren augment-explosion augment-motorcycle \
+        augment augment-siren augment-explosion augment-uav \
         audit audit-compare \
         fetch-esc50 open unlock help

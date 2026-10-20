@@ -34,7 +34,7 @@ VAL_SOURCES_FILE = RESULTS / "val_sources.json"
 VAL_METRICS_FILE = RESULTS / "val_metrics.json"
 DSP_METRICS_FILE = RESULTS / "dsp_metrics.json"
 
-LABELS = ["siren", "background", "explosion", "motorcycle"]
+LABELS = ["siren", "background", "explosion", "uav"]
 
 
 def source_name(filename: str) -> str:

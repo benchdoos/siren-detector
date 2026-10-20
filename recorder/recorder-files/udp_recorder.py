@@ -17,7 +17,7 @@ SAMPLE_RATE = 16_000
 PACKET_SIZE = 4096
 HEADER = struct.Struct("!IIHH")
 MAGIC = 0x53445231  # "SDR1"
-LABELS = ("siren", "explosion", "motorcycle", "background", "unknown", "inbox")
+LABELS = ("siren", "explosion", "uav", "background", "unknown", "inbox")
 
 
 def convert_i2s_32_to_pcm16(data: bytes) -> bytes:

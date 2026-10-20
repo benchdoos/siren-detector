@@ -2,11 +2,11 @@
 
 ## Структура датасета
 
-Храните собственные записи отдельно от внешних справочных аудиоданных. Основные метки: `siren`, `explosion`, `motorcycle`, `background` и `unknown`; длинные неразмеченные записи помещайте в `dataset/inbox/`.
+Храните собственные записи отдельно от внешних справочных аудиоданных. Основные метки: `siren`, `explosion`, `uav`, `background` и `unknown`; длинные неразмеченные записи помещайте в `dataset/inbox/`.
 
 ```text
 dataset/
-├── siren/  explosion/  motorcycle/  background/  unknown/
+├── siren/  explosion/  uav/  background/  unknown/
 ├── inbox/
 └── external/esc50/
 ```

@@ -28,7 +28,7 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATASET = REPO_ROOT / "dataset"
 ANNOTATIONS_CSV = DATASET / "annotations.csv"
-LABELS = ("siren", "explosion", "motorcycle", "background", "unknown")
+LABELS = ("siren", "explosion", "uav", "background", "unknown")
 
 AUDIO_BASE_URL = "http://localhost:8081"
 
