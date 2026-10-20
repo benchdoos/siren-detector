@@ -4,7 +4,7 @@ substitutions:
   udp_target_ip: !secret udp_target_ip
   udp_target_port: !secret udp_target_port
   # SDR1 source_id for this microphone (0 = default, 1+ for additional mics).
-  # See docs/MULTI_MIC.md for multi-microphone setup.
+  # See docs/en/multi-microphone.md for multi-microphone setup.
   source_id: "0"
 
 esphome:
