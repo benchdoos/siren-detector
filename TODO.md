@@ -166,6 +166,8 @@
 - [x] Корректное отображение состояния модели при нескольких источниках.
 - [x] Статус подключения: мигающая зелёная точка (connected) с tooltip "Online".
 - [x] Audio badge: при 2+ источниках — кликабельный dropdown с per-source статистикой пакетов.
+- [x] Синхронизация feedback-лейблов и сегментов между браузерами в реальном времени через WebSocket (`feedback_update`, `segments_update`).
+- [x] `make settings` — дамп текущих runtime-настроек из контейнера (JSON).
 - [ ] Персистентность лейблов между перезапусками контейнера (сейчас in-memory).
 
 ## 9. Локальный inference на ESP32-S3 — новый подход: DSP-фичи
@@ -314,6 +316,21 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
   проверяет API, ждёт `done`, автоматически вызывает stop для сохранения записи.
 - [x] Custom display names: пользовательские имена источников в Settings → Sources, сохраняются в `source_custom_names`, приоритетно отображаются в Web UI.
 - [ ] Проверить задержку и нагрузку на RPi при двух параллельных потоках.
+
+## Click Removal (DSP pre-processing) — реализовано
+
+Проблема: импульсные помехи INMP441 (щелчки, наводки) — короткие всплески (1-5 сэмплов)
+с широкополосным спектром → YAMNet интерпретирует как "Explosion / Burst, pop".
+
+- [x] Реализовать click removal: MAD-based outlier detection + linear interpolation
+  в `yamnet_engine.py` (`_remove_clicks`). Настоящие взрывы длятся сотни сэмплов
+  и не затрагиваются.
+- [x] Глобальные настройки: `click_removal_enabled`, `click_removal_threshold` (MADs),
+  `click_removal_max_width` (макс. длина клика в сэмплах).
+- [x] Per-source overrides: `click_removal_source_overrides` — аналогично DSP overrides.
+- [x] Web UI: секция Click Removal в Detection panel + per-source overrides в Sources panel.
+- [ ] Протестировать на реальных данных с INMP441 — подобрать оптимальный threshold.
+- [ ] Добавить метрику clicks_removed в WebSocket score messages для мониторинга.
 
 ## Ближайшие действия
 

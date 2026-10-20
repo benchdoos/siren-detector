@@ -48,6 +48,54 @@ from .. import settings as settings_mod
 
 _EMPTY_PEAK = {"score": 0.0, "yamnet": 0.0, "mlp": None, "top": "", "yamnet_top3": [], "mlp_top3": []}
 
+# ── Click removal (impulse noise suppression) ─────────────────────────
+# MAD-based outlier detection: finds samples that deviate > threshold * MAD
+# from the median and replaces short groups (≤ max_width) with linear
+# interpolation.  Real explosions span hundreds of samples and are untouched.
+
+def _remove_clicks(waveform: np.ndarray, threshold: float = 10.0,
+                   max_width: int = 5) -> tuple[np.ndarray, int]:
+    """Remove impulse noise (clicks) from *waveform* in-place style.
+
+    Returns (cleaned_waveform, clicks_removed).
+    """
+    if len(waveform) < 10:
+        return waveform, 0
+
+    median = np.median(waveform)
+    mad = np.median(np.abs(waveform - median))
+    if mad < 1e-10:
+        # Nearly-silent signal — use absolute threshold instead
+        mad = 1e-5
+
+    # 1.4826 scales MAD to be consistent with std for normal distributions
+    cutoff = threshold * mad * 1.4826
+    outliers = np.abs(waveform - median) > cutoff
+
+    if not np.any(outliers):
+        return waveform, 0
+
+    result = waveform.copy()
+    indices = np.where(outliers)[0]
+
+    # Split into groups of consecutive indices
+    groups = np.split(indices, np.where(np.diff(indices) > 1)[0] + 1)
+
+    clicks_removed = 0
+    for group in groups:
+        if len(group) == 0 or len(group) > max_width:
+            continue
+        start = int(group[0])
+        end = int(group[-1])
+        left = float(result[start - 1]) if start > 0 else 0.0
+        right = float(result[end + 1]) if end + 1 < len(result) else 0.0
+        n = end - start + 1
+        for i, idx in enumerate(group):
+            result[idx] = left + (right - left) * (i + 1) / (n + 1)
+        clicks_removed += 1
+
+    return result, clicks_removed
+
 
 def _inference_hop_samples() -> int:
     interval = float(settings_mod.settings.get("inference_interval_seconds", 0.5))
@@ -340,6 +388,32 @@ class YAMNetEngine:
         dsp=None,
     ) -> None:
         waveform = np.clip(waveform, -1.0, 1.0)
+
+        # ── Click removal: suppress impulse noise before inference ──────
+        cr_override = settings_mod.settings.get(
+            "click_removal_source_overrides", {},
+        ).get(str(source.source_id), {})
+        cr_enabled = cr_override.get(
+            "enabled", settings_mod.settings.get("click_removal_enabled", 1),
+        )
+        if cr_enabled:
+            cr_threshold = cr_override.get(
+                "threshold",
+                settings_mod.settings.get("click_removal_threshold", 10.0),
+            )
+            cr_max_width = cr_override.get(
+                "max_width",
+                settings_mod.settings.get("click_removal_max_width", 5),
+            )
+            waveform, n_clicks = _remove_clicks(
+                waveform, threshold=cr_threshold, max_width=cr_max_width,
+            )
+            if n_clicks:
+                print(
+                    f"[click-removal] source {source.source_id}: "
+                    f"removed {n_clicks} click(s)",
+                    flush=True,
+                )
 
         # ── DSP pre-filter: skip YAMNet for confident background ────────
         dsp_result = None

@@ -1134,6 +1134,21 @@ function connect() {
     }
     if (msg.type === 'score') updateScores(msg);
     if (msg.type === 'event') addEvent(msg);
+    if (msg.type === 'feedback_update') {
+      const card = [...eventsEl.querySelectorAll('.event-card')]
+        .find(card => card.dataset.filename === msg.filename);
+      if (card) applyCardLabel(card, msg.label);
+    }
+    if (msg.type === 'segments_update') {
+      const card = [...eventsEl.querySelectorAll('.event-card')]
+        .find(card => card.dataset.filename === msg.filename);
+      if (card) {
+        card._segments = Array.isArray(msg.segments) ? msg.segments : [];
+        renderSegments(card);
+        const player = card.querySelector('.clip-player');
+        if (player) _redraw(player);
+      }
+    }
   };
 }
 connect();
@@ -1330,14 +1345,12 @@ async function loadAudits() {
   try {
     const res = await fetch('/api/audits', { headers: adminHeaders() });
     const d = await res.json();
-    // Skip the first (most recent) audit — it duplicates the current metrics shown above.
-    const audits = (d.audits || []).slice(1);
-    if (!audits.length) {
+    if (!d.audits || !d.audits.length) {
       section.innerHTML = '';
       return;
     }
     let html = '<div class="audit-section"><h3>Audit History</h3>';
-    audits.forEach((a, i) => { html += renderAuditItem(a, i); });
+    d.audits.forEach((a, i) => { html += renderAuditItem(a, i); });
     html += '</div>';
     section.innerHTML = html;
   } catch(e) {
@@ -1591,6 +1604,15 @@ function fmtSec(s) { return s.toFixed(1) + 's'; }
 function renderSegments(card) {
   const list = card.querySelector('.seg-list');
   const segs = card._segments || [];
+  const body = card.querySelector('.seg-body');
+  const toggle = card.querySelector('.seg-toggle');
+  if (segs.length) {
+    body.classList.add('open');
+    toggle.textContent = 'segments ▾';
+  } else {
+    body.classList.remove('open');
+    toggle.textContent = 'segments ▸';
+  }
   if (!segs.length) { list.innerHTML = ''; return; }
   list.innerHTML = segs.map((s, i) => {
     const c = SEG_COLORS[s.label] || { stroke: '#888' };

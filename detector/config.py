@@ -51,12 +51,16 @@ DEFAULT_SETTINGS = {
     "dsp_bg_threshold": 0.92,
     "dsp_bg_release_threshold": 0.90,
     "dsp_bg_confirm_windows": 2,
-    "dsp_max_consecutive_skips": 4,
-    "dsp_event_gate": 0.08,
+    "dsp_max_consecutive_skips": 20,
+    "dsp_event_gate": 0.30,
     "dsp_source_overrides": {},
+    "click_removal_enabled": 1,
+    "click_removal_threshold": 10.0,
+    "click_removal_max_width": 5,
+    "click_removal_source_overrides": {},
 }
 
 # DSP pre-filter model paths (defaults for Docker volume mount)
-DSP_MODEL_PATH = "/models/dsp_classifier_int8.tflite"
+DSP_MODEL_PATH = "/models/dsp_classifier_f32.tflite"
 DSP_NORM_STATS_PATH = "/models/dsp_norm_stats.npz"
 DSP_LABELS_PATH = "/models/dsp_classifier_labels.json"

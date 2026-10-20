@@ -87,6 +87,9 @@ async def post_settings(body: dict):
         "clip_seconds": (5, 60),
         "user_event_clip_seconds": (5, 60),
         "clip_from_possible": (0, 1),
+        "click_removal_enabled": (0, 1),
+        "click_removal_threshold": (3.0, 50.0),
+        "click_removal_max_width": (1, 20),
     }
     updated = {}
     for k, default_val in DEFAULT_SETTINGS.items():
@@ -128,6 +131,30 @@ async def post_settings(body: dict):
                                 parsed = int(value) if name in ("dsp_enabled", "bg_confirm_windows", "max_consecutive_skips") else float(value)
                             except (ValueError, TypeError):
                                 raise HTTPException(status_code=400, detail=f"Invalid DSP override value for {name}")
+                            if not lo <= parsed <= hi:
+                                raise HTTPException(status_code=400, detail=f"{name} must be between {lo} and {hi}")
+                            clean[name] = parsed
+                        clean_overrides[str(source_id)] = clean
+                    updated[k] = clean_overrides
+                elif k == "click_removal_source_overrides":
+                    clean_overrides = {}
+                    override_ranges = {
+                        "enabled": (0, 1),
+                        "threshold": (3.0, 50.0),
+                        "max_width": (1, 20),
+                    }
+                    for source_id, override in body[k].items():
+                        if not str(source_id).isdigit() or not isinstance(override, dict):
+                            raise HTTPException(status_code=400, detail="Invalid click removal source override")
+                        clean = {}
+                        for name, value in override.items():
+                            if name not in override_ranges:
+                                raise HTTPException(status_code=400, detail=f"Invalid click removal override: {name}")
+                            lo, hi = override_ranges[name]
+                            try:
+                                parsed = int(value) if name in ("enabled", "max_width") else float(value)
+                            except (ValueError, TypeError):
+                                raise HTTPException(status_code=400, detail=f"Invalid click removal override value for {name}")
                             if not lo <= parsed <= hi:
                                 raise HTTPException(status_code=400, detail=f"{name} must be between {lo} and {hi}")
                             clean[name] = parsed
@@ -263,6 +290,8 @@ async def feedback(body: dict):
     if segments:
         info += f" (gaps only, {len(segments)} segments excluded)"
     print(info, flush=True)
+    # Broadcast to all WS clients so other browsers update in real time
+    _bus.broadcast({"type": "feedback_update", "filename": filename, "label": label})
     return {"ok": True}
 
 
@@ -402,6 +431,10 @@ async def feedback_segments(body: dict):
     print(f"[segments] {filename} → {len(clean)} segments"
           + (f" (cleaned {removed} old files)" if removed else ""),
           flush=True)
+    # Broadcast to all WS clients so other browsers update in real time
+    _bus.broadcast({
+        "type": "segments_update", "filename": filename, "segments": clean,
+    })
     return {"ok": True, "count": len(clean)}
 
 

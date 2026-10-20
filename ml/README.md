@@ -44,3 +44,19 @@ timestamps are offsets from the beginning of each input WAV. YAMNet scores are
 model outputs, not calibrated probabilities or final alarm thresholds. The
 default scan includes every WAV in `background/`, including long captures, so
 the first complete run may take a while.
+
+## DSP pre-filter training
+
+Run `make train-dsp` from the repository root. Calibration diversity is enabled
+by default: the trainer reads full calibration recordings, divides each into
+non-overlapping five-second chunks, and keeps up to 16 quiet, typical, loud, and
+acoustically distinct chunks per recording. Calibration chunks are prioritized
+within the background-window limit; other recordings fill the remaining space.
+To compare with the 30-second-per-file behavior, run
+`make train-dsp DSP_TRAIN_ARGS=--no-calibration-diversity`.
+
+The server uses the float32 TFLite export. The current INT8 export sharply
+misclassifies the calibration recordings, so it is retained for analysis but is
+not deployed. `make deploy` updates the detector code; `make deploy-model`
+copies the trained float32 model and refreshes the detector Compose command so
+the running container loads that export.

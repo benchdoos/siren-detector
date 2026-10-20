@@ -1,6 +1,7 @@
 """TFLite-based DSP classifier for pre-filtering before YAMNet.
 
-Loads a quantised Conv1D model (INT8, ~30 KB) trained on DSP features.
+Loads a compact TFLite Conv1D model trained on DSP features. The server uses
+the float32 export to preserve accuracy; INT8 models are also supported.
 Used as a lightweight gate: if DSP says "background" with high confidence,
 skip the heavy YAMNet inference.
 """

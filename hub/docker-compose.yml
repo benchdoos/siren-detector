@@ -67,7 +67,7 @@ services:
       - --classifier-labels
       - /models/classifier_labels.json
       - --dsp-model
-      - /models/dsp_classifier_int8.tflite
+      - /models/dsp_classifier_f32.tflite
       - --dsp-norm-stats
       - /models/dsp_norm_stats.npz
       - --dsp-labels
