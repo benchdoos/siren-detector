@@ -71,7 +71,7 @@ async def post_settings(body: dict):
     SETTING_RANGES = {
         "siren_threshold": (0.0, 1.0),
         "explosion_threshold": (0.0, 1.0),
-        "motorcycle_threshold": (0.0, 1.0),
+        "uav_threshold": (0.0, 1.0),
         "possible_triggers": (1, 60),
         "confirmed_triggers": (1, 60),
         "cooldown_seconds": (0, 600),
@@ -368,7 +368,7 @@ def _save_segment_slices(src: Path, segments: list[dict]) -> None:
             out.writeframes(seg_frames)
 
 
-SEGMENT_LABELS = {"siren", "explosion", "motorcycle"}
+SEGMENT_LABELS = {"siren", "explosion", "uav"}
 
 
 @router.post("/feedback/segments", dependencies=[Depends(require_admin)])

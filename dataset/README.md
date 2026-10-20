@@ -8,7 +8,7 @@ etc.); do not point it at `external/`.
 dataset/
 ├── siren/                 # recordings from our device
 ├── explosion/
-├── motorcycle/
+├── uav/
 ├── background/
 ├── unknown/
 ├── inbox/

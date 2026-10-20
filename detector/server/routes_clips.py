@@ -155,9 +155,10 @@ async def restore_clips(bus: EventBus) -> None:
             if name.startswith("exp-"):
                 event_type = "explosion"
                 date_part = name[4:].replace(".wav", "")
-            elif name.startswith("moto-"):
-                event_type = "motorcycle"
-                date_part = name[5:].replace(".wav", "")
+            elif name.startswith(("uav-", "moto-")):
+                event_type = "uav"
+                prefix_length = 4 if name.startswith("uav-") else 5
+                date_part = name[prefix_length:].replace(".wav", "")
             elif name.startswith("manual-"):
                 event_type = "unknown"
                 date_part = name[7:].replace(".wav", "")
