@@ -577,7 +577,8 @@ def main() -> None:
                     idx = indices[start:start + batch_size]
                     yield X_m[idx], y_m[idx], w_m[idx]
 
-        steps_per_epoch = len(X_train) // batch_size
+        # Include the final partial batch so every training window is used.
+        steps_per_epoch = (len(X_train) + batch_size - 1) // batch_size
         train_ds = tf.data.Dataset.from_generator(
             train_generator,
             output_signature=(
@@ -615,6 +616,8 @@ def main() -> None:
             validation_data=(X_val.astype(np.float32), y_val_oh),
             epochs=100,
             steps_per_epoch=steps_per_epoch,
+            # train_generator already permutes samples before yielding batches.
+            shuffle=False,
             callbacks=callbacks,
             verbose=1,
         )

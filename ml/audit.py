@@ -32,6 +32,7 @@ RESULTS = Path(__file__).resolve().parent / "results"
 AUDITS_DIR = RESULTS / "audits"
 VAL_SOURCES_FILE = RESULTS / "val_sources.json"
 VAL_METRICS_FILE = RESULTS / "val_metrics.json"
+DSP_METRICS_FILE = RESULTS / "dsp_metrics.json"
 
 LABELS = ["siren", "background", "explosion", "motorcycle"]
 
@@ -128,6 +129,12 @@ def load_val_metrics() -> dict | None:
     return json.loads(VAL_METRICS_FILE.read_text(encoding="utf-8"))
 
 
+def load_dsp_metrics() -> dict | None:
+    if not DSP_METRICS_FILE.exists():
+        return None
+    return json.loads(DSP_METRICS_FILE.read_text(encoding="utf-8"))
+
+
 def compute_imbalance(val_metrics: dict | None) -> dict:
     """Compute class imbalance stats from val_metrics."""
     if not val_metrics or "classes" not in val_metrics:
@@ -148,6 +155,7 @@ def compute_imbalance(val_metrics: dict | None) -> dict:
 def build_audit() -> dict:
     """Build complete audit snapshot."""
     val_metrics = load_val_metrics()
+    dsp_metrics = load_dsp_metrics()
 
     file_counts = count_files()
     leakage = check_leakage()
@@ -180,6 +188,7 @@ def build_audit() -> dict:
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "model_trained_at": trained_at,
+        "dsp_metrics": dsp_metrics,
         "labels": LABELS,
         "file_counts": file_counts,
         "val_accuracy": accuracy,
@@ -196,6 +205,14 @@ def print_audit(audit: dict) -> None:
     print(f"  Dataset Audit — {audit['timestamp']}")
     if audit.get("model_trained_at"):
         print(f"  Model trained: {audit['model_trained_at']}")
+    dsp_metrics = audit.get("dsp_metrics")
+    if dsp_metrics:
+        print(f"  DSP model trained: {dsp_metrics.get('trained_at', 'unknown')}")
+        print(f"  DSP validation accuracy: {dsp_metrics.get('accuracy', 0):.1%}")
+        siren_bg = dsp_metrics.get("siren_confident_background_rate")
+        if siren_bg is not None:
+            print(f"  DSP siren → confident background: {siren_bg:.1%} "
+                  f"(threshold {dsp_metrics.get('background_gate_threshold', 0.92):.2f})")
     print(f"{'='*60}")
 
     # File counts
@@ -299,6 +316,7 @@ def save_model_card(audit: dict) -> None:
     card = {
         "audit_timestamp": audit["timestamp"],
         "model_trained_at": audit.get("model_trained_at"),
+        "dsp_metrics": audit.get("dsp_metrics"),
         "labels": audit["labels"],
         "val_accuracy": audit.get("val_accuracy", {}),
         "confusion_matrix": audit.get("confusion_matrix"),

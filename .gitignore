@@ -14,6 +14,8 @@
 __pycache__/
 *.py[cod]
 package-lock.json
+/site/
+/.docs-venv/
 
 # Audio datasets are large and may have separate redistribution licenses.
 /dataset/external/esc50/audio/
@@ -25,6 +27,7 @@ package-lock.json
 /dataset/**/*.wav
 /dataset/**/*.mp3
 /dataset/recorder/**/*.json
+/ml/dsp_cache
 
 # Environment config (contains IPs, credentials)
 .env

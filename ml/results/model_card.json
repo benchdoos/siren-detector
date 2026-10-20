@@ -1,6 +1,77 @@
 {
-  "audit_timestamp": "2026-10-18T11:53:12+00:00",
-  "model_trained_at": "2026-10-18T11:53:08+00:00",
+  "audit_timestamp": "2026-10-20T14:09:19+00:00",
+  "model_trained_at": "2026-10-20T14:09:15+00:00",
+  "dsp_metrics": {
+    "trained_at": "2026-10-20T14:08:41+00:00",
+    "labels": [
+      "siren",
+      "background",
+      "explosion",
+      "motorcycle"
+    ],
+    "validation_windows": 2893,
+    "accuracy": 0.8873,
+    "classes": [
+      {
+        "label": "siren",
+        "windows": 318,
+        "precision": 0.6938,
+        "recall": 0.5629,
+        "f1": 0.6215
+      },
+      {
+        "label": "background",
+        "windows": 2185,
+        "precision": 0.9376,
+        "recall": 0.9625,
+        "f1": 0.9499
+      },
+      {
+        "label": "explosion",
+        "windows": 178,
+        "precision": 0.7135,
+        "recall": 0.7697,
+        "f1": 0.7405
+      },
+      {
+        "label": "motorcycle",
+        "windows": 212,
+        "precision": 0.74,
+        "recall": 0.6981,
+        "f1": 0.7184
+      }
+    ],
+    "confusion_matrix": [
+      [
+        179,
+        119,
+        6,
+        14
+      ],
+      [
+        48,
+        2103,
+        14,
+        20
+      ],
+      [
+        7,
+        16,
+        137,
+        18
+      ],
+      [
+        24,
+        5,
+        35,
+        148
+      ]
+    ],
+    "background_gate_threshold": 0.92,
+    "siren_confident_background_rate": 0.0,
+    "siren_argmax_background_rate": 0.3742,
+    "quantized_model_size_bytes": 29968
+  },
   "labels": [
     "siren",
     "background",
@@ -9,83 +80,83 @@
   ],
   "val_accuracy": {
     "siren": {
-      "accuracy": 0.788,
-      "windows": 3649
+      "accuracy": 0.769,
+      "windows": 3669
     },
     "background": {
-      "accuracy": 0.769,
+      "accuracy": 0.811,
       "windows": 8700
     },
     "explosion": {
-      "accuracy": 0.731,
-      "windows": 947
+      "accuracy": 0.662,
+      "windows": 967
     },
     "motorcycle": {
-      "accuracy": 0.701,
-      "windows": 448
+      "accuracy": 0.703,
+      "windows": 528
     }
   },
   "confusion_matrix": [
     [
-      2875,
-      277,
-      159,
-      338
+      2823,
+      341,
+      107,
+      398
     ],
     [
-      792,
-      6693,
-      912,
-      303
+      784,
+      7057,
+      612,
+      247
     ],
     [
-      67,
-      142,
-      692,
-      46
+      48,
+      253,
+      640,
+      26
     ],
     [
-      68,
-      27,
-      39,
-      314
+      41,
+      70,
+      46,
+      371
     ]
   ],
   "file_counts": {
     "siren": {
-      "total": 272,
-      "real": 100,
+      "total": 288,
+      "real": 116,
       "aug": 172,
-      "aug_pct": 63.2,
-      "aug_real_ratio": 1.7,
-      "max_recommended_aug": 200
+      "aug_pct": 59.7,
+      "aug_real_ratio": 1.5,
+      "max_recommended_aug": 232
     },
     "background": {
-      "total": 834,
-      "real": 834,
+      "total": 879,
+      "real": 879,
       "aug": 0,
       "aug_pct": 0.0,
       "aug_real_ratio": 0.0,
-      "max_recommended_aug": 1668
+      "max_recommended_aug": 1758
     },
     "explosion": {
-      "total": 422,
-      "real": 272,
+      "total": 432,
+      "real": 282,
       "aug": 150,
-      "aug_pct": 35.5,
-      "aug_real_ratio": 0.6,
-      "max_recommended_aug": 544
+      "aug_pct": 34.7,
+      "aug_real_ratio": 0.5,
+      "max_recommended_aug": 564
     },
     "motorcycle": {
-      "total": 291,
-      "real": 131,
+      "total": 305,
+      "real": 145,
       "aug": 160,
-      "aug_pct": 55.0,
-      "aug_real_ratio": 1.2,
-      "max_recommended_aug": 262
+      "aug_pct": 52.5,
+      "aug_real_ratio": 1.1,
+      "max_recommended_aug": 290
     }
   },
   "issues": [
-    "background: 19.4× more windows than smallest class"
+    "background: 16.5× more windows than smallest class"
   ]
 }

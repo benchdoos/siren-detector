@@ -66,6 +66,12 @@ services:
       - /models/classifier_weights.npz
       - --classifier-labels
       - /models/classifier_labels.json
+      - --dsp-model
+      - /models/dsp_classifier_f32.tflite
+      - --dsp-norm-stats
+      - /models/dsp_norm_stats.npz
+      - --dsp-labels
+      - /models/dsp_classifier_labels.json
 
 volumes:
   tfhub_cache:

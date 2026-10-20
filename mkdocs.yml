@@ -1,0 +1,62 @@
+site_name: Siren Detector
+site_description: Documentation for the Siren Detector project
+site_url: https://benchdoos.github.io/siren-detector/
+repo_url: https://github.com/benchdoos/siren-detector
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - search
+  - i18n:
+      docs_structure: folder
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: ru
+          name: Русский
+          build: true
+          nav_translations:
+            Home: Главная
+            Getting started: Начало работы
+            Architecture: Архитектура
+            Operations: Эксплуатация
+            Data and models: Данные и модели
+            Multi-microphone: Несколько микрофонов
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Architecture: architecture.md
+  - Operations: operations.md
+  - Data and models: data-and-models.md
+  - Multi-microphone: multi-microphone.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+

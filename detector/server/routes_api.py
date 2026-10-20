@@ -13,7 +13,16 @@ from fastapi import APIRouter, Body, Depends, Header, HTTPException
 from fastapi.responses import FileResponse
 
 from ..auth import AUTH_ENABLED, check_token, require_admin, require_viewer
-from ..config import CLIP_DIR, DATASET_DIR, DEFAULT_SETTINGS, VALID_LABELS, SAMPLE_RATE
+from ..config import (
+    CLIP_DIR,
+    DATASET_DIR,
+    DEFAULT_SETTINGS,
+    DSP_LABELS_PATH,
+    DSP_MODEL_PATH,
+    DSP_NORM_STATS_PATH,
+    VALID_LABELS,
+    SAMPLE_RATE,
+)
 from .. import settings as settings_mod
 from .routes_clips import save_clip_meta, _load_clip_meta
 
@@ -32,7 +41,14 @@ def init(bus: EventBus) -> None:
 
 @router.get("/api/settings", dependencies=[Depends(require_viewer)])
 async def get_settings():
-    return {**settings_mod.settings, "defaults": DEFAULT_SETTINGS}
+    dsp_paths = (DSP_MODEL_PATH, DSP_NORM_STATS_PATH, DSP_LABELS_PATH)
+    missing_dsp_files = [Path(path).name for path in dsp_paths if not Path(path).is_file()]
+    return {
+        **settings_mod.settings,
+        "defaults": DEFAULT_SETTINGS,
+        "dsp_available": not missing_dsp_files,
+        "dsp_missing_files": missing_dsp_files,
+    }
 
 
 @router.get("/api/auth/status")
@@ -61,13 +77,28 @@ async def post_settings(body: dict):
         "cooldown_seconds": (0, 600),
         "refractory_seconds": (0, 120),
         "smoothing_window_seconds": (5, 120),
+        "inference_interval_seconds": (0.25, 2.0),
+        "dsp_bg_threshold": (0.5, 1.0),
+        "dsp_bg_release_threshold": (0.5, 1.0),
+        "dsp_bg_confirm_windows": (1, 10),
+        "dsp_max_consecutive_skips": (0, 200),
+        "dsp_event_gate": (0.0, 0.5),
         "yamnet_min_gate": (0.0, 1.0),
         "clip_seconds": (5, 60),
+        "user_event_clip_seconds": (5, 60),
         "clip_from_possible": (0, 1),
+        "click_removal_enabled": (0, 1),
+        "click_removal_threshold": (3.0, 50.0),
+        "click_removal_max_width": (1, 20),
     }
     updated = {}
     for k, default_val in DEFAULT_SETTINGS.items():
         if k in body:
+            if isinstance(default_val, bool):
+                if not isinstance(body[k], bool):
+                    raise HTTPException(status_code=400, detail=f"{k} must be a boolean")
+                updated[k] = body[k]
+                continue
             # list-type settings (e.g. disabled_sources)
             if isinstance(default_val, list):
                 if not isinstance(body[k], list):
@@ -78,7 +109,59 @@ async def post_settings(body: dict):
             if isinstance(default_val, dict):
                 if not isinstance(body[k], dict):
                     raise HTTPException(status_code=400, detail=f"{k} must be an object")
-                updated[k] = body[k]
+                if k == "dsp_source_overrides":
+                    clean_overrides = {}
+                    override_ranges = {
+                        "dsp_enabled": (0, 1),
+                        "bg_threshold": (0.5, 1.0),
+                        "bg_release_threshold": (0.5, 1.0),
+                        "bg_confirm_windows": (1, 10),
+                        "max_consecutive_skips": (0, 200),
+                        "event_gate": (0.0, 0.5),
+                    }
+                    for source_id, override in body[k].items():
+                        if not str(source_id).isdigit() or not isinstance(override, dict):
+                            raise HTTPException(status_code=400, detail="Invalid DSP source override")
+                        clean = {}
+                        for name, value in override.items():
+                            if name not in override_ranges:
+                                raise HTTPException(status_code=400, detail=f"Invalid DSP override: {name}")
+                            lo, hi = override_ranges[name]
+                            try:
+                                parsed = int(value) if name in ("dsp_enabled", "bg_confirm_windows", "max_consecutive_skips") else float(value)
+                            except (ValueError, TypeError):
+                                raise HTTPException(status_code=400, detail=f"Invalid DSP override value for {name}")
+                            if not lo <= parsed <= hi:
+                                raise HTTPException(status_code=400, detail=f"{name} must be between {lo} and {hi}")
+                            clean[name] = parsed
+                        clean_overrides[str(source_id)] = clean
+                    updated[k] = clean_overrides
+                elif k == "click_removal_source_overrides":
+                    clean_overrides = {}
+                    override_ranges = {
+                        "enabled": (0, 1),
+                        "threshold": (3.0, 50.0),
+                        "max_width": (1, 20),
+                    }
+                    for source_id, override in body[k].items():
+                        if not str(source_id).isdigit() or not isinstance(override, dict):
+                            raise HTTPException(status_code=400, detail="Invalid click removal source override")
+                        clean = {}
+                        for name, value in override.items():
+                            if name not in override_ranges:
+                                raise HTTPException(status_code=400, detail=f"Invalid click removal override: {name}")
+                            lo, hi = override_ranges[name]
+                            try:
+                                parsed = int(value) if name in ("enabled", "max_width") else float(value)
+                            except (ValueError, TypeError):
+                                raise HTTPException(status_code=400, detail=f"Invalid click removal override value for {name}")
+                            if not lo <= parsed <= hi:
+                                raise HTTPException(status_code=400, detail=f"{name} must be between {lo} and {hi}")
+                            clean[name] = parsed
+                        clean_overrides[str(source_id)] = clean
+                    updated[k] = clean_overrides
+                else:
+                    updated[k] = body[k]
                 continue
             try:
                 val = type(default_val)(body[k])
@@ -120,7 +203,13 @@ async def get_metrics():
     metrics_path = Path("/models/val_metrics.json")
     if not metrics_path.exists():
         return {"error": "no metrics available"}
-    return json.loads(metrics_path.read_text(encoding="utf-8"))
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    dsp_metrics_path = Path("/models/dsp_metrics.json")
+    metrics["dsp_metrics"] = (
+        json.loads(dsp_metrics_path.read_text(encoding="utf-8"))
+        if dsp_metrics_path.exists() else None
+    )
+    return metrics
 
 
 @router.get("/api/audits", dependencies=[Depends(require_viewer)])
@@ -189,7 +278,8 @@ async def feedback(body: dict):
     if segments:
         # Re-save segment slices (they may have landed in a different label dir before)
         _save_segment_slices(src, segments)
-        _save_gap_slices(src, segments, label, dst_dir)
+        if label != "background" or settings_mod.settings.get("save_background_segments", False):
+            _save_gap_slices(src, segments, label, dst_dir)
     else:
         shutil.copy2(str(src), str(dst_dir / src.name))
 
@@ -200,6 +290,8 @@ async def feedback(body: dict):
     if segments:
         info += f" (gaps only, {len(segments)} segments excluded)"
     print(info, flush=True)
+    # Broadcast to all WS clients so other browsers update in real time
+    _bus.broadcast({"type": "feedback_update", "filename": filename, "label": label})
     return {"ok": True}
 
 
@@ -323,7 +415,8 @@ async def feedback_segments(body: dict):
         dst_dir = DATASET_DIR / current_label
         dst_dir.mkdir(parents=True, exist_ok=True)
         if clean:
-            _save_gap_slices(src, clean, current_label, dst_dir)
+            if current_label != "background" or settings_mod.settings.get("save_background_segments", False):
+                _save_gap_slices(src, clean, current_label, dst_dir)
         else:
             # No segments left — restore full copy
             shutil.copy2(str(src), str(dst_dir / src.name))
@@ -338,6 +431,10 @@ async def feedback_segments(body: dict):
     print(f"[segments] {filename} → {len(clean)} segments"
           + (f" (cleaned {removed} old files)" if removed else ""),
           flush=True)
+    # Broadcast to all WS clients so other browsers update in real time
+    _bus.broadcast({
+        "type": "segments_update", "filename": filename, "segments": clean,
+    })
     return {"ok": True, "count": len(clean)}
 
 
@@ -521,7 +618,8 @@ async def manual_event(body: dict | None = Body(None)):
         raise HTTPException(status_code=404, detail=f"Source {source_id} not found")
     ts = datetime.now(timezone.utc)
     clip_name = f"manual-{ts.strftime('%Y%m%d-%H%M%S')}.wav"
-    clip_buf.save(CLIP_DIR / clip_name)
+    clip_seconds = settings_mod.settings.get("user_event_clip_seconds", 15)
+    clip_buf.save(CLIP_DIR / clip_name, last_seconds=clip_seconds)
     clip_url = f"/clips/{clip_name}"
     ts_iso = ts.isoformat(timespec="seconds")
     meta = {
