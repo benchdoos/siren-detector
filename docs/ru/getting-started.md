@@ -23,7 +23,20 @@ cp esp32/secrets.yaml.example esp32/secrets.yaml
 
 ## 2. Прошейте ESP32
 
-Скопируйте `esp32/siren-detector.yaml` и свой `secrets.yaml` на хост с ESPHome. Проверьте конфигурацию, соберите прошивку и прошейте устройство через ESPHome. Схема подключения микрофонов описана в разделе [Несколько микрофонов](multi-microphone.md).
+На компьютере с установленным ESPHome CLI из корня репозитория проверьте и соберите конфигурацию:
+
+```bash
+esphome config esp32/siren-detector.yaml
+esphome compile esp32/siren-detector.yaml
+```
+
+Рядом с YAML-конфигурацией должен лежать `esp32/secrets.yaml` с параметрами `wifi_ssid`, `wifi_password`, `ap_password`, `udp_target_ip` и `udp_target_port` (шаблон — `esp32/secrets.yaml.example`). Для первой прошивки подключите ESP32-S3 по USB и выполните:
+
+```bash
+esphome run esp32/siren-detector.yaml
+```
+
+Выберите последовательный порт устройства, когда ESPHome предложит его. Последующие обновления можно передавать по OTA, когда устройство подключено к сети. Если сборка выполняется на другом хосте, перенесите YAML и secrets вместе, сохранив их расположение. Схема подключения микрофонов описана в разделе [Несколько микрофонов](multi-microphone.md); настройки прошивки и детектора — в [справочнике настроек](settings.md).
 
 ## 3. Запустите Hub и detector
 
@@ -50,4 +63,5 @@ Detector можно запускать напрямую через Python. Ус�
 
 - Подключите USB-микрофон по инструкции [Несколько микрофонов](multi-microphone.md).
 - Посмотрите раздел [Эксплуатация](operations.md), чтобы настроить MQTT и развёртывание.
+- Изучите [настройки детектора](settings.md) и [HTTP/WebSocket API](api.md).
 - Используйте раздел [Данные и модели](data-and-models.md), чтобы записать примеры и переобучить классификатор.
