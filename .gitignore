@@ -16,6 +16,8 @@ __pycache__/
 package-lock.json
 /site/
 /.docs-venv/
+/TO_THINK_ABOUT.md
+/NEW_FEATURES.md
 
 # Audio datasets are large and may have separate redistribution licenses.
 /dataset/external/esc50/audio/
