@@ -31,8 +31,6 @@ if TYPE_CHECKING:
 class EngineInterface(Protocol):
     """Contract that every detection engine must satisfy."""
 
-    ENGINE_MANIFEST: EngineManifest
-
     def start(self, runtime: RuntimeHub, settings: dict, args: argparse.Namespace) -> None:
         """Start the engine, normally in a background thread.
 
@@ -44,3 +42,9 @@ class EngineInterface(Protocol):
         source and clip state. New engines should avoid using it directly.
         """
         ...
+
+
+class ManifestedEngineInterface(EngineInterface, Protocol):
+    """Engine contract for named registrations with discovery metadata."""
+
+    ENGINE_MANIFEST: EngineManifest

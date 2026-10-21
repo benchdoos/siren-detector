@@ -206,13 +206,32 @@ Detector internals and is not yet a portable public SDK.
 
 ### `engine-manifest.v1`
 
-Each engine declares an `ENGINE_MANIFEST` with a stable `engine_id`, name,
+Each registered engine declares an `ENGINE_MANIFEST` with a stable `engine_id`, name,
 `MAJOR.MINOR.PATCH` version, classes, input/output contracts, a JSON Schema for
 settings, resource requirements, and Python entrypoint. Inspect the built-in
 manifest with `python -m detector.main --engine yamnet --show-engine-manifest`.
 A third-party engine can declare the same `EngineManifest` on its class. The
 manifest is not yet exposed through the API/UI, and its settings schema does
 not yet drive the Settings form.
+
+An embedding application can register a short selector before startup:
+
+```python
+from detector.engine.registry import engine_registry
+from detector.main import main
+
+engine_registry.register("my-engine", "mypackage.engine.MyEngine")
+main()  # start with --engine my-engine
+```
+
+A registered engine must declare `ENGINE_MANIFEST`, and its `engine_id` must
+match the selector. List built-in and registered names with
+`python -m detector.main --list-engines`.
+
+The current CLI also accepts a class dotted path directly. This preserves the
+older `start(runtime, settings, args)` interface; a class without
+`ENGINE_MANIFEST` loads with a warning. The registry imports Python code in the
+same process, so the package must be installed locally.
 
 A component declares a stable ID, type, version, supported contract versions,
 its settings schema, and capabilities. Settings are scoped globally, per
@@ -253,9 +272,12 @@ routes those to `EventBusOutput`, which preserves the old format for
 `EventBus` (`detector/bus.py`), WebSocket, and integrations. Buffers and DSP
 preprocessing remain in `yamnet_engine.py`; policy lives in
 `detector/engine/event_policy.py`, and WAV/sidecar persistence goes through
-`WavClipStorage` via Runtime Hub. The policy still has no public contract or
-registry. UDP Hub is a separate network relay. `RuntimeMessage` wraps the
-legacy payload and does not yet define the final public `v1` schema.
+`WavClipStorage` via Runtime Hub. Policy follows `event-policy.v1`. Engines
+load through `detector/engine/registry.py`: `yamnet` is registered by name,
+while third-party classes can be registered in code or passed as a dotted path
+to `--engine`. A class without a manifest remains available through the legacy
+interface with a warning. UDP Hub is a separate network relay. `RuntimeMessage`
+wraps the legacy payload and does not yet define the final public `v1` schema.
 
 Recommended migration:
 
