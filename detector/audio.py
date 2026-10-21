@@ -49,11 +49,16 @@ class ClipBuffer:
             self._buf.extend(samples.tolist())
 
     def save(self, path: Path, last_seconds: float | None = None) -> None:
+        audio = self.snapshot(last_seconds)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        sf.write(str(path), audio, SAMPLE_RATE, subtype="PCM_16")
+
+    def snapshot(self, last_seconds: float | None = None) -> np.ndarray:
+        """Return a consistent copy of buffered audio, optionally tail-limited."""
         with self._lock:
             audio = np.array(self._buf, dtype=np.float32)
         if last_seconds is not None:
             max_samples = int(last_seconds * SAMPLE_RATE)
             if len(audio) > max_samples:
                 audio = audio[-max_samples:]
-        path.parent.mkdir(parents=True, exist_ok=True)
-        sf.write(str(path), audio, SAMPLE_RATE, subtype="PCM_16")
+        return audio

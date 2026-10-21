@@ -53,7 +53,7 @@ Runtime Hub в legacy EventBus, на который подписаны WebSocket
 
 ## Текущий конвейер детектора
 
-Текущий движок использует отдельный YAMNet + MLP inference stage; DSP/TFLite остаётся предварительным фильтром. Stage возвращает `inference-result.v1` через Runtime Hub. Отдельная `EventPolicy` применяет пороги и сглаживание, управляет клипами и публикует legacy score/event обратно через Hub в `EventBusOutput`. Политика отделена от engine, но пока остаётся реализацией проекта, а не подключаемым API.
+Текущий движок использует отдельный YAMNet + MLP inference stage; DSP/TFLite остаётся предварительным фильтром. Stage возвращает `inference-result.v1` через Runtime Hub. `EventPolicy` применяет пороги и сглаживание, а запись клипов передаёт через Hub в `WavClipStorage`. Legacy score/event идут через Hub в `EventBusOutput`. Политика отделена от engine, но пока остаётся реализацией проекта, а не подключаемым API.
 
 Python-пакет разделён на транспорт, engine, сервер и интеграции, связанные
 `EventBus`. Однако это пока не означает, что любой слой уже можно подменить

@@ -206,10 +206,11 @@ and metadata back through the Hub. The current policy receives it through the
 Hub, applies smoothing, and publishes legacy score/event messages. The Hub
 routes those to `EventBusOutput`, which preserves the old format for
 `EventBus` (`detector/bus.py`), WebSocket, and integrations. Buffers and DSP
-preprocessing remain in `yamnet_engine.py`; policy now lives in
-`detector/engine/event_policy.py` but has no public contract or registry yet.
-UDP Hub is a separate network relay. `RuntimeMessage` wraps the legacy payload
-and does not yet define the final public `v1` schema.
+preprocessing remain in `yamnet_engine.py`; policy lives in
+`detector/engine/event_policy.py`, and WAV/sidecar persistence goes through
+`WavClipStorage` via Runtime Hub. The policy still has no public contract or
+registry. UDP Hub is a separate network relay. `RuntimeMessage` wraps the
+legacy payload and does not yet define the final public `v1` schema.
 
 Recommended migration:
 
@@ -218,8 +219,8 @@ Recommended migration:
    the SDR1 network format.
 3. [~] Move YAMNet + MLP inference into a stage with `inference-result.v1`;
    extract DSP/buffers and register the full chain as a pipeline provider.
-4. [~] Extract the current event policy; define a shared policy contract and
-   separate output/storage adapters for events and clips.
+4. [~] Extract the current event policy and clip storage; define a shared policy
+   contract and output adapters for events.
 5. Add configurable routing and a second independent component, then update
    the management UI and APIs.
 

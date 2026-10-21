@@ -18,6 +18,7 @@ import uvicorn
 from .bus import EventBus
 from .config import WEB_PORT
 from .integrations.mqtt import mqtt_connect, mqtt_subscribe
+from .runtime.clip_storage import WavClipStorage
 from .runtime.hub import RuntimeHub
 from .server.app import create_app
 from .settings import load_settings
@@ -62,6 +63,7 @@ def main() -> None:
 
     bus = EventBus()
     runtime = RuntimeHub(bus)
+    runtime.set_clip_storage(WavClipStorage())
     runtime.add_input(UDPSourceAdapter(args.bind, args.port))
     settings = load_settings()
 
