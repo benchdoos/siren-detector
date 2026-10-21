@@ -341,10 +341,9 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
 
 Рекомендуемый порядок реализации:
 
-1. [~] Описать и валидировать структуру `engine-graph.v1`, настройки по
-   поддерживаемой части JSON Schema и ссылки маршрутов; неизвестные поля
-   сохраняются, ошибки типов возвращаются API как `400`. Нужна полная проверка
-   схемы и финальная спецификация сохранения неизвестных полей.
+1. [x] Описать и валидировать структуру `engine-graph.v1`, настройки по JSON
+   Schema draft из manifest и ссылки маршрутов; неизвестные graph/entry поля
+   сохраняются, ошибки типов возвращаются API как `400`.
 2. [x] Добавить хранение `engine_configs[engine_id].settings` и маршрутов через
    `/api/engine-graph`; старые плоские настройки остаются fallback. Неизвестные
    поля сохраняются.
@@ -358,10 +357,9 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
    policy по движку и передавать policy настройки конкретного graph entry без
    записи в process-level settings. Совместимый score/event stream остаётся общим,
    сообщения содержат `engine_id`.
-6. [~] API показывает локальные manifests и сохранённый graph и валидирует
-   документированный поднабор JSON Schema; UI показывает недоступный selector,
-   редактирует массивы/объекты как JSON и lifecycle прямо в карточках. Расширять
-   схему при появлении manifest-полей, которым нужны другие assertion keywords.
+6. [x] API показывает локальные manifests и сохранённый graph и валидирует
+   JSON Schema draft из manifest; UI показывает недоступный selector,
+   редактирует массивы/объекты как JSON и lifecycle прямо в карточках.
 7. [x] Settings-раздел «Решения» поддерживает включение, manifest settings,
    маршруты, lifecycle/errors в карточке и удаление недоступного selector.
    Runtime panel показывает здоровье audio subscribers.

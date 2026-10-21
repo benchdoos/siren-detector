@@ -197,7 +197,7 @@ class EngineGraphTests(unittest.TestCase):
         )
         validate_settings_schema({"energy_event_threshold": 0.11}, energy_manifest.settings_schema)
         validate_settings_schema({"siren_threshold": 0.22}, yamnet_manifest.settings_schema)
-        with self.assertRaisesRegex(ValueError, "unknown engine settings"):
+        with self.assertRaisesRegex(ValueError, "Additional properties are not allowed"):
             validate_settings_schema(
                 {"energy_event_threshold": 0.11},
                 {"type": "object", "properties": {}, "additionalProperties": False},
@@ -272,12 +272,37 @@ class EngineGraphTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 validate_settings_schema(value, schema)
 
-    def test_unsupported_schema_assertions_are_rejected(self) -> None:
-        with self.assertRaisesRegex(ValueError, "unsupported JSON Schema keyword 'format'"):
+    def test_full_schema_composition_keywords_are_supported(self) -> None:
+        schema = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+                "mode": {"enum": ["fixed", "adaptive"]},
+                "threshold": {"type": "number", "minimum": 0, "maximum": 1},
+            },
+            "required": ["mode", "threshold"],
+            "if": {"properties": {"mode": {"const": "fixed"}}},
+            "then": {"properties": {"threshold": {"const": 0.5}}},
+        }
+        validate_settings_schema({"mode": "fixed", "threshold": 0.5}, schema)
+        with self.assertRaisesRegex(ValueError, "engine settings.threshold"):
+            validate_settings_schema({"mode": "fixed", "threshold": 0.4}, schema)
+        with self.assertRaisesRegex(ValueError, "invalid engine settings schema"):
+            validate_settings_schema({}, {"type": "object", "minLength": "bad"})
+
+    def test_json_schema_local_references_work_and_remote_references_fail_cleanly(self) -> None:
+        local_schema = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "$defs": {"threshold": {"type": "number", "minimum": 0}},
+            "properties": {"threshold": {"$ref": "#/$defs/threshold"}},
+        }
+        validate_settings_schema({"threshold": 0.5}, local_schema)
+        with self.assertRaisesRegex(ValueError, "cannot resolve JSON Schema reference"):
             validate_settings_schema(
-                {"endpoint": "https://example.test"},
+                {"value": 1},
                 {"type": "object", "properties": {
-                    "endpoint": {"type": "string", "format": "uri"},
+                    "value": {"$ref": "https://example.invalid/schema.json"},
                 }},
             )
 
