@@ -68,6 +68,14 @@ Legacy message formats are described in code and partly in
 [`detector/engine/interface.py`](../../detector/engine/interface.py), but are
 not yet a versioned public contract.
 
+When `engine_configs` is non-empty, startup uses the stored `engine-graph.v1`:
+each engine assigned to a route starts once with its own settings, and Runtime
+Hub applies `default`/`by_source` to its audio subscription. The graph takes
+effect after restart. An explicit `--engine` is rejected while a graph is
+active. The same Python class cannot be assigned multiple `engine_id` values
+until its state is isolated. Settings UI does not manage the graph yet; it can
+be read and changed through the REST API.
+
 The target boundaries and formats are described in the [component API](component-api.md).
 The application HTTP and WebSocket interfaces are covered separately in the
 [API reference](api.md); current runtime options are in the [settings reference](settings.md).

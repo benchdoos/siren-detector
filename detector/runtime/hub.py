@@ -12,6 +12,7 @@ from typing import Protocol
 from ..bus import EventBus
 from .contracts import AudioFrame, ClipSaveRequest, InferenceResult, RuntimeMessage
 from .policies import EventPolicy
+from .engine_graph import route_for_source, validate_graph
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class AudioSubscription:
     max_queue_size: int = 8
     overflow: str = "drop_oldest"
     source_ids: frozenset[int] | None = None
+    engine_id: str | None = None
     _queue: queue.Queue = field(init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
     _thread: threading.Thread = field(init=False, repr=False)
@@ -95,6 +97,7 @@ class AudioSubscription:
                 "queue_capacity": self.max_queue_size,
                 "overflow": self.overflow,
                 "source_ids": sorted(self.source_ids) if self.source_ids is not None else None,
+                "engine_id": self.engine_id,
                 "frames_received": self.frames_received,
                 "frames_processed": self.frames_processed,
                 "frames_dropped": self.frames_dropped,
@@ -202,6 +205,7 @@ class RuntimeHub:
         self._subscriptions_lock = threading.RLock()
         self._components: dict[str, dict] = {}
         self._event_policies: dict[str, EventPolicy] = {}
+        self._engine_graph: dict | None = None
         self._clip_storage: ClipStorageAdapter | None = None
         self._inputs: list[AudioInputAdapter] = []
         self._started_inputs: set[int] = set()
@@ -240,6 +244,7 @@ class RuntimeHub:
         max_queue_size: int = 8,
         overflow: str = "drop_oldest",
         source_ids: set[int] | frozenset[int] | None = None,
+        engine_id: str | None = None,
     ) -> AudioSubscription:
         """Register an isolated consumer with a bounded, non-blocking queue.
 
@@ -250,6 +255,9 @@ class RuntimeHub:
             if subscriber_id is None:
                 subscriber_id = f"audio-subscriber-{self._next_subscription_id}"
                 self._next_subscription_id += 1
+            if (engine_id is None and self._engine_graph is not None
+                    and subscriber_id in self._engine_graph["engine_configs"]):
+                engine_id = subscriber_id
             if subscriber_id in self._audio_subscriptions:
                 raise ValueError(f"Audio subscriber {subscriber_id!r} already exists")
             subscription = AudioSubscription(
@@ -258,6 +266,7 @@ class RuntimeHub:
                 max_queue_size=max_queue_size,
                 overflow=overflow,
                 source_ids=frozenset(source_ids) if source_ids is not None else None,
+                engine_id=engine_id,
             )
             self._audio_subscriptions[subscriber_id] = subscription
             component = self._components.get(subscriber_id)
@@ -358,9 +367,20 @@ class RuntimeHub:
         with self._subscriptions_lock:
             subscriptions = tuple(self._audio_subscriptions.values())
         for subscription in subscriptions:
-            if subscription.source_ids is None or frame.source_id in subscription.source_ids:
+            source_allowed = (
+                subscription.source_ids is None or frame.source_id in subscription.source_ids
+            )
+            route = (
+                self._engine_graph is None or subscription.engine_id is None
+                or subscription.engine_id in route_for_source(self._engine_graph, frame.source_id)
+            )
+            if source_allowed and route:
                 subscription.submit(frame)
         self.broadcast_audio(frame.samples, frame.source_id)
+
+    def configure_engine_graph(self, graph: dict) -> None:
+        """Apply source-to-engine routing before any engine subscribes."""
+        self._engine_graph = validate_graph(graph)
 
     def set_event_policy(self, policy: EventPolicy, engine_id: str = "default") -> None:
         """Select the policy for one engine's inference results."""

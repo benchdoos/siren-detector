@@ -76,14 +76,23 @@ async def get_engine_graph():
     graph = _stored_engine_graph()
     manifests = engine_registry.manifests()
     by_id = {item["engine_id"]: item for item in manifests}
-    configs = {}
+    availability = {}
     for engine_id, config in graph["engine_configs"].items():
         manifest = by_id.get(engine_id)
+        if not manifest:
+            try:
+                _engine_class, resolved = engine_registry.resolve(config["selector"])
+                manifest = ({"selector": config["selector"], **resolved.to_dict()}
+                            if resolved else None)
+            except (AttributeError, ImportError, TypeError, ValueError):
+                manifest = None
         available = bool(manifest and manifest["selector"] == config["selector"])
-        configs[engine_id] = {
-            **config, "available": available, "manifest": manifest if available else None,
+        if manifest and manifest.get("engine_id") != engine_id:
+            available = False
+        availability[engine_id] = {
+            "available": available, "manifest": manifest if available else None,
         }
-    return {**graph, "engine_configs": configs}
+    return {**graph, "availability": availability}
 
 
 @router.put("/api/engine-graph", dependencies=[Depends(require_admin)])
@@ -91,13 +100,15 @@ async def put_engine_graph(body: dict = Body(...)):
     """Validate and persist graph configuration, retaining extension fields."""
     try:
         graph = validate_graph(body)
-        manifests = engine_registry.manifests()
-        by_selector = {item["selector"]: item for item in manifests}
         active_implementations: dict[str, str] = {}
         for engine_id, config in graph["engine_configs"].items():
-            manifest = by_selector.get(config["selector"])
-            if not manifest:
+            try:
+                engine_class, resolved = engine_registry.resolve(config["selector"])
+            except (AttributeError, ImportError, TypeError, ValueError):
                 continue  # Keep unavailable local selectors visible for later repair.
+            if resolved is None:
+                continue
+            manifest = resolved.to_dict()
             if manifest["engine_id"] != engine_id:
                 raise ValueError(
                     f"engine_id {engine_id!r} does not match selector manifest ID "
@@ -105,7 +116,7 @@ async def put_engine_graph(body: dict = Body(...)):
                 )
             validate_settings_schema(config["settings"], manifest["settings_schema"])
             if config["enabled"]:
-                implementation = manifest["launch"].get("entrypoint", config["selector"])
+                implementation = (engine_class.__module__, engine_class.__qualname__)
                 previous = active_implementations.get(implementation)
                 if previous:
                     raise ValueError(

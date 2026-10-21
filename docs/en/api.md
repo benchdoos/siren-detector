@@ -55,8 +55,9 @@ timeouts and forced interruption of Python callbacks are not supported.
 
 `GET /api/engines/manifests` lists locally registered engines.
 `GET/PUT /api/engine-graph` read and store graph configuration while preserving
-unknown fields. A stored graph does not yet start engines; the active runtime
-still uses the single `--engine` selector.
+unknown fields. A stored graph is activated after the detector restarts and
+selects engines and source routes. When a graph is active, an explicit
+`--engine` is rejected so there is one source of engine selection.
 
 ## WebSocket
 

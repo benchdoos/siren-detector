@@ -311,10 +311,13 @@ event policy по `engine_id`.
 
 ## Текущая реализация и переход
 
-Сейчас `detector/main.py` выбирает один engine через `--engine` и регистрирует
-`UDPSourceAdapter` в Runtime Hub. Адаптер публикует `AudioFrame`; engine
+Если граф движков отсутствует, `detector/main.py` сохраняет legacy-режим с одним
+engine через `--engine`. Если задан `engine_configs`, main запускает движки,
+назначенные маршрутам, с отдельными settings; активный `--engine` при этом
+запрещён. Runtime Hub применяет маршруты `default`/`by_source` к аудиоподпискам.
+`UDPSourceAdapter` публикует `AudioFrame`; engine
 подписывается на кадры, а YAMNet + MLP stage публикует `InferenceResult` с
-`source_id`, `stage_id`, timestamp, namespaced scores и metadata обратно через
+`source_id`, `engine_id`, `stage_id`, timestamp, namespaced scores и metadata обратно через
 Hub. Текущая политика получает результат через Hub, применяет сглаживание и
 публикует score/event в legacy-формате. Hub направляет итог в `EventBusOutput`,
 который сохраняет старый формат для `EventBus` (`detector/bus.py`), WebSocket и

@@ -176,6 +176,7 @@ class EnergyThresholdEngine:
 
         runtime.subscribe_audio(
             on_audio_frame, subscriber_id=ENGINE_MANIFEST.engine_id,
+            engine_id=ENGINE_MANIFEST.engine_id,
         )
         logger.info(
             "Started energy threshold example (event %.3f, release %.3f)",
