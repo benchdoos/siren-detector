@@ -26,10 +26,16 @@ class AudioFrame:
     sample_format: Literal["float32"] = "float32"
 
     def __post_init__(self) -> None:
+        if self.contract != "audio-frame.v1":
+            raise ValueError(f"unsupported audio frame contract: {self.contract!r}")
         if self.sample_rate_hz <= 0:
             raise ValueError("sample_rate_hz must be positive")
+        if self.sequence < 0:
+            raise ValueError("sequence must be non-negative")
         if self.channels != 1:
             raise ValueError("audio-frame.v1 currently supports mono audio only")
+        if self.sample_format != "float32":
+            raise ValueError(f"unsupported audio sample format: {self.sample_format!r}")
         if (not isinstance(self.samples, np.ndarray) or self.samples.ndim != 1
                 or self.samples.dtype != np.float32):
             raise ValueError("samples must be a one-dimensional float32 array")
@@ -48,6 +54,8 @@ class InferenceResult:
     contract: Literal["inference-result.v1"] = "inference-result.v1"
 
     def __post_init__(self) -> None:
+        if self.contract != "inference-result.v1":
+            raise ValueError(f"unsupported inference result contract: {self.contract!r}")
         if not self.engine_id.strip():
             raise ValueError("engine_id must not be empty")
         if not self.stage_id.strip():

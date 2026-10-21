@@ -74,6 +74,20 @@ In a real API, `samples` should be a binary block or an internal object, not
 JSON-encoded. The frame carries enough timing and sequence information to
 detect gaps and preserve order.
 
+The current implementation accepts only `audio-frame.v1`, mono float32 PCM,
+and rejects an unknown version or format when constructing a frame. SDR1/UDP
+reconstructs missing input packets as silence. If a bounded processor queue
+still drops frames, `audio-subscription.v1` counts dropped frames and sequence
+gaps. After five seconds without packets, the input resets its expected
+sequence and accepts a reconnecting source at its new sequence number.
+
+A callback failure is isolated to that subscriber's queue: it increments the
+error count, marks the subscriber `degraded`, and the next successful callback
+returns it to `ready`. An engine startup failure is reported as `error` without
+preventing other engines from starting. A contract version change requires
+explicit support: current dataclasses reject unknown versions with `ValueError`
+so an incompatible frame/result cannot silently enter processing.
+
 ### Runtime Hub / router
 
 Runtime Hub works in both directions:
