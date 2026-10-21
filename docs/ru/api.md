@@ -18,6 +18,7 @@ REST API обслуживается тем же сервером, что и ве
 | `POST /api/auth/check` | Публичный | Проверяет токен из JSON-тела `{"token":"…"}`. |
 | `GET /api/settings` | Viewer | Текущие настройки, defaults и доступность DSP-модели. |
 | `GET /api/runtime/status` | Viewer | Состояние аудиоподписчиков, глубина очередей, пропуски и ошибки callback. |
+| `GET /metrics` | Viewer | Prometheus 0.0.4: состояние движков, аудиоочередей и выходов. |
 | `GET /api/engines/manifests` | Viewer | Manifests локально зарегистрированных решений. |
 | `GET /api/engine-graph` | Viewer | Сохранённый граф и доступность настроенных решений. |
 | `PUT /api/engine-graph` | Admin | Проверяет и сохраняет конфигурацию `engine-graph.v1`. |

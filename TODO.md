@@ -470,7 +470,7 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
 - [x] Web UI
 - [x] WebSocket
 - [x] REST API
-- [ ] Метрики prometheus
+- [x] Prometheus-метрики runtime движков, аудиоподписок и выходных адаптеров.
 - [x] Webhooks — отправка событий на HTTP-адреса внешних систем.
 - [x] Описать и применять общую схему события `detector-event.v1`; legacy события
   нормализуются, неизвестная версия и невалидные обязательные поля отклоняются.

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 
 from ..auth import AUTH_ENABLED, check_token, require_admin, require_viewer
 from ..config import (
@@ -27,6 +27,7 @@ from .. import settings as settings_mod
 from ..engine.registry import engine_registry
 from ..runtime.engine_graph import EMPTY_GRAPH, validate_graph, validate_settings_schema
 from ..runtime.contracts import normalize_detector_event
+from ..runtime.metrics import render_runtime_metrics
 from .routes_clips import save_clip_meta, _load_clip_meta
 
 if TYPE_CHECKING:
@@ -56,6 +57,20 @@ async def get_runtime_status():
         "subscribers": _runtime.audio_status(),
         "outputs": _runtime.output_status(),
     }
+
+
+@router.get("/metrics", dependencies=[Depends(require_viewer)])
+async def get_prometheus_metrics():
+    """Expose Runtime Hub diagnostics in Prometheus text format."""
+    status = {
+        "components": _runtime.component_status() if _runtime is not None else [],
+        "subscribers": _runtime.audio_status() if _runtime is not None else [],
+        "outputs": _runtime.output_status() if _runtime is not None else [],
+    }
+    return PlainTextResponse(
+        render_runtime_metrics(status),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
 
 
 @router.get("/api/engines/manifests", dependencies=[Depends(require_viewer)])
