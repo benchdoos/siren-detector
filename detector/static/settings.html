@@ -50,6 +50,20 @@
   .s-tooltip .s-tip-default { color: #4caf50; }
   .dsp-warning { margin: 2px 0 10px 160px; padding: 7px 9px; border: 1px solid #6b531d; border-radius: 4px; background: #29220f; color: #ffd166; font-size: 12px; line-height: 1.45; }
   .dsp-warning[hidden] { display: none; }
+  .engine-card { border: 1px solid #292929; background: #171717; border-radius: 7px; padding: 14px; margin-bottom: 12px; }
+  .engine-card-head { display: flex; align-items: flex-start; gap: 10px; }
+  .engine-card-head input { margin-top: 4px; accent-color: #4caf50; }
+  .engine-card-title { flex: 1; min-width: 0; }
+  .engine-card-title h3 { font-size: 14px; font-weight: 600; color: #ddd; }
+  .engine-card-title code, .engine-meta { font-size: 11px; color: #777; }
+  .engine-settings { border-top: 1px solid #292929; margin-top: 12px; padding-top: 10px; }
+  .engine-settings .s-row label { width: 190px; }
+  .engine-routes { display: flex; flex-direction: column; gap: 7px; }
+  .engine-route-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #292929; background: #171717; border-radius: 5px; font-size: 12px; }
+  .engine-route-row input { accent-color: #4caf50; }
+  .engine-error { margin-top: 8px; color: #ef9a9a; font-size: 12px; line-height: 1.5; }
+  .engine-remove { background: none; border: 1px solid #633; color: #e88; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px; }
+  .engine-restart-note { border: 1px solid #6b531d; background: #29220f; color: #ffd166; border-radius: 5px; padding: 9px 11px; font-size: 12px; line-height: 1.5; margin: 0 0 14px; }
 
   /* ── Buttons ── */
   .btn-save { background: #1a3a1a; border: 1px solid #4caf50; color: #4caf50; padding: 6px 20px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; width: 100%; }
@@ -136,6 +150,7 @@
     <button class="sp-nav-item" data-panel="sp-smoothing" onclick="switchPanel(this)">Smoothing</button>
     <button class="sp-nav-item" data-panel="sp-clips" onclick="switchPanel(this)">Clips</button>
     <button class="sp-nav-item" data-panel="sp-sources" onclick="switchPanel(this)">Sources</button>
+    <button class="sp-nav-item" data-panel="sp-engines" onclick="switchPanel(this); if (!_engineGraph) loadEngineGraph()">Engines</button>
     <button class="sp-nav-item" data-panel="sp-runtime" onclick="switchPanel(this)">Runtime</button>
     <button class="sp-nav-item" data-panel="sp-calibration" onclick="switchPanel(this)">Calibration</button>
     <button class="sp-nav-item" data-panel="sp-about" onclick="switchPanel(this)">About</button>
@@ -268,6 +283,31 @@
       </div>
     </div>
 
+    <!-- Engine graph -->
+    <div class="sp-panel" id="sp-engines">
+      <div class="s-section">
+        <div class="s-title">Detection Engines</div>
+        <p style="font-size:12px;color:#666;margin:0 0 12px;line-height:1.5">Enable locally available engines, edit their manifest-defined settings, and choose which audio sources they receive.</p>
+        <div class="engine-restart-note">Changes take effect after the detector restarts. Engine code can only be registered locally; this page does not install or import code.</div>
+        <div id="engine-cards"><div style="font-size:13px;color:#666">Loading engines...</div></div>
+      </div>
+      <div class="s-section">
+        <div class="s-title">Default sources</div>
+        <p style="font-size:12px;color:#666;margin:0 0 10px;line-height:1.5">This route applies to sources without a specific rule.</p>
+        <div class="engine-routes" id="engine-default-route"></div>
+      </div>
+      <div class="s-section">
+        <div class="s-title">Per-source routes</div>
+        <p style="font-size:12px;color:#666;margin:0 0 10px;line-height:1.5">Each source rule replaces the default list completely.</p>
+        <div id="engine-source-routes"></div>
+      </div>
+      <div class="sp-panel-footer">
+        <button class="btn-reset-panel" onclick="loadEngineGraph()">Reload</button>
+        <button class="btn-save" style="width:auto" onclick="saveEngineGraph()">Save engine graph</button>
+        <span class="sp-status" id="status-engines"></span>
+      </div>
+    </div>
+
     <!-- Runtime -->
     <div class="sp-panel" id="sp-runtime">
       <div class="s-section">
@@ -384,6 +424,12 @@ const PANEL_KEYS = {
 let _defaults = {};
 let _loaded = {};   // values as loaded from server (strings)
 let _dspAvailable = true;
+let _engineGraph = null;
+let _engineGraphBaseline = '';
+let _engineManifests = [];
+let _engineSources = [];
+let _engineAvailability = {};
+let _legacySettings = {};
 
 /* ── Navigation ── */
 function switchPanel(btn) {
@@ -398,6 +444,7 @@ function hasUnsaved() {
     const el = document.getElementById('s-' + k);
     if (el && el.value !== _loaded[k]) return true;
   }
+  if (_engineGraph && JSON.stringify(_engineGraph) !== _engineGraphBaseline) return true;
   return false;
 }
 
@@ -465,6 +512,237 @@ async function loadSettings() {
   }
 }
 
+/* ── Engine graph ── */
+function cleanGraphForSave(graph = _engineGraph) {
+  if (!graph) return null;
+  const copy = {...graph};
+  delete copy.availability;
+  return copy;
+}
+
+function engineGraphDefaults() {
+  return {contract: 'engine-graph.v1', engine_configs: {},
+    engine_routes: {default: [], by_source: {}}};
+}
+
+async function loadEngineGraph() {
+  const cards = document.getElementById('engine-cards');
+  cards.innerHTML = '<div style="font-size:13px;color:#666">Loading engines...</div>';
+  try {
+    const [graphRes, manifestRes, sourceRes, runtimeRes, settingsRes] = await Promise.all([
+      fetch('/api/engine-graph', {headers: adminHeaders()}),
+      fetch('/api/engines/manifests', {headers: adminHeaders()}),
+      fetch('/api/sources', {headers: adminHeaders()}),
+      fetch('/api/runtime/status', {headers: adminHeaders()}),
+      fetch('/api/settings', {headers: adminHeaders()}),
+    ]);
+    for (const res of [graphRes, manifestRes, sourceRes, runtimeRes, settingsRes]) {
+      if (!res.ok) throw new Error(res.status === 401 ? 'Authentication required' : `Request failed (${res.status})`);
+    }
+    const [graphData, manifestData, sourceData, runtimeData, settingsData] = await Promise.all([
+      graphRes.json(), manifestRes.json(), sourceRes.json(), runtimeRes.json(), settingsRes.json(),
+    ]);
+    _engineManifests = manifestData.manifests || [];
+    _engineSources = sourceData.sources || [];
+    _engineAvailability = graphData.availability || {};
+    _legacySettings = settingsData;
+    _engineGraph = cleanGraphForSave(graphData) || engineGraphDefaults();
+    _engineGraph.engine_configs ||= {};
+    _engineGraph.engine_routes ||= {default: [], by_source: {}};
+    _engineGraph.engine_routes.default ||= [];
+    _engineGraph.engine_routes.by_source ||= {};
+    _engineGraphBaseline = JSON.stringify(_engineGraph);
+
+    // Seed an unsaved graph from the engine that is currently running.
+    if (!Object.keys(_engineGraph.engine_configs).length) {
+      const running = (runtimeData.components || []).find(c =>
+        _engineManifests.some(m => m.engine_id === c.component_id));
+      const seed = _engineManifests.find(m => m.engine_id === running?.component_id)
+        || _engineManifests.find(m => m.engine_id === 'yamnet');
+      if (seed) {
+        const seedSettings = {};
+        for (const key of Object.keys(seed.settings_schema?.properties || {})) {
+          if (settingsData[key] !== undefined) seedSettings[key] = settingsData[key];
+        }
+        _engineGraph.engine_configs[seed.engine_id] = {
+          selector: seed.selector, enabled: true, settings: seedSettings,
+        };
+        _engineGraph.engine_routes.default = [seed.engine_id];
+        _engineAvailability[seed.engine_id] = {available: true, manifest: seed};
+      }
+    }
+    renderEngineGraph();
+  } catch (err) {
+    cards.innerHTML = `<div style="font-size:13px;color:#ef5350">${esc(err.message || 'Failed to load engines')}</div>`;
+  }
+}
+
+function graphManifest(engineId, config) {
+  const availability = _engineAvailability[engineId];
+  if (availability?.manifest) return availability.manifest;
+  return _engineManifests.find(m => m.engine_id === engineId && m.selector === config?.selector) || null;
+}
+
+function ensureEngineConfig(engineId) {
+  if (_engineGraph.engine_configs[engineId]) return _engineGraph.engine_configs[engineId];
+  const manifest = _engineManifests.find(m => m.engine_id === engineId);
+  if (!manifest) return null;
+  const settings = {};
+  for (const [key, spec] of Object.entries(manifest.settings_schema?.properties || {})) {
+    if (spec.default !== undefined) settings[key] = spec.default;
+  }
+  const config = {selector: manifest.selector, enabled: true, settings};
+  _engineGraph.engine_configs[engineId] = config;
+  return config;
+}
+
+function renderEngineGraph() {
+  if (!_engineGraph) return;
+  const configs = _engineGraph.engine_configs;
+  const known = new Map(_engineManifests.map(m => [m.engine_id, m]));
+  const ids = [...new Set([...known.keys(), ...Object.keys(configs)])].sort();
+  const cards = document.getElementById('engine-cards');
+  if (!ids.length) {
+    cards.innerHTML = '<div style="font-size:13px;color:#666">No locally registered engines are available.</div>';
+  } else {
+    cards.innerHTML = ids.map(id => {
+      const config = configs[id];
+      const manifest = config ? graphManifest(id, config) : known.get(id);
+      const enabled = Boolean(config?.enabled);
+      const selector = config?.selector || manifest?.selector || '';
+      const unavailable = Boolean(config && !manifest);
+      const settings = config?.settings || {};
+      const fields = manifest && config ? Object.entries(manifest.settings_schema?.properties || {}).map(([key, spec]) => {
+        const value = settings[key] ?? _legacySettings[key] ?? spec.default ?? '';
+        let control;
+        if (spec.enum) {
+          control = `<select data-engine-id="${esc(id)}" data-setting="${esc(key)}">${spec.enum.map(v =>
+            `<option value="${esc(String(v))}" ${String(value) === String(v) ? 'selected' : ''}>${esc(String(v))}</option>`).join('')}</select>`;
+        } else if (spec.type === 'boolean') {
+          control = `<input type="checkbox" data-engine-id="${esc(id)}" data-setting="${esc(key)}" ${value ? 'checked' : ''}>`;
+        } else if (spec.type === 'number' || spec.type === 'integer') {
+          control = `<input type="number" data-engine-id="${esc(id)}" data-setting="${esc(key)}" value="${esc(String(value))}" ${spec.minimum !== undefined ? `min="${esc(String(spec.minimum))}"` : ''} ${spec.maximum !== undefined ? `max="${esc(String(spec.maximum))}"` : ''} step="${spec.type === 'integer' ? '1' : 'any'}">`;
+        } else {
+          control = `<input type="text" data-engine-id="${esc(id)}" data-setting="${esc(key)}" value="${esc(String(value))}">`;
+        }
+        return `<div class="s-row"><label>${esc(key)}</label>${control}<span class="engine-meta">${esc(spec.type || '')}${spec.default !== undefined ? ` · default ${esc(String(spec.default))}` : ''}</span></div>`;
+      }).join('') : '';
+      return `<div class="engine-card">
+        <div class="engine-card-head">
+          <input type="checkbox" class="engine-toggle" data-engine-id="${esc(id)}" ${enabled ? 'checked' : ''}>
+          <div class="engine-card-title"><h3>${esc(manifest?.name || id)}</h3><code>${esc(id)}</code>
+            ${manifest ? `<div class="engine-meta">${esc(manifest.version)} · ${esc(manifest.classes?.join(', ') || 'no classes')}</div>` : ''}
+          </div>
+          ${unavailable ? `<button class="engine-remove" data-remove-engine="${esc(id)}">Remove</button>` : ''}
+        </div>
+        ${manifest?.description ? `<p class="engine-meta" style="display:block;margin:9px 0 0 27px;line-height:1.5">${esc(manifest.description)}</p>` : ''}
+        ${unavailable ? `<div class="engine-error">Saved selector “${esc(selector)}” is not available locally. Its settings are preserved. Register the engine or remove this entry.</div>` : ''}
+        ${fields ? `<div class="engine-settings">${fields}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  const activeIds = ids.filter(id => Boolean(configs[id]?.enabled));
+  document.getElementById('engine-default-route').innerHTML = activeIds.length
+    ? activeIds.map(id => `<label class="engine-route-row"><input type="checkbox" data-default-engine="${esc(id)}" ${_engineGraph.engine_routes.default.includes(id) ? 'checked' : ''}><span>${esc(graphManifest(id, configs[id])?.name || id)}</span><code>${esc(id)}</code></label>`).join('')
+    : '<div style="font-size:12px;color:#666">Enable at least one engine to assign a default route.</div>';
+
+  const sourceRoutes = document.getElementById('engine-source-routes');
+  if (!_engineSources.length) {
+    sourceRoutes.innerHTML = '<div style="font-size:12px;color:#666">No audio sources are currently known. Source-specific routes can be added after a source connects.</div>';
+  } else {
+    sourceRoutes.innerHTML = _engineSources.map(source => {
+      const sid = String(source.source_id);
+      const custom = Object.prototype.hasOwnProperty.call(_engineGraph.engine_routes.by_source, sid);
+      const route = _engineGraph.engine_routes.by_source[sid] || [];
+      const routeOptions = activeIds.length ? activeIds.map(id =>
+        `<label class="engine-route-row"><input type="checkbox" data-source-engine="${esc(sid)}" data-engine-id="${esc(id)}" ${route.includes(id) ? 'checked' : ''} ${custom ? '' : 'disabled'}><span>${esc(graphManifest(id, configs[id])?.name || id)}</span></label>`).join('')
+        : '<div style="font-size:12px;color:#666">Enable an engine first.</div>';
+      return `<div style="margin-bottom:12px"><label class="engine-route-row"><input type="checkbox" data-source-override="${esc(sid)}" ${custom ? 'checked' : ''}><strong>${esc(source.name || `Source ${sid}`)}</strong><code>id ${esc(sid)}</code><span class="engine-meta">${custom ? 'custom route' : 'inherits default'}</span></label><div style="margin:5px 0 0 18px;display:${custom ? 'flex' : 'none'};flex-direction:column;gap:6px">${routeOptions}</div></div>`;
+    }).join('');
+  }
+
+  cards.querySelectorAll('.engine-toggle').forEach(el => el.addEventListener('change', () => {
+    const config = ensureEngineConfig(el.dataset.engineId);
+    if (!config) return;
+    config.enabled = el.checked;
+    if (!el.checked) removeEngineFromRoutes(el.dataset.engineId);
+    renderEngineGraph();
+  }));
+  cards.querySelectorAll('[data-setting]').forEach(el => el.addEventListener('change', () => {
+    const config = configs[el.dataset.engineId];
+    if (!config) return;
+    const manifest = graphManifest(el.dataset.engineId, config);
+    const spec = manifest?.settings_schema?.properties?.[el.dataset.setting] || {};
+    let value = el.type === 'checkbox' ? el.checked : el.value;
+    if (spec.type === 'number') value = Number(value);
+    if (spec.type === 'integer') value = Math.trunc(Number(value));
+    config.settings[el.dataset.setting] = value;
+  }));
+  cards.querySelectorAll('[data-remove-engine]').forEach(el => el.addEventListener('click', () => {
+    removeEngineFromRoutes(el.dataset.removeEngine);
+    delete configs[el.dataset.removeEngine];
+    renderEngineGraph();
+  }));
+  document.querySelectorAll('[data-default-engine]').forEach(el => el.addEventListener('change', () => {
+    const id = el.dataset.defaultEngine;
+    const route = new Set(_engineGraph.engine_routes.default);
+    if (el.checked) { ensureEngineConfig(id).enabled = true; route.add(id); }
+    else route.delete(id);
+    _engineGraph.engine_routes.default = [...route];
+    renderEngineGraph();
+  }));
+  document.querySelectorAll('[data-source-override]').forEach(el => el.addEventListener('change', () => {
+    const sid = el.dataset.sourceOverride;
+    if (el.checked) _engineGraph.engine_routes.by_source[sid] = [..._engineGraph.engine_routes.default];
+    else delete _engineGraph.engine_routes.by_source[sid];
+    renderEngineGraph();
+  }));
+  document.querySelectorAll('[data-source-engine]').forEach(el => el.addEventListener('change', () => {
+    const sid = el.dataset.sourceEngine;
+    const id = el.dataset.engineId;
+    const route = new Set(_engineGraph.engine_routes.by_source[sid] || []);
+    if (el.checked) { ensureEngineConfig(id).enabled = true; route.add(id); }
+    else route.delete(id);
+    _engineGraph.engine_routes.by_source[sid] = [...route];
+    renderEngineGraph();
+  }));
+}
+
+function removeEngineFromRoutes(engineId) {
+  _engineGraph.engine_routes.default = _engineGraph.engine_routes.default.filter(id => id !== engineId);
+  for (const [sid, route] of Object.entries(_engineGraph.engine_routes.by_source)) {
+    _engineGraph.engine_routes.by_source[sid] = route.filter(id => id !== engineId);
+  }
+}
+
+async function saveEngineGraph(silent = false) {
+  if (!_engineGraph) return false;
+  try {
+    const res = await fetch('/api/engine-graph', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json', ...adminHeaders()},
+      body: JSON.stringify(cleanGraphForSave()),
+    });
+    if (res.status === 401 || res.status === 403) {
+      if (!silent) showStatus('Admin access required', '#ef5350');
+      return false;
+    }
+    if (!res.ok) {
+      const error = await res.json();
+      if (!silent) showStatus(error.detail || 'Could not save engine graph', '#ef5350');
+      return false;
+    }
+    _engineGraph = await res.json();
+    _engineGraphBaseline = JSON.stringify(_engineGraph);
+    if (!silent) showStatus('Saved · restart detector to apply', '#4caf50');
+    return true;
+  } catch (err) {
+    if (!silent) showStatus('Network error', '#ef5350');
+    return false;
+  }
+}
+
 /* ── Save (all keys) ── */
 async function saveSettings() {
   const body = {};
@@ -493,7 +771,12 @@ async function saveSettings() {
         const el = document.getElementById('s-' + k);
         if (el) { _loaded[k] = el.value; el.classList.remove('changed'); }
       }
-      showStatus('Saved', '#4caf50');
+      if (_engineGraph && JSON.stringify(_engineGraph) !== _engineGraphBaseline) {
+        const graphSaved = await saveEngineGraph(true);
+        showStatus(graphSaved ? 'Settings and engine graph saved · restart detector to apply' : 'Settings saved; engine graph failed to save', graphSaved ? '#4caf50' : '#ef5350');
+      } else {
+        showStatus('Saved', '#4caf50');
+      }
     } else {
       const err = await res.json();
       showStatus(err.detail || 'Error', '#ef5350');
@@ -525,6 +808,7 @@ async function resetAllDefaults() {
     if (res.ok) {
       showStatus('All settings reset to defaults', '#ffa726');
       await loadSettings();
+      if (_engineGraph) await loadEngineGraph();
     }
   } catch(e) { showStatus('Network error', '#ef5350'); }
 }
