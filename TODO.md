@@ -243,28 +243,6 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
   (сейчас только WebSocket + MQTT; README обещает REST/API).
 - [ ] Local mode для Makefile: запуск компонентов на локальной машине как Docker так и без
 
-## Аудит данных и переобучение по TRAINING_GUIDE
-
-Рекомендации из [`ml/TRAINING_GUIDE.md`](ml/TRAINING_GUIDE.md). Подробные результаты
-аудита и сравнения — в [`ml/AUDIT.md`](ml/AUDIT.md).
-
-Итерация 1 (2026-10-13): siren 76→80%, UAV 57→66%, data leakage устранён.
-Итерация 2 (2026-10-16): mixup α=0.1 → siren 81.8%, explosion 73.3% (+2.8%).
-Итерация 3 (2026-10-18): siren ~80%, background ~82%, explosion ~68%, UAV ~68%.
-
-- [x] **Аудит aug/real соотношения**: создан `ml/audit.py` + `make audit`.
-- [x] **Уменьшить количество aug**: siren 792→166 (2×), UAV 936→160 (2×).
-  Makefile counts обновлены.
-- [x] **Class weights в loss**: формула `sqrt(N_total / N_class)`.
-- [x] **Sample weights**: real=1.0, aug/external=0.4. Объединены с class weights
-  в единый `sample_weight` (Keras не позволяет оба одновременно).
-- [x] **Undersample background**: `MAX_BG_TRAIN_WINDOWS=2000` (было 36748).
-- [x] **Проверить val split**: `source_name()` теперь strip'ит `aug_` prefix +
-  hash suffix → aug файлы попадают в тот же split. Data leakage = 0.
-- [x] **Переобучить и сравнить**: `make audit-compare` показывает дельты.
-- [x] **Mixup на embeddings**: реализован в train_classifier.py —
-  смешивание двух embeddings, λ ~ Beta(0.1, 0.1), re-shuffle каждую эпоху.
-  Результат: siren +1%, explosion +2.8%, background +0.9%.
 
 ## 10. Поддержка нескольких микрофонов — реализовано
 
