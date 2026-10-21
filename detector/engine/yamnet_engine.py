@@ -242,7 +242,7 @@ class YAMNetEngine:
         policy_context = EventPolicyContext(runtime, get_source, sources, dsp)
         event_policy = load_event_policy(args.event_policy, policy_context)
         runtime.set_event_policy(event_policy)
-        runtime.subscribe_audio(on_audio_frame)
+        runtime.subscribe_audio(on_audio_frame, subscriber_id="yamnet")
 
         print("Ready.", flush=True)
 

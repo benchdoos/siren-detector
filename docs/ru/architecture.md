@@ -36,7 +36,8 @@ INMP441 → ESP32-S3 → UDP / SDR1 → UDP Hub → Detector → Web UI / MQTT
 
 Текущий UDP Hub — небольшой сетевой ретранслятор. `UDPSourceAdapter` в Detector
 декодирует SDR1 и выдаёт `AudioFrame`; Runtime Hub направляет кадр подписчикам.
-YAMNet engine подписывается на кадры, но пока сам управляет буферами,
+YAMNet engine подписывается на кадры через отдельную ограниченную очередь;
+Runtime Hub не ждёт callback обработки. Engine сам управляет буферами,
 инференсом и сглаживанием событий. Его оценки и события проходят обратно через
 Runtime Hub в legacy EventBus, на который подписаны WebSocket и MQTT.
 

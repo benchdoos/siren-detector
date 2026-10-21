@@ -95,6 +95,37 @@ The first version can use static routing: a source is assigned to one or more
 chains. Dynamic rules, conditional stage execution, and a UI graph editor are
 later capabilities.
 
+#### Audio subscriber isolation (`audio-subscription.v1`)
+
+Each processing component receives frames through its own bounded queue and
+worker. The input adapter only fans frames out to queues; it does not wait for
+model inference. Subscribe with
+`runtime.subscribe_audio(callback, subscriber_id=..., max_queue_size=8,
+overflow="drop_oldest")`.
+
+| Field | Contract |
+|---|---|
+| `subscriber_id` | Unique within Runtime Hub; use a stable component/engine ID. |
+| `max_queue_size` | Positive number of frames; defaults to 8. Bounded to prevent unbounded latency and memory growth. |
+| `overflow` | `drop_oldest` (default, favor fresh audio) or `drop_newest`. Enqueue never blocks the input adapter. |
+| `frames_received` / `frames_processed` | Frames accepted by the subscription and frames successfully handled by its callback. |
+| `frames_dropped` | Frames lost to overflow or discarded from a pending queue during shutdown. |
+| `sequence_gaps` | Sequence gaps observed between consecutively processed frames from one source. |
+| `callback_errors` / `last_error` | Callback failures; its worker continues and does not stop other subscriptions. |
+| `state` | `starting`, `ready`, `degraded`, `stopping`, or `stopped`; a later successful frame returns `degraded` to `ready`. |
+
+`runtime.audio_status()` returns per-subscriber diagnostic snapshots. On Hub
+shutdown, inputs stop first, then pending queues are cleared and workers are
+stopped. If a callback hangs, the Hub waits up to two seconds; Python threads
+cannot be forcibly interrupted, so that daemon worker remains in `stopping`.
+Frames are shared by reference: subscribers must not mutate `frame.samples` in
+place and should copy it before transforming.
+
+Overflow loses audio only for the affected subscriber: other subscribers and
+the live-audio output continue receiving frames. Components must account for
+sequence gaps and tolerate incomplete streams. Choose queue size based on
+latency, frame rate, and inference speed.
+
 ### Processing chain
 
 Processing is configured as an ordered list of components. The default profile
