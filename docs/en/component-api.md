@@ -42,6 +42,16 @@ changing the microphone driver.
 
 ## Boundaries and responsibilities
 
+### Transport decision
+
+Keep SDR1/UDP for the current path: the ESP32 already sends audio this way and
+the UDP Hub forwards packets unchanged. WebSocket currently serves browser
+output, not audio input. RTSP would need its own demultiplexer/decoder (such as
+FFmpeg or GStreamer), so it is deferred until there is a concrete RTSP source.
+Remote inference should consume `AudioFrame` and return `InferenceResult`; a
+separate network HELLO/CONFIG/AUDIO/EVENT protocol is not needed yet. New sources
+should adapt to `audio-frame.v1` without changing the existing UDP wire format.
+
 ### Audio source and input adapter
 
 The adapter handles device and protocol specifics: capture, decoding, format
@@ -53,6 +63,15 @@ initial project profile is mono, 16 kHz, float32 PCM inside Detector. An
 adapter may accept another format and convert it to this profile while keeping
 the original source parameters in metadata. Current SDR1/UDP remains one
 adapter; the SDR1 wire format is not the common internal contract.
+
+`UDPSourceAdapter` for SDR1/UDP and `FileAudioAdapter` for WAV are implemented.
+For local test runs, register it with `RuntimeHub.add_input`; selecting a file
+through CLI or Settings UI is not part of the user workflow yet. The file adapter
+accepts mono PCM WAV at 16 kHz, publishes float32 frames of
+100 ms (the final frame may be shorter), and can pace playback in real time. It
+uses the existing NumPy and SoundFile dependencies and needs no device. USB
+microphones are not implemented yet; for a concrete target device, choose ALSA
+(`sounddevice`/PortAudio) or a native backend and document its system dependencies.
 
 Proposed frame shape:
 

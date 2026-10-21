@@ -36,6 +36,18 @@ make deploy-model
 
 The MLP is trained on frozen YAMNet embeddings; this project does not fine-tune YAMNet. Validation is split by source recording to reduce leakage between related segments. Review per-class metrics and confusion matrices, not only overall accuracy. Model scores are not calibrated probabilities.
 
+## Comparing multiple engines
+
+Do not rank engines from a single aggregate accuracy score. Evaluate every
+candidate on the same versioned, labelled recordings, split by original source
+recording so windows from one source cannot leak between train and validation.
+Report per-class precision, recall and F1, the confusion matrix, false events
+per hour, and event detection latency. Record the engine and model versions,
+settings, dataset revision, and hardware with each result. Scores are not
+calibrated probabilities and must not be averaged across engines as if they
+were comparable probabilities. Keep engine selection manual until the project
+has a representative labelled evaluation set and an agreed acceptance criterion.
+
 See `ml/TRAINING_GUIDE.md` for data balance and validation guidance, `ml/README.md` for standalone YAMNet evaluation, and `ml/AUDIT.md` for recorded audit history.
 
 ## Data quality notes
