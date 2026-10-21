@@ -20,6 +20,7 @@ class EventPolicyContext:
     get_source: Callable[[int], Any]
     sources: dict[int, Any]
     dsp: Any = None
+    settings: dict[str, Any] | None = None
 
 
 class EventPolicy(Protocol):

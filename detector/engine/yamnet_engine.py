@@ -44,6 +44,7 @@ from .event_policy import _EMPTY_PEAK, _dsp_stats_snapshot
 from .stages.yamnet_mlp import YAMNetMlpStage
 from .manifest import YAMNET_ENGINE_MANIFEST
 from ..runtime.policies import EventPolicyContext, load_event_policy
+from ..runtime.engine_settings import settings_for_engine
 from .. import settings as settings_mod
 
 logger = logging.getLogger(__name__)
@@ -97,14 +98,14 @@ def _remove_clicks(waveform: np.ndarray, threshold: float = 10.0,
     return result, clicks_removed
 
 
-def _inference_hop_samples() -> int:
-    interval = float(settings_mod.settings.get("inference_interval_seconds", 0.5))
+def _inference_hop_samples(settings: dict) -> int:
+    interval = float(settings.get("inference_interval_seconds", 0.5))
     return int(SAMPLE_RATE * min(2.0, max(0.25, interval)))
 
 
-def _create_source(source_id: int, name: str) -> SourceState:
+def _create_source(source_id: int, name: str, settings: dict) -> SourceState:
     """Create a fresh SourceState with buffers and smoothers from current settings."""
-    s = settings_mod.settings
+    s = settings
     inference_buf = AudioRingBuffer(capacity=int(ANALYSIS_SECONDS * SAMPLE_RATE))
     clip_buf = ClipBuffer(seconds=max(
         s.get("clip_seconds", CLIP_SECONDS), s.get("user_event_clip_seconds", 15),
@@ -169,8 +170,9 @@ class YAMNetEngine:
         # Keep the current bus for source/clip state and live audio; scores and
         # events go through RuntimeHub to the output layer.
         bus = runtime.event_bus
-        settings_mod.settings.update(settings)
-        print(f"Settings: {settings_mod.settings}", flush=True)
+        engine_settings = settings_for_engine(runtime, settings)
+        graph_mode = runtime.engine_graph_active
+        print(f"Settings: {engine_settings}", flush=True)
 
         # Parse source name mappings
         source_names: dict[int, str] = {}
@@ -214,7 +216,8 @@ class YAMNetEngine:
                 for det_name, sm in src.smoothers.items():
                     key = f"{src.source_id}/{det_name}" if len(sources) > 1 else det_name
                     all_smoothers[key] = sm
-            settings_mod.smoothers = all_smoothers
+            if not graph_mode:
+                settings_mod.smoothers = all_smoothers
 
         def get_source(source_id: int) -> SourceState:
             """Get or register per-source processing state."""
@@ -224,7 +227,7 @@ class YAMNetEngine:
                 if source_id in sources:
                     return sources[source_id]
                 name = source_names.get(source_id, f"source-{source_id}")
-                s = _create_source(source_id, name)
+                s = _create_source(source_id, name, engine_settings)
                 sources[source_id] = s
                 bus.clip_bufs[source_id] = s.clip_buf
                 bus.source_names[source_id] = name
@@ -242,7 +245,9 @@ class YAMNetEngine:
             source.inference_buf.push(frame.samples)
             source.clip_buf.push(frame.samples)
 
-        policy_context = EventPolicyContext(runtime, get_source, sources, dsp)
+        policy_context = EventPolicyContext(
+            runtime, get_source, sources, dsp, settings=engine_settings,
+        )
         event_policy = load_event_policy(args.event_policy, policy_context)
         runtime.set_event_policy(event_policy, engine_id=YAMNET_ENGINE_MANIFEST.engine_id)
         runtime.subscribe_audio(
@@ -262,8 +267,8 @@ class YAMNetEngine:
             """Inference loop for a single source (used in parallel mode)."""
             try:
                 while not stop.is_set():
-                    disabled = settings_mod.settings.get("disabled_sources", [])
-                    waveform = source.inference_buf.consume(_inference_hop_samples())
+                    disabled = engine_settings.get("disabled_sources", [])
+                    waveform = source.inference_buf.consume(_inference_hop_samples(engine_settings))
                     if waveform is None:
                         stop.wait(0.05)
                         continue
@@ -271,11 +276,11 @@ class YAMNetEngine:
                         continue
                     self._process_source(
                         source, waveform, model_stage, det_engine, runtime,
-                        sources, dsp,
+                        sources, dsp, settings=engine_settings,
                     )
             except Exception as exc:
                 runtime.set_component_state(
-                    "yamnet", "degraded",
+                    YAMNET_ENGINE_MANIFEST.engine_id, "degraded",
                     f"source {source.source_id}: {type(exc).__name__}: {exc}",
                 )
                 logger.exception(
@@ -306,7 +311,7 @@ class YAMNetEngine:
                         print(f"[parallel] thread started: {source.name} (id={sid})", flush=True)
 
         while True:
-            mode = settings_mod.settings.get("detection_mode", "round_robin")
+            mode = engine_settings.get("detection_mode", "round_robin")
 
             if mode != _current_mode:
                 if _current_mode == "parallel":
@@ -322,16 +327,16 @@ class YAMNetEngine:
                     heartbeat = self._build_heartbeat(sources)
                     heartbeat.update(udp_stats_snapshot(bus.source_names))
                     if dsp is not None:
-                        heartbeat["dsp_stats"] = _dsp_stats_snapshot(dsp, sources)
+                        heartbeat["dsp_stats"] = _dsp_stats_snapshot(dsp, sources, engine_settings)
                     runtime.publish(RuntimeMessage.from_legacy(heartbeat))
                     _last_heartbeat = now
                 time.sleep(0.5)
             else:
                 # Round-robin: process all sources on main thread
                 any_data = False
-                disabled = settings_mod.settings.get("disabled_sources", [])
+                disabled = engine_settings.get("disabled_sources", [])
                 for source in list(sources.values()):
-                    waveform = source.inference_buf.consume(_inference_hop_samples())
+                    waveform = source.inference_buf.consume(_inference_hop_samples(engine_settings))
                     if waveform is None:
                         continue
                     any_data = True
@@ -339,7 +344,7 @@ class YAMNetEngine:
                         continue
                     self._process_source(
                         source, waveform, model_stage, det_engine, runtime,
-                        sources, dsp,
+                        sources, dsp, settings=engine_settings,
                     )
 
                 now = time.monotonic()
@@ -349,7 +354,7 @@ class YAMNetEngine:
                         heartbeat = self._build_heartbeat(sources)
                         heartbeat.update(udp_stats_snapshot(bus.source_names))
                         if dsp is not None:
-                            heartbeat["dsp_stats"] = _dsp_stats_snapshot(dsp, sources)
+                            heartbeat["dsp_stats"] = _dsp_stats_snapshot(dsp, sources, engine_settings)
                         runtime.publish(RuntimeMessage.from_legacy(heartbeat))
                         _last_heartbeat = now
                 else:
@@ -366,24 +371,26 @@ class YAMNetEngine:
         runtime: RuntimeHub,
         sources: dict | None = None,
         dsp=None,
+        settings: dict | None = None,
     ) -> None:
+        settings = settings if settings is not None else settings_mod.settings
         waveform = np.clip(waveform, -1.0, 1.0)
 
         # ── Click removal: suppress impulse noise before inference ──────
-        cr_override = settings_mod.settings.get(
+        cr_override = settings.get(
             "click_removal_source_overrides", {},
         ).get(str(source.source_id), {})
         cr_enabled = cr_override.get(
-            "enabled", settings_mod.settings.get("click_removal_enabled", 1),
+            "enabled", settings.get("click_removal_enabled", 1),
         )
         if cr_enabled:
             cr_threshold = cr_override.get(
                 "threshold",
-                settings_mod.settings.get("click_removal_threshold", 10.0),
+                settings.get("click_removal_threshold", 10.0),
             )
             cr_max_width = cr_override.get(
                 "max_width",
-                settings_mod.settings.get("click_removal_max_width", 5),
+                settings.get("click_removal_max_width", 5),
             )
             waveform, n_clicks = _remove_clicks(
                 waveform, threshold=cr_threshold, max_width=cr_max_width,
@@ -397,33 +404,33 @@ class YAMNetEngine:
 
         # ── DSP pre-filter: skip YAMNet for confident background ────────
         dsp_result = None
-        dsp_override = settings_mod.settings.get("dsp_source_overrides", {}).get(
+        dsp_override = settings.get("dsp_source_overrides", {}).get(
             str(source.source_id), {},
         )
         source_dsp_enabled = dsp_override.get(
-            "dsp_enabled", settings_mod.settings.get("dsp_enabled", 1),
+            "dsp_enabled", settings.get("dsp_enabled", 1),
         )
         if dsp is not None and source_dsp_enabled:
-            new_audio = waveform[-_inference_hop_samples():]
+            new_audio = waveform[-_inference_hop_samples(settings):]
             dsp_result = dsp.process(new_audio, source.dsp_feature_buf)
 
             if dsp_result["ready"]:
                 bg_threshold = dsp_override.get(
-                    "bg_threshold", settings_mod.settings.get("dsp_bg_threshold", 0.85),
+                    "bg_threshold", settings.get("dsp_bg_threshold", 0.85),
                 )
                 bg_release_threshold = dsp_override.get(
-                    "bg_release_threshold", settings_mod.settings.get("dsp_bg_release_threshold", 0.85),
+                    "bg_release_threshold", settings.get("dsp_bg_release_threshold", 0.85),
                 )
                 bg_confirm_windows = dsp_override.get(
-                    "bg_confirm_windows", settings_mod.settings.get("dsp_bg_confirm_windows", 2),
+                    "bg_confirm_windows", settings.get("dsp_bg_confirm_windows", 2),
                 )
                 max_consecutive_skips = dsp_override.get(
                     "max_consecutive_skips",
-                    settings_mod.settings.get("dsp_max_consecutive_skips", 20),
+                    settings.get("dsp_max_consecutive_skips", 20),
                 )
                 dsp_event_gate = dsp_override.get(
                     "event_gate",
-                    settings_mod.settings.get("dsp_event_gate", 0.08),
+                    settings.get("dsp_event_gate", 0.08),
                 )
                 dsp_label = dsp_result["label"]
                 dsp_conf = dsp_result["confidence"]

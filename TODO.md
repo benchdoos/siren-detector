@@ -350,13 +350,14 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
    поля сохраняются.
 3. [x] Runtime Hub применяет default/by-source маршруты к подпискам движков;
    Settings UI позволяет назначать маршруты по умолчанию и источникам.
-4. [~] Запускать назначенные графом движки ровно один раз с manifest и
-   отдельными settings; повторный запуск одного entrypoint запрещён. Нужна
-   дальнейшая изоляция mutable state YAMNet и CLI-параметров.
-5. [~] Передавать обязательный `engine_id` в `InferenceResult` и выбирать
-   event policy по движку. Наследуемые score/event output и YAMNet policy пока
-   не полностью изолированы по ID. Нельзя позволить двум
-   YAMNet engine перезаписывать друг другу policy или module-level settings.
+4. [x] Запускать назначенные графом движки ровно один раз с manifest и
+   отдельными settings; повторный запуск одного entrypoint запрещён. В graph mode
+   YAMNet хранит настройки и smoother state локально; повторные экземпляры той
+   же реализации пока запрещены.
+5. [x] Передавать обязательный `engine_id` в `InferenceResult`, выбирать event
+   policy по движку и передавать policy настройки конкретного graph entry без
+   записи в process-level settings. Совместимый score/event stream остаётся общим,
+   сообщения содержат `engine_id`.
 6. [~] API показывает локальные manifests и сохранённый graph и валидирует
    используемый поднабор JSON Schema. Settings UI показывает недоступный selector;
    расширить поддержку JSON Schema и отполировать ошибки валидации.

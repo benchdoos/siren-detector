@@ -382,6 +382,11 @@ class RuntimeHub:
         """Apply source-to-engine routing before any engine subscribes."""
         self._engine_graph = validate_graph(graph)
 
+    @property
+    def engine_graph_active(self) -> bool:
+        """Whether startup is using a saved engine graph instead of legacy CLI."""
+        return self._engine_graph is not None
+
     def set_event_policy(self, policy: EventPolicy, engine_id: str = "default") -> None:
         """Select the policy for one engine's inference results."""
         if not engine_id.strip():
