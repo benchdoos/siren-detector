@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import importlib
+import asyncio
 import sys
 import queue
 import socket
@@ -26,6 +27,7 @@ from detector.config import HEADER, MAGIC
 from detector.runtime.hub import RuntimeHub
 from detector.runtime.manifest import EngineManifest
 from detector.server import routes_clips
+from detector.server import routes_ws
 from detector.server.app import create_app
 from detector.transport.udp import UDPSourceAdapter
 
@@ -83,13 +85,26 @@ class RuntimeIntegrationTests(unittest.TestCase):
                 self.assertIn("detector_audio_frames_received_total", metrics.text)
                 self.assertIn("integration-probe", metrics.text)
 
-                with client.stream("GET", "/events") as response:
-                    self.assertEqual(response.status_code, 200)
-                    lines = iter(response.iter_lines())
-                    self.assertEqual(next(lines), "event: session")
-                    self.assertTrue(next(lines).startswith("data: {"))
-                    self.assertEqual(next(lines), "")
-                    self.assertEqual(next(lines), "event: score")
+                class DisconnectRequest:
+                    disconnected = False
+
+                    async def is_disconnected(self):
+                        return self.disconnected
+
+                async def read_sse_snapshot():
+                    request = DisconnectRequest()
+                    response = await routes_ws.sse_endpoint(request)
+                    self.assertEqual(response.media_type, "text/event-stream")
+                    session_event = await anext(response.body_iterator)
+                    score_event = await anext(response.body_iterator)
+                    request.disconnected = True
+                    with self.assertRaises(StopAsyncIteration):
+                        await anext(response.body_iterator)
+                    return session_event, score_event
+
+                session_event, score_event = asyncio.run(read_sse_snapshot())
+                self.assertTrue(session_event.startswith("event: session\ndata: {"))
+                self.assertTrue(score_event.startswith("event: score\ndata: {"))
         finally:
             runtime.stop()
 
