@@ -19,6 +19,7 @@ When authentication is enabled (`AUTH_ENABLED` in `hub/.env`), protected request
 | `GET /api/settings` | Viewer | Current settings, defaults, and DSP model availability. |
 | `GET /api/runtime/status` | Viewer | Audio subscriber states, queue depth, dropped frames, and callback errors. |
 | `GET /metrics` | Viewer | Prometheus 0.0.4 text metrics for engine, audio queue, and output health. |
+| `GET /events` | Viewer | One-way SSE stream of the current snapshot and score/event updates. |
 | `GET /api/engines/manifests` | Viewer | Locally registered engine manifests. |
 | `GET /api/engine-graph` | Viewer | Stored graph and configured engine availability. |
 | `PUT /api/engine-graph` | Admin | Validates and stores `engine-graph.v1`. |
@@ -61,6 +62,14 @@ selects engines and source routes. When a graph is active, an explicit
 `--engine` is rejected so there is one source of engine selection.
 
 ## WebSocket
+
+### `/events` (Server-Sent Events)
+
+Connect with `GET http://<host>:8080/events` and `Accept: text/event-stream`.
+The stream starts with `session` and `score` events, then forwards event-bus
+updates; keep-alive comments are sent while idle. A viewer token is required
+when authentication is enabled. Slow clients receive recent messages: the
+oldest message is dropped when their bounded queue fills.
 
 ### `/ws`
 

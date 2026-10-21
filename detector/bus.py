@@ -101,7 +101,17 @@ class EventBus:
 
     def _enqueue_all(self, msg: dict) -> None:
         for q in self.client_queues.values():
-            q.put_nowait(msg)
+            # Slow one-way clients must not break delivery to other subscribers.
+            # Bounded queues (such as SSE) favor the freshest state update.
+            if q.full():
+                try:
+                    q.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+            try:
+                q.put_nowait(msg)
+            except asyncio.QueueFull:
+                pass
         for cb in self._subscribers:
             try:
                 cb(msg)
