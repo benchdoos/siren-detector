@@ -17,6 +17,7 @@ When authentication is enabled (`AUTH_ENABLED` in `hub/.env`), protected request
 | `GET /api/auth/status` | Public | Reports whether authentication is enabled. |
 | `POST /api/auth/check` | Public | Checks a token from JSON body `{"token":"…"}`. |
 | `GET /api/settings` | Viewer | Current settings, defaults, and DSP model availability. |
+| `GET /api/runtime/status` | Viewer | Audio subscriber states, queue depth, dropped frames, and callback errors. |
 | `POST /api/settings` | Admin | Updates provided settings; invalid types, ranges, or modes return `400`. |
 | `POST /api/settings/reset` | Admin | Resets settings to defaults. |
 | `GET /api/sources` | Viewer | Known source status and custom names. |
@@ -37,6 +38,13 @@ When authentication is enabled (`AUTH_ENABLED` in `hub/.env`), protected request
 | `GET /clips/{filename}/spectrogram` | No route-level check | Returns a clip spectrogram. |
 
 Protected routes return `401` or `403` for invalid or missing tokens. See the [settings reference](settings.md) for setting names and ranges.
+
+`GET /api/runtime/status` returns `available` and a `subscribers` array. Each
+audio subscription includes `subscriber_id`, `state`, `queue_depth`,
+`queue_capacity`, `overflow`, counters for `frames_received`,
+`frames_processed`, `frames_dropped`, `sequence_gaps`, `callback_errors`, and
+`last_error`. This covers audio delivery and callbacks; model startup lifecycle
+and errors in a separate inference loop are not included yet.
 
 ## WebSocket
 

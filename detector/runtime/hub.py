@@ -196,6 +196,7 @@ class RuntimeHub:
         self._outputs: list[OutputAdapter] = [EventBusOutput(event_bus)]
         self._audio_subscriptions: dict[str, AudioSubscription] = {}
         self._next_subscription_id = 1
+        self._subscriptions_lock = threading.RLock()
         self._event_policy: EventPolicy | None = None
         self._clip_storage: ClipStorageAdapter | None = None
         self._inputs: list[AudioInputAdapter] = []
@@ -218,7 +219,9 @@ class RuntimeHub:
     def add_input(self, input_adapter: AudioInputAdapter) -> None:
         """Register an input adapter; it starts when a processor subscribes."""
         self._inputs.append(input_adapter)
-        if self._audio_subscriptions:
+        with self._subscriptions_lock:
+            has_subscribers = bool(self._audio_subscriptions)
+        if has_subscribers:
             self._start_inputs()
 
     def broadcast_audio(self, samples, source_id: int = 0) -> None:
@@ -238,24 +241,27 @@ class RuntimeHub:
         ``drop_oldest`` favors fresh audio for real-time inference. Sequence
         gaps and all queue/callback errors remain visible in ``audio_status``.
         """
-        if subscriber_id is None:
-            subscriber_id = f"audio-subscriber-{self._next_subscription_id}"
-            self._next_subscription_id += 1
-        if subscriber_id in self._audio_subscriptions:
-            raise ValueError(f"Audio subscriber {subscriber_id!r} already exists")
-        subscription = AudioSubscription(
-            subscriber_id=subscriber_id,
-            consumer=consumer,
-            max_queue_size=max_queue_size,
-            overflow=overflow,
-        )
-        self._audio_subscriptions[subscriber_id] = subscription
+        with self._subscriptions_lock:
+            if subscriber_id is None:
+                subscriber_id = f"audio-subscriber-{self._next_subscription_id}"
+                self._next_subscription_id += 1
+            if subscriber_id in self._audio_subscriptions:
+                raise ValueError(f"Audio subscriber {subscriber_id!r} already exists")
+            subscription = AudioSubscription(
+                subscriber_id=subscriber_id,
+                consumer=consumer,
+                max_queue_size=max_queue_size,
+                overflow=overflow,
+            )
+            self._audio_subscriptions[subscriber_id] = subscription
         self._start_inputs()
         return subscription
 
     def audio_status(self) -> list[dict]:
         """Return per-subscriber lifecycle and queue diagnostics."""
-        return [sub.snapshot() for sub in self._audio_subscriptions.values()]
+        with self._subscriptions_lock:
+            subscriptions = tuple(self._audio_subscriptions.values())
+        return [sub.snapshot() for sub in subscriptions]
 
     def _start_inputs(self) -> None:
         for input_adapter in self._inputs:
@@ -276,12 +282,16 @@ class RuntimeHub:
     def stop(self) -> None:
         """Stop audio producers first, then all subscriber workers."""
         self.stop_inputs()
-        for subscription in self._audio_subscriptions.values():
+        with self._subscriptions_lock:
+            subscriptions = tuple(self._audio_subscriptions.values())
+        for subscription in subscriptions:
             subscription.stop()
 
     def publish_audio_frame(self, frame: AudioFrame) -> None:
         """Route an input frame to processors and the live-audio output."""
-        for subscription in tuple(self._audio_subscriptions.values()):
+        with self._subscriptions_lock:
+            subscriptions = tuple(self._audio_subscriptions.values())
+        for subscription in subscriptions:
             subscription.submit(frame)
         self.broadcast_audio(frame.samples, frame.source_id)
 
