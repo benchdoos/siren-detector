@@ -1,8 +1,8 @@
 {
-  "audit_timestamp": "2026-10-20T20:53:36+00:00",
-  "model_trained_at": "2026-10-20T20:53:31+00:00",
+  "audit_timestamp": "2026-10-21T07:03:58+00:00",
+  "model_trained_at": "2026-10-21T07:03:54+00:00",
   "dsp_metrics": {
-    "trained_at": "2026-10-20T20:52:37+00:00",
+    "trained_at": "2026-10-21T07:03:21+00:00",
     "labels": [
       "siren",
       "background",
@@ -10,66 +10,66 @@
       "uav"
     ],
     "validation_windows": 2885,
-    "accuracy": 0.8721,
+    "accuracy": 0.8787,
     "classes": [
       {
         "label": "siren",
         "windows": 319,
-        "precision": 0.5692,
-        "recall": 0.5799,
-        "f1": 0.5745
+        "precision": 0.6878,
+        "recall": 0.442,
+        "f1": 0.5382
       },
       {
         "label": "background",
         "windows": 2185,
-        "precision": 0.9365,
-        "recall": 0.9387,
-        "f1": 0.9376
+        "precision": 0.9154,
+        "recall": 0.9703,
+        "f1": 0.942
       },
       {
         "label": "explosion",
         "windows": 204,
-        "precision": 0.8021,
-        "recall": 0.7353,
-        "f1": 0.7673
+        "precision": 0.8187,
+        "recall": 0.6863,
+        "f1": 0.7467
       },
       {
         "label": "uav",
         "windows": 177,
-        "precision": 0.7104,
-        "recall": 0.7345,
-        "f1": 0.7222
+        "precision": 0.6943,
+        "recall": 0.7571,
+        "f1": 0.7243
       }
     ],
     "confusion_matrix": [
       [
-        185,
-        122,
+        141,
+        163,
         0,
-        12
+        15
       ],
       [
-        98,
-        2051,
-        25,
-        11
+        34,
+        2120,
+        16,
+        15
       ],
       [
-        13,
-        11,
-        150,
-        30
+        16,
+        19,
+        140,
+        29
       ],
       [
-        29,
-        6,
-        12,
-        130
+        14,
+        14,
+        15,
+        134
       ]
     ],
     "background_gate_threshold": 0.92,
-    "siren_confident_background_rate": 0.047,
-    "siren_argmax_background_rate": 0.3824,
+    "siren_confident_background_rate": 0.0251,
+    "siren_argmax_background_rate": 0.511,
     "quantized_model_size_bytes": 29968
   },
   "labels": [
@@ -80,46 +80,46 @@
   ],
   "val_accuracy": {
     "siren": {
-      "accuracy": 0.775,
+      "accuracy": 0.817,
       "windows": 3589
     },
     "background": {
-      "accuracy": 0.819,
+      "accuracy": 0.831,
       "windows": 8700
     },
     "explosion": {
-      "accuracy": 0.658,
+      "accuracy": 0.595,
       "windows": 927
     },
     "uav": {
-      "accuracy": 0.705,
+      "accuracy": 0.715,
       "windows": 498
     }
   },
   "confusion_matrix": [
     [
-      2782,
-      376,
-      80,
-      351
+      2931,
+      353,
+      60,
+      245
     ],
     [
-      725,
-      7121,
-      528,
-      326
+      879,
+      7234,
+      333,
+      254
+    ],
+    [
+      84,
+      259,
+      552,
+      32
     ],
     [
       58,
-      223,
-      610,
-      36
-    ],
-    [
-      58,
-      27,
-      62,
-      351
+      37,
+      47,
+      356
     ]
   ],
   "file_counts": {
@@ -140,20 +140,20 @@
       "max_recommended_aug": 1776
     },
     "explosion": {
-      "total": 436,
-      "real": 286,
+      "total": 437,
+      "real": 287,
       "aug": 150,
-      "aug_pct": 34.4,
+      "aug_pct": 34.3,
       "aug_real_ratio": 0.5,
-      "max_recommended_aug": 572
+      "max_recommended_aug": 574
     },
     "uav": {
-      "total": 309,
-      "real": 149,
+      "total": 310,
+      "real": 150,
       "aug": 160,
-      "aug_pct": 51.8,
+      "aug_pct": 51.6,
       "aug_real_ratio": 1.1,
-      "max_recommended_aug": 298
+      "max_recommended_aug": 300
     }
   },
   "issues": [
