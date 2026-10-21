@@ -1,13 +1,43 @@
 # Architecture
 
-## Audio and event flow
+## Target replaceable-component architecture
 
 ```text
-INMP441 → ESP32-S3 → UDP / SDR1 → Hub → Detector → Web UI / MQTT
-                                          └──────→ event clips
+Audio sources → input adapters → Runtime Hub ──audio──→ processing chain
+                                       ↑                 DSP → YAMNet → MLP
+                                       └──── scores / events ────┘
+                                       │
+                                       ├→ score export / monitoring
+                                       └→ event policy → export layer
+                                                            ├→ Web UI / WS
+                                                            ├→ REST API
+                                                            ├→ MQTT and other outputs
+                                                            └→ clips / storage
 ```
 
-The Hub is a small UDP fan-out relay. It forwards incoming packets to the detector and to the recorder when the recorder is running. The detector owns the inference, event decision, clip storage, web server, and integrations.
+This is the target architecture, not a claim that every component is already
+replaceable. The principle is that each block has a contract, so a source,
+router, processing stage, or output adapter can be changed independently. For
+example, a user should be able to replace the MLP, the full recognition chain,
+or event delivery without rewriting microphone support or the UI.
+
+“Hub” currently means the UDP fan-out relay in `hub/hub.py`, which forwards
+packets to the detector and recorder. In the target design, Runtime Hub is the
+logical router inside Detector: it routes audio through chains, receives
+processing results, and forwards them to event policy and the export layer.
+These are different roles and should not be conflated in component contracts
+or documentation.
+
+## Current audio and event flow
+
+```text
+INMP441 → ESP32-S3 → UDP / SDR1 → UDP Hub → Detector → Web UI / MQTT
+                                             └──────→ event clips
+```
+
+The current Hub is a small UDP relay. The detector receives audio, while the
+selected engine manages audio reception/processing and publishes scores and
+events. The target component architecture still requires refactoring.
 
 ## Components
 
@@ -23,7 +53,17 @@ The Hub is a small UDP fan-out relay. It forwards incoming packets to the detect
 
 The current engine loads YAMNet once and uses its audio embeddings with an optional project-trained MLP classifier. An optional DSP/TFLite model can pre-filter background windows to reduce YAMNet work. The event smoother combines repeated window scores before confirming an event. Thresholds and timing settings can be changed from the web UI.
 
-The Python detector is split into transport, engine, server, and integration layers, connected by an in-process `EventBus`. Project modules can be replaced with custom implementations as long as they preserve the relevant API/contracts: an inference engine implements `detector/engine/interface.py`, while an audio source sends SDR1 packets expected by the transport. See the [settings reference](settings.md) for runtime options and the [API reference](api.md) for HTTP and WebSocket interfaces.
+The Python package is split into transport, engine, server, and integration
+layers connected by an in-process `EventBus`. This does not yet mean every layer
+can be replaced through a stable public API: `EngineInterface.start()` receives
+the `EventBus`, settings, and CLI args, and the current engine starts its own
+transport. Bus message formats are described in code and partly in
+[`detector/engine/interface.py`](../../detector/engine/interface.py), but are
+not yet a versioned public contract.
+
+The target boundaries and formats are described in the [component API](component-api.md).
+The application HTTP and WebSocket interfaces are covered separately in the
+[API reference](api.md); current runtime options are in the [settings reference](settings.md).
 
 ## Audio protocol
 

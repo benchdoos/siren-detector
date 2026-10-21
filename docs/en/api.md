@@ -1,5 +1,11 @@
 # Siren Detector API
 
+This page documents the application's HTTP API and WebSocket interface. It is
+the API for managing and consuming application data, not the contract for a
+pluggable source, processor, or output adapter. Target component boundaries are
+described in the [component API](component-api.md); current and target system
+diagrams are in [Architecture](architecture.md).
+
 The REST API is served by the same server as the web UI. For a running instance, FastAPI's interactive docs are at `http://<host>:8080/docs` and OpenAPI JSON at `http://<host>:8080/openapi.json`. OpenAPI is generated automatically from the application's REST routes. WebSocket routes are not included and are documented below.
 
 When authentication is enabled (`AUTH_ENABLED` in `hub/.env`), protected requests must include a token checked for viewer or admin access. Reads generally require viewer access; settings updates, feedback, and calibration controls require admin access. Public exceptions include `/api/auth/status`, `/api/auth/check`, clip downloads, and calibration audio downloads; check the deployed configuration. With authentication disabled, requests are not restricted by tokens.

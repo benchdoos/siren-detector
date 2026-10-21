@@ -18,6 +18,7 @@ The current deployment is a remote inference setup: the ESP32 captures and trans
 
 - [Getting started](getting-started.md) — configure and run the Docker services.
 - [Architecture](architecture.md) — audio flow and service responsibilities.
+- [Component API](component-api.md) — target contracts for sources, routing, processing, and outputs.
 - [Operations](operations.md) — deployment, settings, API, and troubleshooting.
 - [Data and models](data-and-models.md) — collect data and retrain the classifiers.
 - [Multi-microphone setup](multi-microphone.md) — add a USB audio source or understand the current ESP32 dual-mic wiring.
