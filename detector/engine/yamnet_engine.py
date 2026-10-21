@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -38,8 +39,9 @@ from ..config import (
 from ..transport.udp import udp_stats_snapshot
 from .smoother import TemporalSmoother
 from .source_state import SourceState
-from .event_policy import EventPolicy, _EMPTY_PEAK, _dsp_stats_snapshot
+from .event_policy import _EMPTY_PEAK, _dsp_stats_snapshot
 from .stages.yamnet_mlp import YAMNetMlpStage
+from ..runtime.policies import EventPolicyContext, load_event_policy
 from .. import settings as settings_mod
 
 # ── Click removal (impulse noise suppression) ─────────────────────────
@@ -152,6 +154,10 @@ class YAMNetEngine:
                             help="Path to DSP classifier labels (.json)")
         parser.add_argument("--no-dsp", action="store_true",
                             help="Disable DSP pre-filter even if model files exist")
+        parser.add_argument(
+            "--event-policy", default="default",
+            help="Event policy name or local package.module.ClassName",
+        )
 
     def start(self, runtime: RuntimeHub, settings: dict, args: argparse.Namespace) -> None:
         # Keep the current bus for source/clip state and live audio; scores and
@@ -230,8 +236,9 @@ class YAMNetEngine:
             source.inference_buf.push(frame.samples)
             source.clip_buf.push(frame.samples)
 
-        event_policy = EventPolicy(runtime, get_source, sources, dsp)
-        runtime.subscribe_inference(event_policy)
+        policy_context = EventPolicyContext(runtime, get_source, sources, dsp)
+        event_policy = load_event_policy(args.event_policy, policy_context)
+        runtime.set_event_policy(event_policy)
         runtime.subscribe_audio(on_audio_frame)
 
         print("Ready.", flush=True)
@@ -253,7 +260,7 @@ class YAMNetEngine:
                 if source.source_id in disabled:
                     continue
                 self._process_source(
-                    source, waveform, model_stage, det_engine, runtime, event_policy,
+                    source, waveform, model_stage, det_engine, runtime,
                     sources, dsp,
                 )
 
@@ -312,7 +319,7 @@ class YAMNetEngine:
                     if source.source_id in disabled:
                         continue
                     self._process_source(
-                        source, waveform, model_stage, det_engine, runtime, event_policy,
+                        source, waveform, model_stage, det_engine, runtime,
                         sources, dsp,
                     )
 
@@ -338,7 +345,6 @@ class YAMNetEngine:
         model_stage: YAMNetMlpStage,
         det_engine: str,
         runtime: RuntimeHub,
-        event_policy: EventPolicy,
         sources: dict | None = None,
         dsp=None,
     ) -> None:
@@ -451,7 +457,13 @@ class YAMNetEngine:
                     )
 
                 if skip_yamnet:
-                    event_policy.publish_dsp_skip(source, dsp_result)
+                    runtime.publish_inference(InferenceResult(
+                        source_id=source.source_id,
+                        stage_id="dsp-prefilter",
+                        timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                        scores={f"yamnet:{name}": 0.0 for name in DETECTORS},
+                        metadata={"dsp_skipped_yamnet": True, "dsp_result": dsp_result},
+                    ))
                     return
         elif dsp is not None:
             source.dsp_feature_buf.clear()

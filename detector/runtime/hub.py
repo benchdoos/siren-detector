@@ -7,6 +7,7 @@ from typing import Protocol
 
 from ..bus import EventBus
 from .contracts import AudioFrame, ClipSaveRequest, InferenceResult, RuntimeMessage
+from .policies import EventPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +26,6 @@ class AudioInputAdapter(Protocol):
         ...
 
     def stop(self) -> None:
-        ...
-
-
-class InferenceConsumer(Protocol):
-    """Consumes model output and applies an event/detection policy."""
-
-    def __call__(self, result: InferenceResult) -> None:
         ...
 
 
@@ -70,7 +64,7 @@ class RuntimeHub:
         self.event_bus = event_bus
         self._outputs: list[OutputAdapter] = [EventBusOutput(event_bus)]
         self._audio_consumers: list[AudioConsumer] = []
-        self._inference_consumers: list[InferenceConsumer] = []
+        self._event_policy: EventPolicy | None = None
         self._clip_storage: ClipStorageAdapter | None = None
         self._inputs: list[AudioInputAdapter] = []
         self._started_inputs: set[int] = set()
@@ -132,14 +126,15 @@ class RuntimeHub:
                 )
         self.broadcast_audio(frame.samples, frame.source_id)
 
-    def subscribe_inference(self, consumer: InferenceConsumer) -> None:
-        """Register a policy or downstream component for model outputs."""
-        self._inference_consumers.append(consumer)
+    def set_event_policy(self, policy: EventPolicy) -> None:
+        """Select the event policy that handles inference results."""
+        self._event_policy = policy
 
     def publish_inference(self, result: InferenceResult) -> None:
-        """Route model output to downstream policy components."""
-        for consumer in tuple(self._inference_consumers):
-            consumer(result)
+        """Route model output to the selected event policy."""
+        if self._event_policy is None:
+            raise RuntimeError("No event policy is configured")
+        self._event_policy.process(result)
 
     def publish(self, message: RuntimeMessage) -> None:
         """Route a score or event from a processing component to outputs."""

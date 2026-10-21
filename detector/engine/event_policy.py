@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, timezone
-from typing import Callable
 
 from .. import settings as settings_mod
 from ..config import CLIP_SECONDS, DETECTORS, SAMPLE_RATE
 from ..runtime.contracts import ClipSaveRequest, InferenceResult, RuntimeMessage
-from ..runtime.hub import RuntimeHub
+from ..runtime.policies import EventPolicyContext
 from ..transport.udp import udp_stats_snapshot
 from .source_state import SourceState
 
@@ -40,25 +38,16 @@ def _dsp_stats_snapshot(dsp, sources: dict) -> dict | None:
 class EventPolicy:
     """Turn inference results into smoothed scores, events, and clip records."""
 
-    def __init__(self, runtime: RuntimeHub, get_source: Callable[[int], SourceState],
-                 sources: dict[int, SourceState], dsp=None) -> None:
-        self._runtime = runtime
-        self._get_source = get_source
-        self._sources = sources
-        self._dsp = dsp
+    policy_id = "default"
+    api_version = "event-policy.v1"
 
-    def publish_dsp_skip(self, source: SourceState, dsp_result: dict) -> None:
-        """Apply a DSP background skip through the same policy route."""
-        result = InferenceResult(
-            source_id=source.source_id,
-            stage_id="dsp-prefilter",
-            timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            scores={f"yamnet:{name}": 0.0 for name in DETECTORS},
-            metadata={"dsp_skipped_yamnet": True, "dsp_result": dsp_result},
-        )
-        self._runtime.publish_inference(result)
+    def __init__(self, context: EventPolicyContext) -> None:
+        self._runtime = context.runtime
+        self._get_source = context.get_source
+        self._sources = context.sources
+        self._dsp = context.dsp
 
-    def __call__(self, result: InferenceResult) -> None:
+    def process(self, result: InferenceResult) -> None:
         """Apply project event policy to generic model results from Runtime Hub."""
         source = self._get_source(result.source_id)
         runtime = self._runtime
