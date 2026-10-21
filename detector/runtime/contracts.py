@@ -36,6 +36,18 @@ class AudioFrame:
 
 
 @dataclass(frozen=True)
+class InferenceResult:
+    """Raw model output routed from an inference stage to event policy."""
+
+    source_id: int
+    stage_id: str
+    timestamp: str
+    scores: Mapping[str, float]
+    metadata: Mapping[str, Any]
+    contract: Literal["inference-result.v1"] = "inference-result.v1"
+
+
+@dataclass(frozen=True)
 class RuntimeMessage:
     """A score update or detector event ready for runtime routing.
 

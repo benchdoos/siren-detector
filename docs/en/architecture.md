@@ -54,15 +54,17 @@ Hub to the legacy EventBus, which feeds WebSocket and MQTT.
 
 ## Detector pipeline
 
-The current engine loads YAMNet once and uses its audio embeddings with an optional project-trained MLP classifier. An optional DSP/TFLite model can pre-filter background windows to reduce YAMNet work. The event smoother combines repeated window scores before confirming an event. Thresholds and timing settings can be changed from the web UI.
+The current engine uses a separate YAMNet + MLP inference stage; DSP/TFLite remains a pre-filter. The stage returns `inference-result.v1` through Runtime Hub. The current event policy applies thresholds and smoothing, then publishes legacy score/event messages back through Hub to `EventBusOutput`. Smoothing, clips, and event rules still belong to this project rather than a pluggable API.
 
 The Python package is split into transport, engine, server, and integration
 layers connected by an in-process `EventBus`. This does not yet mean every layer
 can be replaced through a stable public API: `EngineInterface.start()` receives
 Runtime Hub, settings, and CLI args. `main.py` registers the UDP adapter, the
 engine subscribes to frames, and results pass back through Hub and
-`EventBusOutput` into `EventBus`. Buffers, inference, and smoothing still live
-inside the engine. Legacy message formats are described in code and partly in
+`EventBusOutput` into `EventBus`. Buffers and DSP preprocessing remain in the
+engine; inference lives in `detector/engine/stages/yamnet_mlp.py`, while event
+policy is routed through Runtime Hub but still implemented as an engine method.
+Legacy message formats are described in code and partly in
 [`detector/engine/interface.py`](../../detector/engine/interface.py), but are
 not yet a versioned public contract.
 
