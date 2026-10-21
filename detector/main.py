@@ -23,6 +23,7 @@ from .integrations.mqtt import mqtt_connect, mqtt_subscribe
 from .runtime.clip_storage import WavClipStorage
 from .runtime.engine_graph import validate_graph, validate_settings_schema
 from .runtime.hub import RuntimeHub
+from .runtime.lifecycle import has_explicit_engine_option, run_engine_component
 from .server.app import create_app
 from . import settings as settings_mod
 from .settings import load_settings
@@ -57,7 +58,7 @@ def main() -> None:
     graph_engines: list[tuple[str, type, object, dict]] = []
     graph_engine_args: dict[str, argparse.Namespace] = {}
     if stored_graph is not None:
-        if any(arg == "--engine" or arg.startswith("--engine=") for arg in sys.argv):
+        if has_explicit_engine_option(sys.argv):
             pre.error("A saved engine graph is active; remove --engine or clear the graph first")
         if pre_args.show_engine_manifest:
             pre.error("--show-engine-manifest requires --engine and cannot be used with a saved graph")
@@ -152,18 +153,11 @@ def main() -> None:
             selected_manifest.version if selected_manifest else None,
         )
 
-        def run_engine(engine_id=component_id, engine_class=cls,
-                       engine_settings=component_settings, engine_args=component_args):
-            try:
-                engine_class().start(runtime, engine_settings, engine_args)
-            except Exception as exc:
-                runtime.set_component_state(engine_id, "error", exc)
-                print(f"[engine:{engine_id}] failed: {type(exc).__name__}: {exc}", flush=True)
-            else:
-                runtime.set_component_state(engine_id, "ready")
-
         threading.Thread(
-            target=run_engine, daemon=True, name=f"engine-{component_id}",
+            target=run_engine_component,
+            args=(runtime, component_id, cls, component_settings, component_args),
+            daemon=True,
+            name=f"engine-{component_id}",
         ).start()
 
     # FastAPI in main thread (captures the event loop)
