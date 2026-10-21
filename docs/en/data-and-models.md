@@ -86,6 +86,50 @@ The detector web UI provides in-place labeling. When an event is confirmed, a cl
 
 Background calibration records ambient sound from a selected source into `dataset/background/<source>/`. Calibration examples are useful for adapting the background model to a microphone's acoustic profile; collect representative quiet, typical, and loud conditions.
 
+## Pretrained models
+
+Pretrained model weights and training artifacts are published as GitHub Releases at
+<https://github.com/benchdoos/siren-detector/releases>. Each release includes MLP
+and DSP classifier weights, label mappings, validation metrics, a model card, and
+`saved_embeddings.npz` (frozen YAMNet embeddings from the training set).
+
+### Use a release as-is
+
+Download the release zip, extract the weight files, and copy them to `ml/results/`:
+
+```bash
+unzip retrain-*.zip -d ml/results/
+make deploy-model   # push weights to RPi and restart
+```
+
+### Fine-tune a release on your own data
+
+The training script supports incremental retraining. If `ml/results/saved_embeddings.npz`
+exists, `make train` merges the saved embeddings with freshly extracted embeddings from
+your local `dataset/`. This lets you add your own recordings without re-extracting
+embeddings for the entire original dataset.
+
+1. Download a release and place `saved_embeddings.npz` (and optionally `classifier.keras`)
+   into `ml/results/`.
+2. Record and label your own audio (see sections above).
+3. Run augmentation and training:
+
+```bash
+make augment
+make train-dsp
+make train
+make deploy-model
+```
+
+The trainer deduplicates by source: if a file appears in both the saved embeddings and
+your local dataset, the fresh version takes priority.
+
+### Build a dataset from scratch
+
+You do not need a pretrained release. Record examples with the recorder or web UI,
+label them, optionally augment, and train — the full workflow is described below and
+in the sections above.
+
 ## Train and deploy
 
 The usual retraining command is `make retrain`. It merges recorder files on the host, waits for an active calibration to finish, syncs data, augments selected classes, trains DSP and MLP classifiers, audits the results, and deploys available model files. This workflow requires the SSH and web UI values in the root `.env`.
