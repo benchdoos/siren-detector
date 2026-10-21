@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""Download moped / scooter / vespa clips from Freesound.
+"""Collect candidate UAV clips from Freesound for manual review.
 
 Usage:
-    FREESOUND_API_KEY=<your_key> python3 dataset/fetch_freesound_uav.py
+    FREESOUND_API_KEY=<your_key> python3 dataset/fetch_freesound_uav.py [--limit 20]
 
 Get an API key at https://freesound.org/apiv2/apply/
 Only sounds with permissive licenses (CC0, CC BY, CC BY-NC) are downloaded.
-Audio is converted to 16 kHz mono WAV and saved to dataset/uav/.
+Audio is converted to 16 kHz mono WAV and staged in dataset/inbox/uav_candidates/.
+Review each candidate before moving approved files into dataset/uav/.
 Already-downloaded Freesound IDs (dl_<id>__* files) are skipped.
 """
 
 from __future__ import annotations
 
 import json
+import argparse
 import os
 import shutil
 import subprocess
@@ -24,18 +26,20 @@ import urllib.request
 from pathlib import Path
 
 API_BASE = "https://freesound.org/apiv2"
-DATASET_DIR = Path(__file__).resolve().parent / "uav"
+DATASET_DIR = Path(__file__).resolve().parent / "inbox" / "uav_candidates"
+MANIFEST_PATH = DATASET_DIR / "manifest.jsonl"
 SAMPLE_RATE = 16_000
 MAX_DURATION = 30  # skip clips longer than 30 s
 
 QUERIES = [
-    "moped",
-    "moped driving",
-    "scooter engine",
-    "scooter driving",
-    "vespa",
-    "vespa driving",
-    "motorbike moped",
+    "quadcopter",
+    "quad copter drone",
+    "multirotor drone",
+    "UAV propellers",
+    "drone propellers",
+    "drone takeoff",
+    "drone hovering",
+    "DJI drone",
 ]
 
 ALLOWED_LICENSES = {
@@ -53,10 +57,11 @@ def get_existing_ids(directory: Path) -> set[int]:
     if not directory.exists():
         return ids
     for f in directory.iterdir():
-        if f.name.startswith("dl_"):
+        if f.name.startswith(("dl_", "uav_candidate_")):
             parts = f.stem.split("__")
             try:
-                ids.add(int(parts[0].removeprefix("dl_")))
+                prefix = "uav_candidate_" if parts[0].startswith("uav_candidate_") else "dl_"
+                ids.add(int(parts[0].removeprefix(prefix)))
             except ValueError:
                 pass
     return ids
@@ -114,6 +119,13 @@ def sanitize(name: str) -> str:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--limit", type=int, default=20,
+                        help="Maximum candidate clips to stage (default: 20)")
+    args = parser.parse_args()
+    if args.limit < 1:
+        parser.error("--limit must be at least 1")
+
     token = os.environ.get("FREESOUND_API_KEY", "").strip()
     if not token:
         print(
@@ -127,7 +139,7 @@ def main() -> int:
     existing_ids = get_existing_ids(DATASET_DIR)
     print(f"Already have {len(existing_ids)} Freesound IDs in {DATASET_DIR}")
 
-    print("Searching Freesound for moped / scooter / vespa sounds...")
+    print("Searching Freesound for drone / UAV / multirotor sounds...")
     seen_ids: set[int] = set()
     candidates: list[dict] = []
 
@@ -147,6 +159,7 @@ def main() -> int:
 
     # filter licenses
     allowed = [s for s in candidates if s.get("license", "") in ALLOWED_LICENSES]
+    allowed = allowed[:args.limit]
     print(f"\nFound {len(candidates)} new unique candidates, {len(allowed)} with allowed license.")
 
     if not allowed:
@@ -168,7 +181,7 @@ def main() -> int:
             sid = sound["id"]
             username = sanitize(sound["username"])
             mp3_path = Path(tmpdir) / f"{sid}.mp3"
-            wav_name = f"dl_{sid}__{username}__{slug}.wav"
+            wav_name = f"uav_candidate_{sid}__{username}__{slug}.wav"
             wav_path = DATASET_DIR / wav_name
 
             print(f"  [{downloaded + 1}] {sound['name']} (id={sid}, {sound['duration']:.1f}s)", flush=True)
@@ -184,10 +197,25 @@ def main() -> int:
                 skipped += 1
                 continue
 
+            metadata = {
+                "file": wav_name,
+                "freesound_id": sid,
+                "name": sound["name"],
+                "username": sound["username"],
+                "duration_seconds": sound["duration"],
+                "license": sound.get("license", ""),
+                "tags": sound.get("tags", []),
+                "url": f"https://freesound.org/s/{sid}/",
+                "review_status": "pending",
+            }
+            with MANIFEST_PATH.open("a", encoding="utf-8") as manifest:
+                manifest.write(json.dumps(metadata, ensure_ascii=False) + "\n")
+
             downloaded += 1
             time.sleep(0.3)
 
-    print(f"\nDownloaded and converted {downloaded} clips to {DATASET_DIR}/")
+    print(f"\nStaged {downloaded} candidate clips in {DATASET_DIR}/")
+    print("Listen to each clip and check its manifest entry before adding it to dataset/uav/.")
     print(f"Skipped: {skipped}")
     return 0
 
