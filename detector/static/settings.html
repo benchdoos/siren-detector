@@ -58,6 +58,8 @@
   .engine-card-title code, .engine-meta { font-size: 11px; color: #777; }
   .engine-settings { border-top: 1px solid #292929; margin-top: 12px; padding-top: 10px; }
   .engine-settings .s-row label { width: 190px; }
+  .engine-json-setting { min-width: 240px; min-height: 58px; resize: vertical; font: 11px/1.45 monospace; }
+  .engine-json-invalid { border-color: #ef5350 !important; }
   .engine-routes { display: flex; flex-direction: column; gap: 7px; }
   .engine-route-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #292929; background: #171717; border-radius: 5px; font-size: 12px; }
   .engine-route-row input { accent-color: #4caf50; }
@@ -440,6 +442,7 @@ function switchPanel(btn) {
 }
 
 function hasUnsaved() {
+  if (document.querySelector('.engine-json-invalid')) return true;
   for (const k of SETTINGS_KEYS) {
     const el = document.getElementById('s-' + k);
     if (el && el.value !== _loaded[k]) return true;
@@ -614,14 +617,17 @@ function renderEngineGraph() {
       const settings = config?.settings || {};
       const fields = manifest && config ? Object.entries(manifest.settings_schema?.properties || {}).map(([key, spec]) => {
         const value = settings[key] ?? _legacySettings[key] ?? spec.default ?? '';
+        const fieldType = Array.isArray(spec.type) ? spec.type.find(type => type !== 'null') : spec.type;
         let control;
         if (spec.enum) {
-          control = `<select data-engine-id="${esc(id)}" data-setting="${esc(key)}">${spec.enum.map(v =>
-            `<option value="${esc(String(v))}" ${String(value) === String(v) ? 'selected' : ''}>${esc(String(v))}</option>`).join('')}</select>`;
-        } else if (spec.type === 'boolean') {
+          control = `<select data-engine-id="${esc(id)}" data-setting="${esc(key)}">${spec.enum.map((v, index) =>
+            `<option value="${index}" ${JSON.stringify(value) === JSON.stringify(v) ? 'selected' : ''}>${esc(typeof v === 'string' ? v : JSON.stringify(v))}</option>`).join('')}</select>`;
+        } else if (fieldType === 'boolean') {
           control = `<input type="checkbox" data-engine-id="${esc(id)}" data-setting="${esc(key)}" ${value ? 'checked' : ''}>`;
-        } else if (spec.type === 'number' || spec.type === 'integer') {
-          control = `<input type="number" data-engine-id="${esc(id)}" data-setting="${esc(key)}" value="${esc(String(value))}" ${spec.minimum !== undefined ? `min="${esc(String(spec.minimum))}"` : ''} ${spec.maximum !== undefined ? `max="${esc(String(spec.maximum))}"` : ''} step="${spec.type === 'integer' ? '1' : 'any'}">`;
+        } else if (fieldType === 'number' || fieldType === 'integer') {
+          control = `<input type="number" data-engine-id="${esc(id)}" data-setting="${esc(key)}" value="${esc(String(value))}" ${spec.minimum !== undefined ? `min="${esc(String(spec.minimum))}"` : ''} ${spec.maximum !== undefined ? `max="${esc(String(spec.maximum))}"` : ''} step="${fieldType === 'integer' ? '1' : 'any'}">`;
+        } else if (fieldType === 'array' || fieldType === 'object') {
+          control = `<textarea class="engine-json-setting" data-engine-id="${esc(id)}" data-setting="${esc(key)}" data-json-setting="true" spellcheck="false">${esc(JSON.stringify(value, null, 2))}</textarea>`;
         } else {
           control = `<input type="text" data-engine-id="${esc(id)}" data-setting="${esc(key)}" value="${esc(String(value))}">`;
         }
@@ -675,8 +681,19 @@ function renderEngineGraph() {
     const manifest = graphManifest(el.dataset.engineId, config);
     const spec = manifest?.settings_schema?.properties?.[el.dataset.setting] || {};
     let value = el.type === 'checkbox' ? el.checked : el.value;
-    if (spec.type === 'number') value = Number(value);
-    if (spec.type === 'integer') value = Math.trunc(Number(value));
+    const fieldType = Array.isArray(spec.type) ? spec.type.find(type => type !== 'null') : spec.type;
+    if (el.tagName === 'SELECT' && Array.isArray(spec.enum)) value = spec.enum[Number(el.value)];
+    if (el.dataset.jsonSetting) {
+      try {
+        value = JSON.parse(value);
+        el.classList.remove('engine-json-invalid');
+      } catch (_) {
+        el.classList.add('engine-json-invalid');
+        return;
+      }
+    }
+    if (fieldType === 'number') value = Number(value);
+    if (fieldType === 'integer') value = Math.trunc(Number(value));
     config.settings[el.dataset.setting] = value;
   }));
   cards.querySelectorAll('[data-remove-engine]').forEach(el => el.addEventListener('click', () => {
@@ -718,6 +735,10 @@ function removeEngineFromRoutes(engineId) {
 
 async function saveEngineGraph(silent = false) {
   if (!_engineGraph) return false;
+  if (document.querySelector('.engine-json-invalid')) {
+    if (!silent) showStatus('Fix invalid JSON settings before saving', '#ef5350');
+    return false;
+  }
   try {
     const res = await fetch('/api/engine-graph', {
       method: 'PUT',
@@ -771,7 +792,9 @@ async function saveSettings() {
         const el = document.getElementById('s-' + k);
         if (el) { _loaded[k] = el.value; el.classList.remove('changed'); }
       }
-      if (_engineGraph && JSON.stringify(_engineGraph) !== _engineGraphBaseline) {
+      if (document.querySelector('.engine-json-invalid')) {
+        showStatus('Settings saved; fix invalid JSON in Engines to save engine graph', '#ef5350');
+      } else if (_engineGraph && JSON.stringify(_engineGraph) !== _engineGraphBaseline) {
         const graphSaved = await saveEngineGraph(true);
         showStatus(graphSaved ? 'Settings and engine graph saved · restart detector to apply' : 'Settings saved; engine graph failed to save', graphSaved ? '#4caf50' : '#ef5350');
       } else {

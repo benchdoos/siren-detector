@@ -244,8 +244,18 @@ class MyPolicy:
 JSON Schema настроек, требованиями к ресурсам и Python entrypoint. Для
 встроенного решения manifest можно посмотреть командой
 `python -m detector.main --engine yamnet --show-engine-manifest`. Сторонний
-движок может объявить такой же `EngineManifest` в атрибуте класса. Пока manifest
-не публикуется через API/UI, а схема настроек не управляет формой Settings.
+движок может объявить такой же `EngineManifest` в атрибуте класса. Manifest
+доступен через `GET /api/engines/manifests`; настройки зарегистрированного
+движка отображаются в Settings UI при выборе в сохранённом графе. Массивы и
+объекты редактируются как JSON.
+
+API графа проверяет следующую часть JSON Schema: `type` (включая объединения
+типов), `enum`, числовые границы и `multipleOf`, длину строки и `pattern`,
+размеры массива, `uniqueItems` и `items`, а также `required`, `properties`,
+`additionalProperties` и количество свойств объекта. Аннотации `default`,
+`description` и `title` сохраняются. Неподдерживаемые assertion-ключи отвергаются,
+а не игнорируются. Для `pattern` используется синтаксис Python regex; `$ref`,
+`format`, условные схемы и tuple-валидация элементов массива не поддерживаются.
 
 Встраиваемое приложение может зарегистрировать short selector до запуска:
 

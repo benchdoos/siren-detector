@@ -244,8 +244,18 @@ Each registered engine declares an `ENGINE_MANIFEST` with a stable `engine_id`, 
 settings, resource requirements, and Python entrypoint. Inspect the built-in
 manifest with `python -m detector.main --engine yamnet --show-engine-manifest`.
 A third-party engine can declare the same `EngineManifest` on its class. The
-manifest is not yet exposed through the API/UI, and its settings schema does
-not yet drive the Settings form.
+manifest is available from `GET /api/engines/manifests`; registered manifest
+settings also drive the Settings UI when the engine is selected in the saved
+graph. Array and object settings are edited as JSON.
+
+The graph API validates this JSON Schema subset: `type` (including type unions),
+`enum`, numeric bounds and `multipleOf`, string length and `pattern`, array
+length, `uniqueItems` and `items`, and object `required`, `properties`,
+`additionalProperties`, and property counts. Annotation keywords such as
+`default`, `description`, and `title` are preserved. Unsupported assertion
+keywords are rejected instead of being silently ignored. `pattern` uses Python's
+regular-expression syntax; `$ref`, `format`, conditional schemas, and tuple
+validation for array items are not supported.
 
 An embedding application can register a short selector before startup:
 

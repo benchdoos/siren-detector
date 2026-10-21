@@ -44,8 +44,8 @@ python -m detector.main \
 
 If `settings.json` contains `energy_event_threshold`,
 `energy_release_threshold`, or `energy_clip_seconds`, those values take priority
-over the CLI options. The current Settings UI is not generated from manifests,
-so these parameters do not appear in its form yet.
+over the CLI options in legacy mode. In graph mode, these manifest-defined
+settings appear in Settings → Engines and apply after the detector restarts.
 
 When the input amplitude crosses the threshold, the `siren` score bar rises and
 an event card appears after a WAV clip is saved. The same score/event messages

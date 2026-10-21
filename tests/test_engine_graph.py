@@ -224,6 +224,63 @@ class EngineGraphTests(unittest.TestCase):
             self.assertIs(legacy_values, settings_module.settings)
             self.assertEqual(settings_module.settings["siren_threshold"], 0.4)
 
+    def test_nested_json_schema_constraints_are_enforced(self) -> None:
+        schema = {
+            "type": "object",
+            "required": ["profile", "bands"],
+            "properties": {
+                "profile": {
+                    "type": "object",
+                    "required": ["name"],
+                    "properties": {
+                        "name": {"type": "string", "minLength": 3, "maxLength": 12,
+                                 "pattern": "^[a-z]+$"},
+                    },
+                    "additionalProperties": False,
+                },
+                "bands": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "uniqueItems": True,
+                    "items": {
+                        "type": "object",
+                        "required": ["center", "gain"],
+                        "properties": {
+                            "center": {"type": "integer", "minimum": 1, "maximum": 8},
+                            "gain": {"type": "number", "exclusiveMinimum": 0,
+                                     "multipleOf": 0.25},
+                        },
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "additionalProperties": False,
+        }
+        validate_settings_schema({
+            "profile": {"name": "siren"},
+            "bands": [{"center": 3, "gain": 0.5}],
+        }, schema)
+        invalid_settings = [
+            {"profile": {"name": "X"}, "bands": [{"center": 3, "gain": 0.5}]},
+            {"profile": {"name": "valid_1"}, "bands": [{"center": 3, "gain": 0.5}]},
+            {"profile": {"name": "valid"}, "bands": [{"center": 3, "gain": 0.3}]},
+            {"profile": {"name": "valid"}, "bands": [{"center": 3, "gain": 0.5}] * 2},
+            {"profile": {"name": "valid", "extra": True}, "bands": [{"center": 3, "gain": 0.5}]},
+        ]
+        for value in invalid_settings:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                validate_settings_schema(value, schema)
+
+    def test_unsupported_schema_assertions_are_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unsupported JSON Schema keyword 'format'"):
+            validate_settings_schema(
+                {"endpoint": "https://example.test"},
+                {"type": "object", "properties": {
+                    "endpoint": {"type": "string", "format": "uri"},
+                }},
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
