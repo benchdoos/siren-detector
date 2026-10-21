@@ -16,6 +16,7 @@ The current deployment is a remote inference setup: the ESP32 captures and trans
 
 ## Start here
 
+- [Hardware setup](hardware.md) — ESP32-S3 and INMP441 wiring, capacitors, and flashing.
 - [Getting started](getting-started.md) — configure and run the Docker services.
 - [Architecture](architecture.md) — audio flow and service responsibilities.
 - [Component API](component-api.md) — target contracts for sources, routing, processing, and outputs.

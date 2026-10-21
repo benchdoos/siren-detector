@@ -101,6 +101,51 @@ The payload uses 16 kHz mono I2S audio in 32-bit slots. The ESP32 transport keep
 
 The ESP32 firmware currently captures two optional INMP441 microphones on separate I2S buses, then averages the samples and sends one SDR1 stream. They therefore appear as **one source** to the detector. A USB microphone running `audio_source/audio_source.py` is an independent source. See [Multi-microphone setup](multi-microphone.md) for details.
 
+## DSP pre-filter cascade
+
+The detector can run an optional lightweight DSP model before YAMNet to skip expensive inference when the audio is clearly background.
+
+### How it works
+
+```text
+Audio (0.5 s) → DSP feature extraction → Conv1D classifier → Decision
+                                                                 │
+                                          background (high conf) → skip YAMNet
+                                          anything else          → run YAMNet + MLP
+```
+
+**Step 1: Feature extraction** (`detector/dsp_features.py`). Eight microphone-invariant features are extracted per 40 ms frame (20 ms hop, 50 fps):
+
+| Feature | What it captures |
+|---|---|
+| Pitch (YIN) | Fundamental frequency — siren sweeps have characteristic pitch patterns |
+| Log RMS energy | Loudness — explosions produce sharp energy spikes |
+| Spectral centroid | Brightness of the sound |
+| HNR (harmonic-to-noise ratio) | Tonal vs noisy — sirens are tonal, background is noisy |
+| ZCR (zero crossing rate) | Frequency content proxy |
+| Spectral bandwidth | How spread the energy is across frequencies |
+| Spectral flatness | Noise-like vs tone-like spectrum |
+| Spectral rolloff | Frequency below which 85% of energy falls |
+
+Delta features (rate of change) are appended, giving 16 features per frame.
+
+**Step 2: Conv1D classifier** (`detector/dsp_infer.py`). A TFLite model processes 250 frames (5 seconds) of normalized features. Architecture: Conv1D(24, k=7) -> Pool -> Conv1D(48, k=5) -> Pool -> Conv1D(48, k=3) -> GlobalAvgPool -> Dense(48) -> Dense(4). Total: ~18K parameters, ~30 KB as INT8 TFLite.
+
+**Step 3: Gate decision**. If the DSP model predicts "background" with confidence above `dsp_bg_threshold` (default 0.92), YAMNet inference is skipped for that window. A hysteresis mechanism prevents rapid toggling:
+
+- `dsp_bg_confirm_windows` (default 2): consecutive background predictions needed before skipping starts.
+- `dsp_bg_release_threshold` (default 0.90): confidence must drop below this to resume YAMNet.
+- `dsp_event_gate` (default 0.30): if any event class probability exceeds this, YAMNet runs regardless.
+- `dsp_max_consecutive_skips` (default 20): safety valve — after N consecutive skips, one forced YAMNet pass prevents the DSP model from permanently blocking detection.
+
+### Why DSP features are microphone-invariant
+
+Unlike spectrogram-based approaches that depend on the microphone's frequency response, DSP features like pitch, HNR, and ZCR describe structural properties of the sound. Changing the microphone or location shifts absolute levels but preserves the patterns that distinguish sirens (periodic sweep), explosions (sharp energy transient), and UAVs (sustained tonal energy) from background noise.
+
+### Configuration
+
+DSP settings are in [Settings](settings.md#dsp-pre-filter). Per-source overrides allow different thresholds per microphone. The DSP model must be present in the model directory; when missing, the pre-filter is automatically disabled.
+
 ## Inference modes
 
 The detector supports `round_robin` inference (one inference loop cycles over active sources) and `parallel` inference (a loop per source). Parallel mode can improve per-source latency at the cost of CPU and memory as source count grows. It can be selected in detector settings. Neither mode runs inference on the ESP32. See [inference modes and settings](settings.md#processing-modes) for details.

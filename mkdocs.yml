@@ -39,6 +39,7 @@ plugins:
           build: true
           nav_translations:
             Home: Главная
+            Hardware setup: Аппаратная сборка
             Getting started: Начало работы
             Architecture: Архитектура
             Operations: Эксплуатация
@@ -51,6 +52,7 @@ plugins:
 
 nav:
   - Home: index.md
+  - Hardware setup: hardware.md
   - Getting started: getting-started.md
   - Architecture: architecture.md
   - Operations: operations.md

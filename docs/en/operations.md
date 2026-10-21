@@ -70,6 +70,59 @@ The API shares the web UI port. Key routes include:
 
 Viewer routes require a valid token when authentication is enabled; state-changing routes require admin access. See the [API reference](api.md) and the running server's Swagger UI for routes and request/response schemas.
 
+## Makefile reference
+
+All targets assume the root `.env` is configured with `RPI`, `RPI_BASE`, `CONTAINER`, and `WEB_UI`.
+
+### Deploy
+
+| Target | Description |
+|---|---|
+| `make deploy` | Full rebuild: sync detector code + Compose file to RPi, rebuild container. |
+| `make deploy-ui` | Sync only `detector/static/` (no container rebuild). |
+| `make deploy-audio` | Sync `audio_source/` to RPi and rebuild its container. |
+| `make deploy-firmware` | Copy ESP32 YAML to RPi, validate, compile, and flash OTA. |
+| `make deploy-compose` | Copy `hub/docker-compose.yml` to RPi (no rebuild). |
+| `make deploy-model` | Push trained weights (MLP + DSP + audits) to RPi and restart. |
+| `make restart` | Restart the detector container (no rebuild). |
+| `make logs` | Tail detector container logs. |
+| `make logs-esp` | Stream ESP32 logs via ESPHome on RPi. |
+
+### ML and retraining
+
+| Target | Description |
+|---|---|
+| `make retrain` | Full cycle: merge recorder -> sync -> augment -> train DSP + MLP -> audit -> deploy -> clean. |
+| `make sync-dataset` | Sync labeled data from RPi to local Mac. |
+| `make augment` | Augment siren + explosion + uav (cleans old `aug_*` first). |
+| `make augment-siren` | Augment siren class only. |
+| `make augment-explosion` | Augment explosion class only. |
+| `make augment-uav` | Augment UAV class (normal + quiet). |
+| `make train` | Train MLP classifier on local dataset. |
+| `make train-dsp` | Train DSP pre-filter (Conv1D on DSP features). |
+| `make audit` | Run dataset and model audit, save snapshot. |
+| `make audit-compare` | Compare latest audit with previous (or specify `OLD=file NEW=file`). |
+| `make package-retrain-release` | Package retrain outputs for a GitHub Release. |
+
+### Cleanup
+
+| Target | Description |
+|---|---|
+| `make clean-clips` | Delete all saved clips on RPi. |
+| `make clean-dataset` | Delete all labeled WAVs on RPi (sync first!). |
+| `make clean-aug` | Remove all `aug_*` files locally before regenerating. |
+| `make clean-docker` | Prune Docker images and build cache on RPi (preserves volumes). |
+
+### Utilities
+
+| Target | Description |
+|---|---|
+| `make settings` | Dump current runtime settings from detector as JSON. |
+| `make open` | Open web UI in browser. |
+| `make unlock` | Add SSH key to agent for 10 minutes. |
+| `make fetch-esc50` | Download and extract the ESC-50 dataset. |
+| `make help` | Show available commands. |
+
 ## Troubleshooting
 
 - **No source appears:** check ESPHome logs, target IP/port, and that UDP `9000` is reachable on the Hub host.
