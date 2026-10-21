@@ -244,7 +244,7 @@ class YAMNetEngine:
 
         policy_context = EventPolicyContext(runtime, get_source, sources, dsp)
         event_policy = load_event_policy(args.event_policy, policy_context)
-        runtime.set_event_policy(event_policy)
+        runtime.set_event_policy(event_policy, engine_id=YAMNET_ENGINE_MANIFEST.engine_id)
         runtime.subscribe_audio(on_audio_frame, subscriber_id="yamnet")
 
         print("Ready.", flush=True)
@@ -475,6 +475,7 @@ class YAMNetEngine:
                 if skip_yamnet:
                     runtime.publish_inference(InferenceResult(
                         source_id=source.source_id,
+                        engine_id=YAMNET_ENGINE_MANIFEST.engine_id,
                         stage_id="dsp-prefilter",
                         timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                         scores={f"yamnet:{name}": 0.0 for name in DETECTORS},
@@ -493,6 +494,7 @@ class YAMNetEngine:
         })
         runtime.publish_inference(InferenceResult(
             source_id=prediction.source_id,
+            engine_id=prediction.engine_id,
             stage_id=prediction.stage_id,
             timestamp=prediction.timestamp,
             scores=prediction.scores,

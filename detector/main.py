@@ -22,6 +22,7 @@ from .integrations.mqtt import mqtt_connect, mqtt_subscribe
 from .runtime.clip_storage import WavClipStorage
 from .runtime.hub import RuntimeHub
 from .server.app import create_app
+from . import settings as settings_mod
 from .settings import load_settings
 from .transport.udp import UDPSourceAdapter
 
@@ -68,6 +69,8 @@ def main() -> None:
     runtime.set_clip_storage(WavClipStorage())
     runtime.add_input(UDPSourceAdapter(args.bind, args.port))
     settings = load_settings()
+    settings_mod.settings.clear()
+    settings_mod.settings.update(settings)
 
     # MQTT (non-blocking, works without broker)
     mqtt_connect()

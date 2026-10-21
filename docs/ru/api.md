@@ -18,6 +18,9 @@ REST API обслуживается тем же сервером, что и ве
 | `POST /api/auth/check` | Публичный | Проверяет токен из JSON-тела `{"token":"…"}`. |
 | `GET /api/settings` | Viewer | Текущие настройки, defaults и доступность DSP-модели. |
 | `GET /api/runtime/status` | Viewer | Состояние аудиоподписчиков, глубина очередей, пропуски и ошибки callback. |
+| `GET /api/engines/manifests` | Viewer | Manifests локально зарегистрированных решений. |
+| `GET /api/engine-graph` | Viewer | Сохранённый граф и доступность настроенных решений. |
+| `PUT /api/engine-graph` | Admin | Проверяет и сохраняет конфигурацию `engine-graph.v1`. |
 | `POST /api/settings` | Admin | Обновляет переданные поля настроек; неверные типы, диапазоны и режимы возвращают `400`. |
 | `POST /api/settings/reset` | Admin | Сбрасывает настройки к defaults. |
 | `GET /api/sources` | Viewer | Состояние известных аудиоисточников и пользовательские имена. |
@@ -49,6 +52,11 @@ REST API обслуживается тем же сервером, что и ве
 workers; произвольные фоновые потоки стороннего плагина должны сообщать свои
 сбои через `runtime.set_component_state(component_id, "degraded", error)`.
 Жёсткий timeout и принудительное прерывание Python callback не поддерживаются.
+
+`GET /api/engines/manifests` показывает локально зарегистрированные решения.
+`GET/PUT /api/engine-graph` читают и сохраняют конфигурацию графа, сохраняя
+неизвестные поля для совместимости. Сохранённый граф пока не запускает движки:
+активный runtime всё ещё использует одиночный `--engine`.
 
 ## WebSocket
 

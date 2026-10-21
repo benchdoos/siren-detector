@@ -54,7 +54,9 @@ class EventPolicy:
         sources = self._sources
         dsp = self._dsp
         if result.metadata.get("dsp_skipped_yamnet"):
-            self._publish_dsp_skipped_score(source, result.metadata["dsp_result"])
+            self._publish_dsp_skipped_score(
+                source, result.metadata["dsp_result"], result.engine_id,
+            )
             return
 
         yamnet_scores = {
@@ -119,6 +121,7 @@ class EventPolicy:
         score_msg: dict = {
             "type": "score", "top": yamnet_top,
             "source": source.name, "source_id": source.source_id,
+            "engine_id": result.engine_id,
         }
         for name in DETECTORS:
             score_msg[f"{name}_score"] = round(effective[name], 3)
@@ -166,6 +169,7 @@ class EventPolicy:
                 meta = {
                     "event": name, "confidence": round(pk["score"], 3),
                     "timestamp": ts, "source": source.name, "engine": engine_name,
+                    "engine_id": result.engine_id,
                     "source_id": source.source_id,
                     "yamnet": round(pk["yamnet"], 3),
                     "mlp": round(pk["mlp"], 3) if pk["mlp"] is not None else None,
@@ -192,6 +196,7 @@ class EventPolicy:
                 "type": "event", "event": name, "state": new_state,
                 "confidence": round(pk["score"], 3), "timestamp": ts,
                 "source": source.name, "engine": engine_name, "clip_url": clip_url,
+                "engine_id": result.engine_id,
                 "source_id": source.source_id,
                 "yamnet": round(pk["yamnet"], 3),
                 "mlp": round(pk["mlp"], 3) if pk["mlp"] is not None else None,
@@ -207,11 +212,14 @@ class EventPolicy:
             if new_state == "confirmed":
                 source.peaks[name] = dict(_EMPTY_PEAK)
 
-    def _publish_dsp_skipped_score(self, source: SourceState, dsp_result: dict) -> None:
+    def _publish_dsp_skipped_score(
+        self, source: SourceState, dsp_result: dict, engine_id: str,
+    ) -> None:
         """Publish background score and decay smoother triggers for a DSP skip."""
         score_msg: dict = {
             "type": "score", "top": "(dsp:background)",
             "source": source.name, "source_id": source.source_id,
+            "engine_id": engine_id,
             "dsp": dsp_result["probs"],
             "dsp_label": dsp_result["label"],
             "dsp_confidence": round(dsp_result["confidence"], 3),

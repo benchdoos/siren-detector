@@ -24,6 +24,8 @@ from ..config import (
     SAMPLE_RATE,
 )
 from .. import settings as settings_mod
+from ..engine.registry import engine_registry
+from ..runtime.engine_graph import EMPTY_GRAPH, validate_graph, validate_settings_schema
 from .routes_clips import save_clip_meta, _load_clip_meta
 
 if TYPE_CHECKING:
@@ -52,6 +54,72 @@ async def get_runtime_status():
         "components": _runtime.component_status(),
         "subscribers": _runtime.audio_status(),
     }
+
+
+@router.get("/api/engines/manifests", dependencies=[Depends(require_viewer)])
+async def get_engine_manifests():
+    """List locally registered engines and their configuration contracts."""
+    return {"manifests": engine_registry.manifests()}
+
+
+def _stored_engine_graph() -> dict:
+    return validate_graph({
+        "contract": settings_mod.settings.get("engine_graph_contract", EMPTY_GRAPH["contract"]),
+        "engine_configs": settings_mod.settings.get("engine_configs", {}),
+        "engine_routes": settings_mod.settings.get("engine_routes", EMPTY_GRAPH["engine_routes"]),
+    })
+
+
+@router.get("/api/engine-graph", dependencies=[Depends(require_viewer)])
+async def get_engine_graph():
+    """Return the stored graph with availability information for each engine."""
+    graph = _stored_engine_graph()
+    manifests = engine_registry.manifests()
+    by_id = {item["engine_id"]: item for item in manifests}
+    configs = {}
+    for engine_id, config in graph["engine_configs"].items():
+        manifest = by_id.get(engine_id)
+        available = bool(manifest and manifest["selector"] == config["selector"])
+        configs[engine_id] = {
+            **config, "available": available, "manifest": manifest if available else None,
+        }
+    return {**graph, "engine_configs": configs}
+
+
+@router.put("/api/engine-graph", dependencies=[Depends(require_admin)])
+async def put_engine_graph(body: dict = Body(...)):
+    """Validate and persist graph configuration, retaining extension fields."""
+    try:
+        graph = validate_graph(body)
+        manifests = engine_registry.manifests()
+        by_selector = {item["selector"]: item for item in manifests}
+        active_implementations: dict[str, str] = {}
+        for engine_id, config in graph["engine_configs"].items():
+            manifest = by_selector.get(config["selector"])
+            if not manifest:
+                continue  # Keep unavailable local selectors visible for later repair.
+            if manifest["engine_id"] != engine_id:
+                raise ValueError(
+                    f"engine_id {engine_id!r} does not match selector manifest ID "
+                    f"{manifest['engine_id']!r}"
+                )
+            validate_settings_schema(config["settings"], manifest["settings_schema"])
+            if config["enabled"]:
+                implementation = manifest["launch"].get("entrypoint", config["selector"])
+                previous = active_implementations.get(implementation)
+                if previous:
+                    raise ValueError(
+                        f"implementation {implementation!r} cannot be enabled under "
+                        f"both {previous!r} and {engine_id!r}"
+                    )
+                active_implementations[implementation] = engine_id
+    except (TypeError, ValueError, ImportError, AttributeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    settings_mod.settings["engine_graph_contract"] = graph["contract"]
+    settings_mod.settings["engine_configs"] = graph["engine_configs"]
+    settings_mod.settings["engine_routes"] = graph["engine_routes"]
+    settings_mod.save_settings()
+    return graph
 
 
 @router.get("/api/settings", dependencies=[Depends(require_viewer)])

@@ -27,6 +27,11 @@ def load_settings() -> dict:
             for k in DEFAULT_SETTINGS:
                 if k in saved:
                     result[k] = type(DEFAULT_SETTINGS[k])(saved[k])
+            # Keep versioned extension blocks (for example engine_configs and
+            # engine_routes) intact across upgrades that do not know their fields.
+            for k, value in saved.items():
+                if k not in DEFAULT_SETTINGS:
+                    result[k] = value
         except Exception as exc:
             print(f"Settings load error: {exc}", flush=True)
     return result
