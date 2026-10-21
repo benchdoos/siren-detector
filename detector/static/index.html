@@ -558,7 +558,9 @@ function _updateSourcesDropdown() {
     summary.querySelector('.dsp-classes').innerHTML = _renderTop3Html(topClasses, true);
     // Current DSP state per source
     const nowEl = summary.querySelector('.dsp-now');
-    const dspSources = Object.values(_sourceScores).filter(s => s.dsp);
+    const now = Date.now();
+    const dspSources = Object.values(_sourceScores).filter(s =>
+      s.dsp && now - (s._receivedAt || 0) < 5000);
     if (dspSources.length) {
       nowEl.innerHTML = '<h3 style="color:#666;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 4px">Now</h3>'
         + dspSources.map(s => {
@@ -661,7 +663,7 @@ function updateScores(msg) {
   const isHeartbeat = msg.source_id == null;
   if (!isHeartbeat) {
     const scoreKey = `${msg.source_id}:${msg.engine_id || 'legacy'}`;
-    _sourceScores[scoreKey] = msg;
+    _sourceScores[scoreKey] = {...msg, _receivedAt: Date.now()};
     if (!_sourceCustomNames[msg.source_id]) _knownSources[msg.source_id] = msg.source;
   }
   if (msg.source_names) {
