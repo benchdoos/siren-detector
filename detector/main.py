@@ -87,7 +87,7 @@ def main() -> None:
         try:
             await server.serve()
         finally:
-            runtime.stop_inputs()
+            runtime.stop()
 
     asyncio.run(serve())
 

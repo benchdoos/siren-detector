@@ -37,9 +37,9 @@ INMP441 → ESP32-S3 → UDP / SDR1 → UDP Hub → Detector → Web UI / MQTT
 
 The current UDP Hub is a small network relay. `UDPSourceAdapter` in Detector
 decodes SDR1 and emits `AudioFrame`; Runtime Hub routes the frame to
-subscribers. The YAMNet engine subscribes to frames but still owns buffers,
-inference, and event smoothing. Its scores and events flow back through Runtime
-Hub to the legacy EventBus, which feeds WebSocket and MQTT.
+subscribers through independent bounded queues. The YAMNet engine still owns
+buffers, inference, and event smoothing. Its scores and events flow back
+through Runtime Hub to the legacy EventBus, which feeds WebSocket and MQTT.
 
 ## Components
 
