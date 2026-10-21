@@ -632,7 +632,12 @@ function renderEngineGraph() {
         } else {
           control = `<input type="text" data-engine-id="${esc(id)}" data-setting="${esc(key)}" value="${esc(String(value))}">`;
         }
-        return `<div class="s-row"><label>${esc(key)}</label>${control}<span class="engine-meta">${esc(spec.type || '')}${spec.default !== undefined ? ` · default ${esc(String(spec.default))}` : ''}</span></div>`;
+        const label = spec.title || key;
+        const help = spec.description
+          ? ` <span class="s-help" onclick="toggleTip(this)">?</span>` : '';
+        const tip = spec.description
+          ? `<div class="s-tooltip"><strong>${esc(label)}</strong><br>${esc(spec.description)}${spec.minimum !== undefined || spec.maximum !== undefined ? `<hr><span class="s-tip-range">Range: <b>${esc(String(spec.minimum ?? '—'))} – ${esc(String(spec.maximum ?? '—'))}</b></span>` : ''}${spec.default !== undefined ? `<br><span class="s-tip-default">Default: <b>${esc(String(spec.default))}</b></span>` : ''}</div>` : '';
+        return `<div class="s-row"><label>${esc(label)}${help}</label>${control}<span class="engine-meta">${esc(spec.type || '')}${spec.default !== undefined ? ` · default ${esc(String(spec.default))}` : ''}</span></div>${tip}`;
       }).join('') : '';
       return `<div class="engine-card">
         <div class="engine-card-head">
