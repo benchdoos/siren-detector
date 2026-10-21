@@ -304,11 +304,14 @@ follow once contracts are stable.
 
 ## Current implementation and migration
 
-Today `detector/main.py` selects one engine with `--engine` and registers a
-`UDPSourceAdapter` in Runtime Hub. The adapter publishes `AudioFrame`; the
-engine subscribes to frames, and the YAMNet + MLP stage publishes an
-`InferenceResult` with `source_id`, `stage_id`, timestamp, namespaced scores,
-and metadata back through the Hub. The current policy receives it through the
+If there is no engine graph, `detector/main.py` keeps the legacy single-engine
+`--engine` mode. When `engine_configs` is set, main starts engines assigned to
+routes with separate settings; an explicit `--engine` is rejected. Runtime Hub
+applies `default`/`by_source` routes to audio subscriptions. The
+`UDPSourceAdapter` publishes `AudioFrame`; the engine subscribes to frames, and
+the YAMNet + MLP stage publishes an `InferenceResult` with `source_id`,
+`engine_id`, `stage_id`, timestamp, namespaced scores, and metadata back through
+the Hub. The current policy receives it through the
 Hub, applies smoothing, and publishes legacy score/event messages. The Hub
 routes those to `EventBusOutput`, which preserves the old format for
 `EventBus` (`detector/bus.py`), WebSocket, and integrations. Buffers and DSP
