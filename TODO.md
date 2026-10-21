@@ -363,11 +363,11 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
 7. [x] Settings-раздел «Решения» поддерживает включение, manifest settings,
    маршруты, lifecycle/errors в карточке и удаление недоступного selector.
    Runtime panel показывает здоровье audio subscribers.
-8. [~] Добавлены регрессионные проверки миграции старого `settings.json`, legacy
+8. [x] Добавлены регрессионные проверки миграции старого `settings.json`, legacy
    dotted `--engine` и его явного запрета при активном graph, enabled/disabled
    validation, default/by-source маршрутов, неизвестного источника, доставки через
-   Runtime Hub, независимых settings и отказа одного движка. Остаётся проверить
-   полный process startup с реальными input/API adapters.
+   Runtime Hub, независимых settings и отказа одного движка. `main()` проверен
+   с реальными UDP, Uvicorn/FastAPI, API и тестовым manifest engine.
 
 Ограничения первого multi-engine MVP: маршрутизация статическая, каскадов и
 слияния результатов нет; несколько экземпляров одного stateful implementation
@@ -378,9 +378,9 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
   отсчётов, временная метка, длительность/sequence number и `source_id`.
 - [x] Вынести SDR1/UDP вход в `UDPSourceAdapter`, отделённый от обработки;
   оставить текущий wire format без изменений.
-- [~] Ввести внутренний `inference-result.v1` для сырых оценок этапа: timestamp,
-  `source_id`, обязательный `engine_id`, `stage_id`, namespaced scores и metadata.
-  Публичная схема итогового события с состоянием и confidence ещё не определена.
+- [x] Ввести внутренний `inference-result.v1` для сырых оценок этапа: timestamp,
+  `source_id`, обязательный `engine_id`, `stage_id`, namespaced scores и metadata;
+  итоговое событие следует публичному контракту `detector-event.v1`.
 - [x] Зафиксировать базовые границы `RuntimeHub` и `EventBus`: Hub маршрутизирует
   аудио и результаты компонентов, EventBus пока доставляет legacy-оценки/события
   UI и интеграциям.
@@ -403,9 +403,9 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
   подключён через Runtime Hub); определить независимый контракт и регистрацию
   альтернативных event policies. `event-policy.v1`, выбор `default` или локального
   Python-класса через CLI уже есть; контекст пока содержит внутренности Detector.
-- [~] Описать `engine-manifest.v1`: для встроенного YAMNet + MLP уже заданы
+- [x] Описать `engine-manifest.v1`: для встроенного YAMNet + MLP уже заданы
   стабильный ID, версия, классы, контракты, схема настроек, ресурсы и запуск;
-  добавлен вывод через CLI. Подключение manifest к API/UI ещё впереди.
+  manifest выводится через CLI и подключён к API/UI.
 - [x] Зарегистрировать встроенный `yamnet` и добавить реестр локальных
   Python-движков; сохранить выбор класса через dotted path и совместимость со
   старым `start(runtime, settings, args)` (legacy dotted path без manifest — с предупреждением).
@@ -413,11 +413,11 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
   получить аудиокадр → вернуть score/event → увидеть результат в UI.
 - [x] MVP-критерий: пользователь может подключить один собственный движок к
   существующему аудиопотоку без изменений прошивки, транспорта, UI и MQTT.
-- [~] Показывать состояние компонентов в API/UI: `GET /api/runtime/status` и
+- [x] Показывать состояние компонентов в API/UI: `GET /api/runtime/status` и
   Runtime panel показывают lifecycle и версию engine, ошибки запуска, а также
   очереди, пропуски и ошибки callback. YAMNet передаёт ошибки parallel workers;
   сторонний engine со своими потоками сообщает их через Runtime Hub. Жёстко
-  прервать зависший Python callback нельзя.
+  прервать зависший Python callback нельзя; это ограничение Python.
 - [x] Изолировать подписчиков Runtime Hub: fan-out в ограниченные очереди,
   overflow и обработка ошибок одного callback без блокировки остальных.
 
