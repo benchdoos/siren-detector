@@ -5,7 +5,6 @@
 /secrets.yaml
 /ml/.venv/
 /ml/results/*
-!/ml/results/saved_embeddings.npz
 !/ml/results/val_sources.json
 !/ml/results/classifier_weights.npz
 !/ml/results/classifier_labels.json
