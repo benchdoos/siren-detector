@@ -82,6 +82,14 @@ class RuntimeIntegrationTests(unittest.TestCase):
                 self.assertEqual(metrics.status_code, 200)
                 self.assertIn("detector_audio_frames_received_total", metrics.text)
                 self.assertIn("integration-probe", metrics.text)
+
+                with client.stream("GET", "/events") as response:
+                    self.assertEqual(response.status_code, 200)
+                    lines = iter(response.iter_lines())
+                    self.assertEqual(next(lines), "event: session")
+                    self.assertTrue(next(lines).startswith("data: {"))
+                    self.assertEqual(next(lines), "")
+                    self.assertEqual(next(lines), "event: score")
         finally:
             runtime.stop()
 
