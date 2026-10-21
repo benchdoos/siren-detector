@@ -279,6 +279,11 @@ to `--engine`. A class without a manifest remains available through the legacy
 interface with a warning. UDP Hub is a separate network relay. `RuntimeMessage`
 wraps the legacy payload and does not yet define the final public `v1` schema.
 
+A runnable minimal third-party engine, launch instructions, and the expected
+UI behavior are covered in [Connect a custom engine](custom-engine-example.md).
+It receives `AudioFrame` through Runtime Hub and publishes score/event messages
+back through the Hub; it does not need direct UDP, WebSocket, or MQTT access.
+
 Recommended migration:
 
 1. Document current score/event and audio wire formats as a legacy profile.
