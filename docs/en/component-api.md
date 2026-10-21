@@ -52,6 +52,17 @@ Remote inference should consume `AudioFrame` and return `InferenceResult`; a
 separate network HELLO/CONFIG/AUDIO/EVENT protocol is not needed yet. New sources
 should adapt to `audio-frame.v1` without changing the existing UDP wire format.
 
+### Proposed event fusion semantics
+
+Fusion should be an explicit, separately configured output policy; independent
+per-engine events remain the default. The initial candidate is a 5-second window
+keyed by `(source_id, event class)`: confirmed events in the same window become
+one event, with the maximum confidence, a list of contributing `engine_ids`, and
+the window's first timestamp. Events from different sources or classes never
+merge. The UI should retain the contributing scores and identify this rule in
+the event details. This proposal still needs implementation and product review;
+no event fusion is active today.
+
 ### Audio source and input adapter
 
 The adapter handles device and protocol specifics: capture, decoding, format
