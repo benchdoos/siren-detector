@@ -262,6 +262,14 @@ manifest is available from `GET /api/engines/manifests`; registered manifest
 settings also drive the Settings UI when the engine is selected in the saved
 graph. Array and object settings are edited as JSON.
 
+Configuration scope is explicit: legacy `/api/settings` values remain global
+defaults; `engine_configs[engine_id].settings` overrides those defaults for one
+engine; source-specific DSP/click-removal overrides stay under the source
+settings. In graph mode, engine settings are copied and do not mutate global
+defaults. The built-in YAMNet manifest exposes its thresholds, inference cadence,
+and DSP controls; shared clip and smoothing policy values continue to use the
+global settings.
+
 Settings validation uses the `jsonschema` Draft 2020-12 validator by default, or
 the draft declared by the manifest's `$schema`. This includes composition,
 conditional schemas, local references, tuple validation, and the standard
