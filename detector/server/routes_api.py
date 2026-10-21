@@ -28,15 +28,26 @@ from .routes_clips import save_clip_meta, _load_clip_meta
 
 if TYPE_CHECKING:
     from ..bus import EventBus
+    from ..runtime.hub import RuntimeHub
 
 router = APIRouter()
 
 _bus: EventBus | None = None
+_runtime: RuntimeHub | None = None
 
 
-def init(bus: EventBus) -> None:
-    global _bus
+def init(bus: EventBus, runtime: RuntimeHub | None = None) -> None:
+    global _bus, _runtime
     _bus = bus
+    _runtime = runtime
+
+
+@router.get("/api/runtime/status", dependencies=[Depends(require_viewer)])
+async def get_runtime_status():
+    """Return in-process audio subscriber states and queue diagnostics."""
+    if _runtime is None:
+        return {"available": False, "subscribers": []}
+    return {"available": True, "subscribers": _runtime.audio_status()}
 
 
 @router.get("/api/settings", dependencies=[Depends(require_viewer)])

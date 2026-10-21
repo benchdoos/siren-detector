@@ -14,17 +14,18 @@ from . import routes_api, routes_clips, routes_ws
 
 if TYPE_CHECKING:
     from ..bus import EventBus
+    from ..runtime.hub import RuntimeHub
 
 _bus: EventBus | None = None
 
 
-def create_app(bus: EventBus) -> FastAPI:
+def create_app(bus: EventBus, runtime: RuntimeHub | None = None) -> FastAPI:
     global _bus
     _bus = bus
 
     # Initialise sub-modules with bus reference
     routes_clips.init(bus)
-    routes_api.init(bus)
+    routes_api.init(bus, runtime)
     routes_ws.init(bus)
 
     @asynccontextmanager

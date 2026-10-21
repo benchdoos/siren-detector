@@ -17,6 +17,7 @@ REST API обслуживается тем же сервером, что и ве
 | `GET /api/auth/status` | Публичный | Сообщает, включена ли авторизация. |
 | `POST /api/auth/check` | Публичный | Проверяет токен из JSON-тела `{"token":"…"}`. |
 | `GET /api/settings` | Viewer | Текущие настройки, defaults и доступность DSP-модели. |
+| `GET /api/runtime/status` | Viewer | Состояние аудиоподписчиков, глубина очередей, пропуски и ошибки callback. |
 | `POST /api/settings` | Admin | Обновляет переданные поля настроек; неверные типы, диапазоны и режимы возвращают `400`. |
 | `POST /api/settings/reset` | Admin | Сбрасывает настройки к defaults. |
 | `GET /api/sources` | Viewer | Состояние известных аудиоисточников и пользовательские имена. |
@@ -37,6 +38,13 @@ REST API обслуживается тем же сервером, что и ве
 | `GET /clips/{filename}/spectrogram` | Нет проверки на маршруте | Получает спектрограмму клипа. |
 
 Защищённые маршруты при неверном или отсутствующем токене возвращают `401` либо `403`. Поля настроек и их диапазоны приведены в [справочнике настроек](settings.md).
+
+`GET /api/runtime/status` возвращает `available` и массив `subscribers`. Для
+каждой аудиоподписки доступны `subscriber_id`, `state`, `queue_depth`,
+`queue_capacity`, `overflow`, счётчики `frames_received`, `frames_processed`,
+`frames_dropped`, `sequence_gaps`, `callback_errors` и `last_error`. Это статус
+доставки кадров и callback; lifecycle запуска модели и ошибки отдельного
+inference loop пока не входят в ответ.
 
 ## WebSocket
 

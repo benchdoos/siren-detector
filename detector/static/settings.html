@@ -136,6 +136,7 @@
     <button class="sp-nav-item" data-panel="sp-smoothing" onclick="switchPanel(this)">Smoothing</button>
     <button class="sp-nav-item" data-panel="sp-clips" onclick="switchPanel(this)">Clips</button>
     <button class="sp-nav-item" data-panel="sp-sources" onclick="switchPanel(this)">Sources</button>
+    <button class="sp-nav-item" data-panel="sp-runtime" onclick="switchPanel(this)">Runtime</button>
     <button class="sp-nav-item" data-panel="sp-calibration" onclick="switchPanel(this)">Calibration</button>
     <button class="sp-nav-item" data-panel="sp-about" onclick="switchPanel(this)">About</button>
     <div class="sp-nav-spacer"></div>
@@ -264,6 +265,20 @@
       </div>
       <div class="sp-panel-footer">
         <span class="sp-status" id="status-sources"></span>
+      </div>
+    </div>
+
+    <!-- Runtime -->
+    <div class="sp-panel" id="sp-runtime">
+      <div class="s-section">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
+          <div class="s-title" style="margin:0;flex:1">Audio Subscribers</div>
+          <button class="btn-reset-panel" onclick="loadRuntimeStatus()">Refresh</button>
+        </div>
+        <p style="font-size:12px;color:#666;margin:0 0 12px 0;line-height:1.5">Live audio delivery and callback health. Queue drops mean a component is receiving frames faster than it processes them. Model startup and inference-loop status are not reported here yet.</p>
+        <div id="runtime-subscribers" style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:13px;color:#666">Loading runtime status...</div>
+        </div>
       </div>
     </div>
 
@@ -604,6 +619,44 @@ async function loadSources() {
     }
   } catch(e) {
     list.innerHTML = '<div style="font-size:13px;color:#ef5350">Failed to load sources.</div>';
+  }
+}
+
+/* ── Runtime component status ── */
+async function loadRuntimeStatus() {
+  const container = document.getElementById('runtime-subscribers');
+  try {
+    const res = await fetch('/api/runtime/status', { headers: adminHeaders() });
+    if (!res.ok) throw new Error(`Request failed (${res.status})`);
+    const data = await res.json();
+    const subscribers = data.subscribers || [];
+    if (!data.available || subscribers.length === 0) {
+      container.innerHTML = '<div style="font-size:13px;color:#666">No audio-processing components are currently subscribed.</div>';
+      return;
+    }
+    container.innerHTML = subscribers.map(sub => {
+      const stateColor = sub.state === 'ready' ? '#4caf50'
+        : sub.state === 'degraded' ? '#ffa726'
+        : sub.state === 'stopped' ? '#777' : '#64b5f6';
+      const details = [
+        `${sub.frames_processed || 0} frames processed`,
+        `${sub.frames_dropped || 0} dropped`,
+        `${sub.sequence_gaps || 0} sequence gaps`,
+        `${sub.callback_errors || 0} callback errors`,
+        `queue ${sub.queue_depth || 0}/${sub.queue_capacity || 0}`,
+      ].join(' · ');
+      const error = sub.last_error
+        ? `<div style="font-size:11px;color:#ef9a9a;margin-top:6px;overflow-wrap:anywhere">${esc(sub.last_error)}</div>` : '';
+      return `<div style="background:#1a1a1a;border:1px solid #292929;border-radius:6px;padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+          <strong style="font-size:13px;color:#ddd">${esc(sub.subscriber_id)}</strong>
+          <span style="font-size:11px;color:${stateColor};margin-left:auto">${esc(sub.state)}</span>
+        </div>
+        <div style="font-size:11px;color:#777;line-height:1.5">${details}</div>${error}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    container.innerHTML = `<div style="font-size:13px;color:#ef5350">Could not load runtime status: ${esc(e.message)}</div>`;
   }
 }
 
@@ -1059,10 +1112,12 @@ async function deleteCalRecording(btn, path) {
 
 /* ── Init ── */
 loadSettings();
+loadRuntimeStatus();
 loadCalibrationSources();
 loadSources();
 loadCalRecordings();
 setInterval(loadCalRecordings, 15000);
+setInterval(loadRuntimeStatus, 3000);
 
 (async function init() {
   // Check if calibration is in progress — if so, open Calibration panel

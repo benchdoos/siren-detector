@@ -78,7 +78,7 @@ def main() -> None:
     threading.Thread(target=engine.start, args=(runtime, settings, args), daemon=True).start()
 
     # FastAPI in main thread (captures the event loop)
-    app = create_app(bus)
+    app = create_app(bus, runtime)
     config = uvicorn.Config(app, host="0.0.0.0", port=args.web_port, log_level="warning")
     server = uvicorn.Server(config)
 
