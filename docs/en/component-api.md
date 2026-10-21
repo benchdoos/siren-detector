@@ -1,0 +1,227 @@
+# Component API
+
+This document describes the target architecture for replaceable components.
+It is a proposed contract: the current code does not yet implement every
+interface and format below. The web application's HTTP API is documented
+separately in [API](api.md).
+
+## Goal and terminology
+
+The system is composed of replaceable blocks:
+
+```text
+sources → input adapters → Runtime Hub ⇄ processing chains
+                              │       DSP → YAMNet → MLP
+                              └→ export layer → UI / WS / REST / MQTT
+```
+
+Each block can be replaced by an implementation that follows its component
+contract. A user can replace one stage (such as MLP), the full recognition
+chain, an audio source, routing, or an output without coupling the new
+component directly to the others.
+
+**Runtime Hub** means the logical router inside Detector. The existing
+**UDP Hub** (`hub/hub.py`) is a separate network relay that forwards datagrams.
+They have different roles.
+
+### Component types
+
+| Type | Input | Output | Examples |
+|---|---|---|---|
+| Source | Microphone, file, or network stream | Audio data | ESP32/SDR1, USB/ALSA, file |
+| Input adapter | Source protocol or driver | Common `AudioFrame` | SDR1/UDP to PCM frames |
+| Runtime Hub | Frames and route configuration | Routed frames/requests | Fan-out, chain selection |
+| Processing stage | Frame or previous stage result | Transform or score | DSP, YAMNet, MLP, custom model |
+| Event policy | Scores from one or more stages | Normalized events | Thresholds, temporal smoothing, fusion |
+| Output adapter | Normalized scores/events | External representation | WebSocket, MQTT, webhook, clips |
+
+A microphone driver belongs to a source/input adapter, not to a model that
+receives normalized frames. An LLM or remote model may need a processing
+adapter, such as audio windowing or transcript/summary handoff, without
+changing the microphone driver.
+
+## Boundaries and responsibilities
+
+### Audio source and input adapter
+
+The adapter handles device and protocol specifics: capture, decoding, format
+conversion, and stable `source_id` assignment. It does not classify sirens or
+publish MQTT directly.
+
+The internal audio contract normalizes data independently of transport. The
+initial project profile is mono, 16 kHz, float32 PCM inside Detector. An
+adapter may accept another format and convert it to this profile while keeping
+the original source parameters in metadata. Current SDR1/UDP remains one
+adapter; the SDR1 wire format is not the common internal contract.
+
+Proposed frame shape:
+
+```json
+{
+  "contract": "audio-frame.v1",
+  "source_id": "0",
+  "sequence": 1842,
+  "timestamp": "2026-10-21T10:15:30.125Z",
+  "sample_rate_hz": 16000,
+  "channels": 1,
+  "sample_format": "float32",
+  "samples": "binary payload",
+  "metadata": {"transport": "sdr1/udp"}
+}
+```
+
+In a real API, `samples` should be a binary block or an internal object, not
+JSON-encoded. The frame carries enough timing and sequence information to
+detect gaps and preserve order.
+
+### Runtime Hub / router
+
+Runtime Hub works in both directions:
+
+1. It receives audio frames from input adapters and routes them to assigned
+   processing chains.
+2. It receives scores, events, and execution status from chains and associates
+   them with the originating `source_id`, frame, and `engine_id`.
+3. Based on route configuration, it forwards results to event policy and/or
+   the export layer.
+
+So yes: a model returns information to Runtime Hub, and the Hub routes it to
+the output layer. Intermediate scores can go directly to monitoring, while
+final events can pass through event policy for thresholds, temporal smoothing,
+deduplication, and fusion. Runtime Hub itself contains no YAMNet, DSP, MQTT, or
+class-specific rules; its job is routing, correlation, and lifecycle.
+
+The first version can use static routing: a source is assigned to one or more
+chains. Dynamic rules, conditional stage execution, and a UI graph editor are
+later capabilities.
+
+### Processing chain
+
+Processing is configured as an ordered list of components. The default profile
+preserves current behavior:
+
+```text
+DSP pre-filter → YAMNet embeddings/scores → MLP classifier → event policy
+```
+
+DSP, YAMNet, and MLP are replaceable stages/models. An implementation may
+combine them in one process for efficiency if it preserves the same external
+contract. A chain may emit intermediate scores and a final result. Shared
+event policy converts scores into states and events; later it can also fuse
+results from multiple chains.
+
+A processor receives an audio frame and invocation context, then returns a
+result with the same source/frame identifiers. It should not call the UI,
+MQTT, or clip filesystem directly. Stage-specific resources and private state
+remain inside that component.
+
+### Export layer and output adapters
+
+The export layer receives normalized results forwarded by Runtime Hub and
+converts them for recipients. Its adapters can subscribe to scores, events,
+and component status. WebSocket/UI provides live visualization, REST reads
+state and manages the system, MQTT/webhook delivers externally, and clip
+storage persists audio. Failure of an optional output must not stop audio
+input or inference; each output defines buffering, retry, and drop behavior.
+
+## Shared inference result
+
+Processing components publish scores in a common shape. The exact schema will
+be finalized and versioned during implementation; the minimum proposed form:
+
+```json
+{
+  "contract": "inference-result.v1",
+  "source_id": "0",
+  "engine_id": "default-audio-chain",
+  "frame_sequence": 1842,
+  "timestamp": "2026-10-21T10:15:30.125Z",
+  "stage_id": "mlp",
+  "scores": {"siren": 0.87, "background": 0.08},
+  "metadata": {"model_version": "local"}
+}
+```
+
+`engine_id` and `stage_id` provide attribution without embedding model-specific
+names in the common protocol. A score is model output; by itself it is not a
+confirmed event.
+
+An event is created by event policy and carries at least:
+
+```json
+{
+  "contract": "detector-event.v1",
+  "event_id": "unique-id",
+  "class": "siren",
+  "state": "confirmed",
+  "confidence": 0.87,
+  "timestamp": "2026-10-21T10:15:30.125Z",
+  "source_id": "0",
+  "engine_ids": ["default-audio-chain"],
+  "evidence": [{"stage_id": "mlp", "score": 0.87}],
+  "clip_url": "/clips/example.wav"
+}
+```
+
+For multiple solutions, an event preserves provenance and evidence. Confirmation,
+deduplication, and fusion rules belong to event policy, not hidden UI or MQTT
+adapter logic.
+
+## Configuration and lifecycle
+
+A component declares a stable ID, type, version, supported contract versions,
+its settings schema, and capabilities. Settings are scoped globally, per
+source, per component/stage, and optionally per source-to-chain assignment.
+Secrets (such as external service tokens) are stored separately from ordinary
+settings and never returned in clear text by the API.
+
+Minimum lifecycle: `configured → starting → ready → stopping → stopped`, with
+an `error` state and diagnostics on failure. Components accept resource limits
+and timeouts; one component's stop or failure must not silently block the full
+graph. Process restart may be required for some component changes, and dynamic
+settings application must be declared explicitly.
+
+The component registry and graph configuration belong to a management API.
+Arbitrary Python imports or uploading user code through the web UI should not
+be treated as a safe extension installation mechanism. The MVP can use
+developer-managed file/CLI configuration; UI installation and activation can
+follow once contracts are stable.
+
+## Versions and compatibility
+
+- Audio, inference-result, and event contracts have independent versions.
+- Breaking changes increment the major contract version.
+- Unknown optional fields are ignored and preserved by pass-through relays.
+- Each adapter declares supported formats and versions.
+- Until public `v1` is finalized, these schemas are proposals, not a stable
+  wire protocol.
+
+## Current implementation and migration
+
+Today `detector/main.py` selects one engine with `--engine`. The contract in
+`detector/engine/interface.py` passes the engine the entire `EventBus`, settings,
+and CLI args; the engine starts its own UDP transport and publishes complete
+score/event messages. `EventBus` (`detector/bus.py`) is the in-process bridge
+to WebSocket and integrations, while UDP Hub is a separate relay. Threshold
+and smoothing settings are mostly global.
+
+Recommended migration:
+
+1. Document current score/event and audio wire formats as a legacy profile.
+2. Add an internal normalized `AudioFrame` and input adapter without changing
+   SDR1 on the network.
+3. Move the current chain into the first pipeline provider while preserving
+   behavior.
+4. Add separate event policy and output adapters over the shared result.
+5. Add configurable routing and a second independent component, then update
+   the management UI and APIs.
+
+This allows each contract to be validated against the existing YAMNet + MLP
+before changing transport, model, and interface together.
+
+## Related documents
+
+- [Architecture](architecture.md) — current and target diagrams.
+- [HTTP API and WebSocket](api.md) — application interface, not the plugin API.
+- [Settings](settings.md) — current runtime parameters.
+- `detector/engine/interface.py` — actual legacy engine contract.
