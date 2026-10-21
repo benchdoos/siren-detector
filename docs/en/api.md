@@ -18,6 +18,7 @@ When authentication is enabled (`AUTH_ENABLED` in `hub/.env`), protected request
 | `POST /api/auth/check` | Public | Checks a token from JSON body `{"token":"…"}`. |
 | `GET /api/settings` | Viewer | Current settings, defaults, and DSP model availability. |
 | `GET /api/runtime/status` | Viewer | Audio subscriber states, queue depth, dropped frames, and callback errors. |
+| `GET /metrics` | Viewer | Prometheus 0.0.4 text metrics for engine, audio queue, and output health. |
 | `GET /api/engines/manifests` | Viewer | Locally registered engine manifests. |
 | `GET /api/engine-graph` | Viewer | Stored graph and configured engine availability. |
 | `PUT /api/engine-graph` | Admin | Validates and stores `engine-graph.v1`. |

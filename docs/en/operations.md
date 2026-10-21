@@ -54,6 +54,7 @@ The API shares the web UI port. Key routes include:
 |---|---|---|
 | `/api/settings` | GET/POST | Read or update settings (POST requires admin access) |
 | `/api/sources` | GET | List known audio sources |
+| `/metrics` | GET | Scrape Prometheus runtime counters and gauges (requires viewer auth) |
 | `/api/metrics` | GET | Read validation metrics when present |
 | `/api/audits` | GET | Read model/dataset audit snapshots |
 | `/api/calibrate` | GET/POST | Check or start background calibration |
