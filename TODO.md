@@ -370,8 +370,8 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
 2. [x] Добавить хранение `engine_configs[engine_id].settings` и маршрутов через
    `/api/engine-graph`; старые плоские настройки остаются fallback. Неизвестные
    поля сохраняются.
-3. [~] Runtime Hub применяет default/by-source маршруты к подпискам движков;
-   UI для назначения маршрутов источникам ещё не сделан.
+3. [x] Runtime Hub применяет default/by-source маршруты к подпискам движков;
+   Settings UI позволяет назначать маршруты по умолчанию и источникам.
 4. [~] Запускать назначенные графом движки ровно один раз с manifest и
    отдельными settings; повторный запуск одного entrypoint запрещён. Нужна
    дальнейшая изоляция mutable state YAMNet и CLI-параметров.
@@ -379,16 +379,16 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
    event policy по движку. Наследуемые score/event output и YAMNet policy пока
    не полностью изолированы по ID. Нельзя позволить двум
    YAMNet engine перезаписывать друг другу policy или module-level settings.
-6. [~] Добавить API просмотра локально доступных manifests и сохранённого graph;
-   API валидирует используемый поднабор JSON Schema. Полная JSON Schema,
-   UI управления и отображение ошибок недоступного selector ещё впереди.
-7. [~] Добавить Settings-раздел «Решения»: включение, версия, классы, настройки
-   manifest и назначение источникам. Недоступный selector показывается с ошибкой
-   и сохранённую запись можно удалить. Состояние движка видно в Runtime panel;
-   объединить его с карточкой решения и закончить UI polish.
-8. [ ] Проверить миграцию старого `settings.json`, legacy `--engine`, включённый
-   и выключенный движки, default/by-source маршруты, неизвестный источник,
-   ошибку одного движка и разные settings двух движков.
+6. [~] API показывает локальные manifests и сохранённый graph и валидирует
+   используемый поднабор JSON Schema. Settings UI показывает недоступный selector;
+   расширить поддержку JSON Schema и отполировать ошибки валидации.
+7. [~] Settings-раздел «Решения» поддерживает включение, manifest settings,
+   маршруты и удаление недоступного selector. Состояние движка видно отдельно в
+   Runtime panel; объединить его с карточкой и закончить UI polish.
+8. [~] Добавлены регрессионные проверки миграции старого `settings.json`, legacy
+   dotted `--engine`, enabled/disabled validation, default/by-source маршрутов,
+   неизвестного источника и раздельных settings по manifest. Ещё проверить полный
+   startup/CLI путь, маршрутизацию через Runtime Hub и отказ одного движка.
 
 Ограничения первого multi-engine MVP: маршрутизация статическая, каскадов и
 слияния результатов нет; несколько экземпляров одного stateful implementation
