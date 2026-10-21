@@ -380,7 +380,10 @@ class RuntimeHub:
         for output in self._outputs:
             stop = getattr(output, "stop", None)
             if callable(stop):
-                stop()
+                try:
+                    stop()
+                except Exception:
+                    logger.exception("Output adapter %s failed to stop", type(output).__name__)
         with self._subscriptions_lock:
             for component in self._components.values():
                 if component["state"] != "error":

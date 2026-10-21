@@ -24,6 +24,7 @@ from .runtime.clip_storage import WavClipStorage
 from .runtime.engine_graph import validate_graph, validate_settings_schema
 from .runtime.hub import RuntimeHub
 from .runtime.lifecycle import has_explicit_engine_option, run_engine_component
+from .runtime.webhook import WebhookOutput
 from .server.app import create_app
 from . import settings as settings_mod
 from .settings import load_settings
@@ -128,6 +129,13 @@ def main() -> None:
     if stored_graph is not None:
         runtime.configure_engine_graph(stored_graph)
     runtime.set_clip_storage(WavClipStorage())
+    try:
+        webhook_output = WebhookOutput.from_environment()
+    except ValueError as exc:
+        webhook_output = None
+        print(f"Webhook configuration error; output disabled: {exc}", flush=True)
+    if webhook_output is not None:
+        runtime.add_output(webhook_output)
     runtime.add_input(UDPSourceAdapter(args.bind, args.port))
     settings_mod.settings.clear()
     settings_mod.settings.update(settings)
