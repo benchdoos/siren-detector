@@ -17,6 +17,7 @@ Detection modes:
 from __future__ import annotations
 
 import argparse
+import logging
 import threading
 import time
 from datetime import datetime, timezone
@@ -44,6 +45,8 @@ from .stages.yamnet_mlp import YAMNetMlpStage
 from .manifest import YAMNET_ENGINE_MANIFEST
 from ..runtime.policies import EventPolicyContext, load_event_policy
 from .. import settings as settings_mod
+
+logger = logging.getLogger(__name__)
 
 # ── Click removal (impulse noise suppression) ─────────────────────────
 # MAD-based outlier detection: finds samples that deviate > threshold * MAD
@@ -254,17 +257,27 @@ class YAMNetEngine:
 
         def _source_loop(source: SourceState, stop: threading.Event):
             """Inference loop for a single source (used in parallel mode)."""
-            while not stop.is_set():
-                disabled = settings_mod.settings.get("disabled_sources", [])
-                waveform = source.inference_buf.consume(_inference_hop_samples())
-                if waveform is None:
-                    stop.wait(0.05)
-                    continue
-                if source.source_id in disabled:
-                    continue
-                self._process_source(
-                    source, waveform, model_stage, det_engine, runtime,
-                    sources, dsp,
+            try:
+                while not stop.is_set():
+                    disabled = settings_mod.settings.get("disabled_sources", [])
+                    waveform = source.inference_buf.consume(_inference_hop_samples())
+                    if waveform is None:
+                        stop.wait(0.05)
+                        continue
+                    if source.source_id in disabled:
+                        continue
+                    self._process_source(
+                        source, waveform, model_stage, det_engine, runtime,
+                        sources, dsp,
+                    )
+            except Exception as exc:
+                runtime.set_component_state(
+                    "yamnet", "degraded",
+                    f"source {source.source_id}: {type(exc).__name__}: {exc}",
+                )
+                logger.exception(
+                    "Parallel inference worker failed for source %s",
+                    source.source_id,
                 )
 
         def _stop_parallel():

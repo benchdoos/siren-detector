@@ -6,6 +6,7 @@ import logging
 import queue
 import threading
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Protocol
 
 from ..bus import EventBus
@@ -197,6 +198,7 @@ class RuntimeHub:
         self._audio_subscriptions: dict[str, AudioSubscription] = {}
         self._next_subscription_id = 1
         self._subscriptions_lock = threading.RLock()
+        self._components: dict[str, dict] = {}
         self._event_policy: EventPolicy | None = None
         self._clip_storage: ClipStorageAdapter | None = None
         self._inputs: list[AudioInputAdapter] = []
@@ -254,6 +256,10 @@ class RuntimeHub:
                 overflow=overflow,
             )
             self._audio_subscriptions[subscriber_id] = subscription
+            component = self._components.get(subscriber_id)
+            if component is not None:
+                component["state"] = "ready"
+                component["updated_at"] = datetime.now(timezone.utc).isoformat()
         self._start_inputs()
         return subscription
 
@@ -262,6 +268,52 @@ class RuntimeHub:
         with self._subscriptions_lock:
             subscriptions = tuple(self._audio_subscriptions.values())
         return [sub.snapshot() for sub in subscriptions]
+
+    def register_component(
+        self, component_id: str, name: str, version: str | None = None,
+    ) -> None:
+        """Register an engine lifecycle record before starting its thread."""
+        if not component_id.strip() or not name.strip():
+            raise ValueError("component_id and name must not be empty")
+        with self._subscriptions_lock:
+            if component_id in self._components:
+                raise ValueError(f"Component {component_id!r} already exists")
+            now = datetime.now(timezone.utc).isoformat()
+            self._components[component_id] = {
+                "component_id": component_id,
+                "name": name,
+                "version": version,
+                "state": "starting",
+                "started_at": now,
+                "updated_at": now,
+                "error_count": 0,
+                "last_error": None,
+            }
+
+    def set_component_state(
+        self, component_id: str, state: str, error: BaseException | str | None = None,
+    ) -> None:
+        """Update lifecycle state and retain the latest diagnostic."""
+        allowed = {"starting", "ready", "degraded", "error", "stopping", "stopped"}
+        if state not in allowed:
+            raise ValueError(f"Unsupported component state {state!r}")
+        with self._subscriptions_lock:
+            component = self._components.get(component_id)
+            if component is None:
+                return
+            component["state"] = state
+            component["updated_at"] = datetime.now(timezone.utc).isoformat()
+            if error is not None:
+                component["error_count"] += 1
+                component["last_error"] = (
+                    f"{type(error).__name__}: {error}"
+                    if isinstance(error, BaseException) else str(error)
+                )
+
+    def component_status(self) -> list[dict]:
+        """Return snapshots of registered engine lifecycle records."""
+        with self._subscriptions_lock:
+            return [dict(component) for component in self._components.values()]
 
     def _start_inputs(self) -> None:
         for input_adapter in self._inputs:
@@ -281,11 +333,21 @@ class RuntimeHub:
 
     def stop(self) -> None:
         """Stop audio producers first, then all subscriber workers."""
+        with self._subscriptions_lock:
+            for component in self._components.values():
+                if component["state"] not in ("error", "stopped"):
+                    component["state"] = "stopping"
+                    component["updated_at"] = datetime.now(timezone.utc).isoformat()
         self.stop_inputs()
         with self._subscriptions_lock:
             subscriptions = tuple(self._audio_subscriptions.values())
         for subscription in subscriptions:
             subscription.stop()
+        with self._subscriptions_lock:
+            for component in self._components.values():
+                if component["state"] != "error":
+                    component["state"] = "stopped"
+                    component["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     def publish_audio_frame(self, frame: AudioFrame) -> None:
         """Route an input frame to processors and the live-audio output."""
