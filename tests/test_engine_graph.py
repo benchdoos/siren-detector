@@ -3,15 +3,43 @@
 from __future__ import annotations
 
 import json
+import importlib
+import sys
 import tempfile
+import threading
+import time
+import types
 import unittest
 from pathlib import Path
+from argparse import Namespace
 from unittest.mock import patch
+
+import numpy as np
 
 from detector.engine.registry import engine_registry
 from detector.runtime.manifest import EngineManifest
 from detector.runtime.engine_graph import route_for_source, validate_graph, validate_settings_schema
+from detector.runtime.contracts import AudioFrame
+from detector.runtime.lifecycle import has_explicit_engine_option, run_engine_component
 from detector.settings import load_settings
+
+
+class _FakeEventBus:
+    def __init__(self):
+        self.audio = []
+
+    def broadcast_audio(self, samples, source_id=0):
+        self.audio.append(source_id)
+
+    def broadcast(self, message):
+        pass
+
+
+_bus_stub = types.ModuleType("detector.bus")
+_bus_stub.EventBus = _FakeEventBus
+with patch.dict(sys.modules, {"detector.bus": _bus_stub}):
+    RuntimeHub = importlib.import_module("detector.runtime.hub").RuntimeHub
+sys.modules.pop("detector.runtime.hub", None)
 
 
 ENERGY_SCHEMA = {
@@ -59,6 +87,11 @@ class EngineGraphTests(unittest.TestCase):
         self.assertEqual(engine_class.__name__, "EnergyThresholdEngine")
         self.assertEqual(manifest.engine_id, "energy-threshold-example")
 
+    def test_saved_graph_rejects_explicit_legacy_engine_option(self) -> None:
+        self.assertFalse(has_explicit_engine_option(["detector", "--port", "9000"]))
+        self.assertTrue(has_explicit_engine_option(["detector", "--engine", "yamnet"]))
+        self.assertTrue(has_explicit_engine_option(["detector", "--engine=yamnet"]))
+
     def test_default_source_override_and_unknown_source_routes(self) -> None:
         graph = validate_graph({
             "contract": "engine-graph.v1",
@@ -76,6 +109,69 @@ class EngineGraphTests(unittest.TestCase):
         self.assertEqual(route_for_source(graph, 2), ("yamnet",))
         self.assertEqual(route_for_source(graph, 7), ("energy-threshold-example",))
         self.assertEqual(route_for_source(graph, 999), ("yamnet",))
+
+    def test_runtime_hub_delivers_only_to_routed_engine(self) -> None:
+        graph = {
+            "engine_configs": {
+                "yamnet": {"selector": "yamnet", "enabled": True, "settings": {}},
+                "energy-threshold-example": {
+                    "selector": "energy-threshold-example", "enabled": True, "settings": {},
+                },
+            },
+            "engine_routes": {
+                "default": ["yamnet"],
+                "by_source": {"7": ["energy-threshold-example"]},
+            },
+        }
+        runtime = RuntimeHub(_FakeEventBus())
+        runtime.configure_engine_graph(graph)
+        received = {"yamnet": [], "energy-threshold-example": []}
+        events = {engine_id: threading.Event() for engine_id in received}
+        for engine_id in received:
+            def consume(frame, key=engine_id):
+                received[key].append(frame.source_id)
+                events[key].set()
+
+            runtime.subscribe_audio(consume, subscriber_id=engine_id)
+        try:
+            for source_id in (2, 7, 999):
+                runtime.publish_audio_frame(AudioFrame(
+                    source_id=source_id,
+                    sequence=source_id,
+                    timestamp="2026-10-21T00:00:00Z",
+                    sample_rate_hz=16_000,
+                    samples=np.zeros(4, dtype=np.float32),
+                    metadata={},
+                ))
+            self.assertTrue(events["yamnet"].wait(1))
+            self.assertTrue(events["energy-threshold-example"].wait(1))
+            deadline = time.monotonic() + 1
+            while len(received["yamnet"]) < 2 and time.monotonic() < deadline:
+                time.sleep(0.005)
+            self.assertEqual(received["yamnet"], [2, 999])
+            self.assertEqual(received["energy-threshold-example"], [7])
+        finally:
+            runtime.stop()
+
+    def test_one_engine_failure_does_not_change_peer_state(self) -> None:
+        class BrokenEngine:
+            def start(self, runtime, settings, args):
+                raise RuntimeError("engine startup failed")
+
+        class HealthyEngine:
+            def start(self, runtime, settings, args):
+                return None
+
+        runtime = RuntimeHub(_FakeEventBus())
+        runtime.register_component("broken", "Broken")
+        runtime.register_component("healthy", "Healthy")
+        run_engine_component(runtime, "broken", BrokenEngine, {}, Namespace())
+        run_engine_component(runtime, "healthy", HealthyEngine, {}, Namespace())
+        states = {item["component_id"]: item for item in runtime.component_status()}
+        self.assertEqual(states["broken"]["state"], "error")
+        self.assertEqual(states["broken"]["error_count"], 1)
+        self.assertIn("engine startup failed", states["broken"]["last_error"])
+        self.assertEqual(states["healthy"]["state"], "ready")
 
     def test_disabled_engine_cannot_be_routed(self) -> None:
         with self.assertRaisesRegex(ValueError, "route references disabled engine"):

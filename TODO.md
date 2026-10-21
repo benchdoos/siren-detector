@@ -386,9 +386,10 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
    маршруты и удаление недоступного selector. Состояние движка видно отдельно в
    Runtime panel; объединить его с карточкой и закончить UI polish.
 8. [~] Добавлены регрессионные проверки миграции старого `settings.json`, legacy
-   dotted `--engine`, enabled/disabled validation, default/by-source маршрутов,
-   неизвестного источника и раздельных settings по manifest. Ещё проверить полный
-   startup/CLI путь, маршрутизацию через Runtime Hub и отказ одного движка.
+   dotted `--engine` и его явного запрета при активном graph, enabled/disabled
+   validation, default/by-source маршрутов, неизвестного источника, доставки через
+   Runtime Hub, независимых settings и отказа одного движка. Остаётся проверить
+   полный process startup с реальными input/API adapters.
 
 Ограничения первого multi-engine MVP: маршрутизация статическая, каскадов и
 слияния результатов нет; несколько экземпляров одного stateful implementation
