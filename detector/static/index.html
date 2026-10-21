@@ -85,6 +85,7 @@
 
   .score-panel { padding: 20px 24px; border-bottom: 1px solid #222; }
   .score-label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+  .score-engine { font-size: 10px; color: #888; text-transform: none; letter-spacing: 0; }
   .score-bar-wrap { background: #1a1a1a; border-radius: 6px; height: 32px; overflow: hidden; position: relative; }
   .score-bar { height: 100%; width: 0%; background: #4caf50; transition: width .3s, background .3s; border-radius: 6px; }
   @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.5 } }
@@ -313,7 +314,7 @@
 
 <div class="score-panel">
   <div class="detector-row" data-detector="siren">
-    <div class="score-label">Siren</div>
+    <div class="score-label">Siren <span class="score-engine" id="score-engine-siren"></span></div>
     <div class="score-bar-wrap">
       <div class="score-bar" id="bar-siren"></div>
       <span class="score-value" id="val-siren">—</span>
@@ -326,7 +327,7 @@
     </div>
   </div>
   <div class="detector-row" data-detector="explosion" style="margin-top:12px">
-    <div class="score-label">Explosion</div>
+    <div class="score-label">Explosion <span class="score-engine" id="score-engine-explosion"></span></div>
     <div class="score-bar-wrap">
       <div class="score-bar" id="bar-explosion"></div>
       <span class="score-value" id="val-explosion">—</span>
@@ -338,7 +339,7 @@
     </div>
   </div>
   <div class="detector-row" data-detector="uav" style="margin-top:12px">
-    <div class="score-label">UAVs</div>
+    <div class="score-label">UAVs <span class="score-engine" id="score-engine-uav"></span></div>
     <div class="score-bar-wrap">
       <div class="score-bar" id="bar-uav"></div>
       <span class="score-value" id="val-uav">—</span>
@@ -368,6 +369,7 @@
   <button class="lbtn" onclick="batchLabel('unknown')">unknown</button>
 </div>
 <div class="filter-bar">
+  <label style="font-size:11px;color:#777">Engine <select id="engine-filter" onchange="setEngineFilter(this)"><option value="all">all</option></select></label>
   <button class="fbtn active" data-filter="all" onclick="setFilter(this)">all</button>
   <button class="fbtn" data-filter="untagged" onclick="setFilter(this)">untagged</button>
   <button class="fbtn" data-filter="siren" onclick="setFilter(this)"><span style="color:#ef5350">•</span> siren</button>
@@ -439,15 +441,41 @@ const _sourceCustomNames = {};  // source_id → custom name (from settings, sur
 const _sourceScores = {};  // source_id → last score message (for multi-source aggregation)
 let _dspStats = null;  // aggregate DSP decisions across all sources
 const _STATE_PRIORITY = { idle: 0, possible: 1, confirmed: 2 };
+let activeEngineFilter = 'all';
+const _knownEngines = new Set();
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 function cardMatchesFilter(card, filter) {
-  if (filter === 'all') return true;
-  if (filter === 'untagged') return card.dataset.tagged !== 'true';
-  return card.dataset.label === filter;
+  const matchesLabel = filter === 'all' || (filter === 'untagged'
+    ? card.dataset.tagged !== 'true' : card.dataset.label === filter);
+  const matchesEngine = activeEngineFilter === 'all' || card.dataset.engineId === activeEngineFilter;
+  return matchesLabel && matchesEngine;
 }
 
-function updateDetector(name, score, state, triggers, possibleNeeded, confirmedNeeded, cooldown, refractory) {
+function registerEngineFilter(engineId) {
+  if (!engineId || _knownEngines.has(engineId)) return;
+  _knownEngines.add(engineId);
+  const select = document.getElementById('engine-filter');
+  const option = document.createElement('option');
+  option.value = engineId;
+  option.textContent = engineId;
+  select.appendChild(option);
+  [...select.options].slice(1).sort((a, b) => a.text.localeCompare(b.text))
+    .forEach(option => select.appendChild(option));
+}
+
+function setEngineFilter(select) {
+  activeEngineFilter = select.value;
+  document.querySelectorAll('#events .event-card').forEach(card => {
+    card.style.display = cardMatchesFilter(card, activeFilter) ? '' : 'none';
+    const checkbox = card.querySelector('.ev-check');
+    if (checkbox) checkbox.checked = false;
+  });
+  document.getElementById('select-all').checked = false;
+  updateSelection();
+}
+
+function updateDetector(name, score, state, triggers, possibleNeeded, confirmedNeeded, cooldown, refractory, engineId) {
   const bar   = document.getElementById('bar-' + name);
   const val   = document.getElementById('val-' + name);
   const badge = document.getElementById('badge-' + name);
@@ -457,6 +485,8 @@ function updateDetector(name, score, state, triggers, possibleNeeded, confirmedN
   bar.style.width      = pct + '%';
   bar.style.background = color;
   val.textContent      = (score * 100).toFixed(1) + '%';
+  const engineLabel = document.getElementById('score-engine-' + name);
+  if (engineLabel) engineLabel.textContent = engineId ? ` · peak from ${engineId}` : '';
   badge.textContent    = state;
   badge.className      = 'state-badge ' + state;
   bar.classList.toggle('pulsing', state === 'possible' || state === 'confirmed');
@@ -638,12 +668,13 @@ function updateScores(msg) {
   // Aggregate per detector: worst state, max score, max triggers
   for (const name of DETECTOR_NAMES) {
     let bestScore = 0, bestState = 'idle', bestTriggers = 0;
+    let bestEngineId = '';
     let possNeeded = 4, confNeeded = 8, maxCooldown = 0, maxRefractory = 0;
     for (const s of sources) {
       const sc = s[name + '_score'] || 0;
       const st = s[name + '_state'] || 'idle';
       const tr = s[name + '_triggers'] || 0;
-      if (sc > bestScore) bestScore = sc;
+      if (sc > bestScore) { bestScore = sc; bestEngineId = s.engine_id || ''; }
       if ((_STATE_PRIORITY[st] || 0) > (_STATE_PRIORITY[bestState] || 0)) bestState = st;
       if (tr > bestTriggers) bestTriggers = tr;
       if (s[name + '_possible_needed'] != null) possNeeded = s[name + '_possible_needed'];
@@ -653,8 +684,10 @@ function updateScores(msg) {
       if (cd > maxCooldown) maxCooldown = cd;
       if (rf > maxRefractory) maxRefractory = rf;
     }
-    updateDetector(name, bestScore, bestState, bestTriggers, possNeeded, confNeeded, maxCooldown, maxRefractory);
+    updateDetector(name, bestScore, bestState, bestTriggers, possNeeded, confNeeded, maxCooldown, maxRefractory, bestEngineId);
   }
+
+  registerEngineFilter(msg.engine_id);
 
   // Top info: average across all sources
   const parts = [];
@@ -774,7 +807,7 @@ function buildDetailsHtml(ev) {
   if (ev.triggers != null) {
     html += `<div class="detail-row"><span class="detail-label">Triggers</span><span class="detail-val">${ev.triggers} / ${ev.triggers_needed || '?'} in window</span></div>`;
   }
-  html += `<div class="detail-row"><span class="detail-label">Engine</span><span class="detail-val">${esc(ev.engine || 'unknown')}</span></div>`;
+  html += `<div class="detail-row"><span class="detail-label">Engine</span><span class="detail-val">${esc(ev.engine || 'unknown')}${ev.engine_id ? ` · ${esc(ev.engine_id)}` : ''}</span></div>`;
   if (ev.source) html += `<div class="detail-row"><span class="detail-label">Source</span><span class="detail-val">${esc(ev.source)}${ev.source_id != null ? ' (id: ' + ev.source_id + ')' : ''}</span></div>`;
   // YAMNet
   if (ev.yamnet != null || (ev.yamnet_top3 && ev.yamnet_top3.length)) {
@@ -812,8 +845,10 @@ function addEvent(ev) {
   if (emptyEl) { emptyEl.remove(); emptyEl = null; }
   const ts = new Date(ev.timestamp).toLocaleTimeString();
   const filename = ev.clip_url.split('/').pop();
+  registerEngineFilter(ev.engine_id);
   const card = document.createElement('div');
   card.className = 'event-card';
+  if (ev.engine_id) card.dataset.engineId = ev.engine_id;
   const breakdown = (() => {
     const p = [];
     if (ev.yamnet_top) p.push(`top: ${esc(ev.yamnet_top)}`);
@@ -831,7 +866,7 @@ function addEvent(ev) {
       <span class="badge ${esc(ev.event)}">${esc(ev.event.toUpperCase())}</span>
       <span class="event-time">${ts}</span>
       <span class="event-conf">${(ev.confidence * 100).toFixed(1)}%</span>
-      <span class="event-engine">${esc(ev.engine)}</span>
+      <span class="event-engine">${esc(ev.engine || 'unknown')}${ev.engine_id ? ` · ${esc(ev.engine_id)}` : ''}</span>
       <button class="ev-details-toggle" onclick="toggleDetails(this)">details ▸</button>
       ${ev.source && ev.source !== 'manual' && ev.source !== 'restored' ? `<span class="event-source">${esc(ev.source)}</span>` : ''}
     </div>
