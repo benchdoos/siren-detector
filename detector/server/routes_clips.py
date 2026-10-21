@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse
 
 from ..auth import AUTH_ENABLED, check_token
 from ..config import CLIP_DIR, DATASET_DIR, VALID_LABELS
+from ..runtime.contracts import normalize_detector_event
 
 if TYPE_CHECKING:
     from ..bus import EventBus
@@ -181,6 +182,8 @@ async def restore_clips(bus: EventBus) -> None:
             "timestamp": ts,
             "source": meta.get("source", "restored") if meta else "restored",
             "engine": meta.get("engine", "unknown") if meta else "unknown",
+            "engine_id": meta.get("engine_id", meta.get("engine", "legacy")) if meta else "legacy",
+            "source_id": meta.get("source_id") if meta else None,
             "clip_url": f"/clips/{name}",
             "yamnet": meta.get("yamnet", 0.0) if meta else 0.0,
             "mlp": meta.get("mlp") if meta else None,
@@ -192,6 +195,7 @@ async def restore_clips(bus: EventBus) -> None:
             "triggers_needed": meta.get("triggers_needed") if meta else None,
             "segments": meta.get("segments", []) if meta else [],
         }
+        ev = normalize_detector_event(ev)
         bus.event_history.append(ev)
     if wavs:
         print(f"Restored {len(wavs)} clips from /clips/", flush=True)

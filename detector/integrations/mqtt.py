@@ -129,6 +129,7 @@ def _mqtt_publish_event(
     if _mqtt_client is None:
         return
     _mqtt_client.publish("sound_detector/events", json.dumps({
+        "contract": "detector-event.v1",
         "type": "event",
         "event": name,
         "state": state,

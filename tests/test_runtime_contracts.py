@@ -6,7 +6,7 @@ import unittest
 
 import numpy as np
 
-from detector.runtime.contracts import AudioFrame, InferenceResult
+from detector.runtime.contracts import AudioFrame, InferenceResult, normalize_detector_event
 
 
 class RuntimeContractTests(unittest.TestCase):
@@ -35,6 +35,22 @@ class RuntimeContractTests(unittest.TestCase):
                 metadata={},
                 contract="inference-result.v2",
             )
+
+    def test_legacy_event_is_upgraded_and_versioned_event_is_validated(self) -> None:
+        event = normalize_detector_event({
+            "type": "event", "event": "siren", "confidence": 0.7,
+            "state": "confirmed", "engine": "yamnet", "source_id": 2,
+            "source": "north-mic", "timestamp": "2026-10-21T10:00:00Z",
+        })
+        self.assertEqual(event["contract"], "detector-event.v1")
+        self.assertEqual(event["engine_id"], "yamnet")
+        with self.assertRaisesRegex(ValueError, "unsupported event contract"):
+            normalize_detector_event({"type": "event", "contract": "detector-event.v2"})
+        with self.assertRaisesRegex(ValueError, "invalid detector-event.v1"):
+            normalize_detector_event({
+                "type": "event", "event": "siren", "state": "confirmed",
+                "confidence": 1.5, "engine_id": "yamnet", "source_id": 1,
+            })
 
 
 if __name__ == "__main__":

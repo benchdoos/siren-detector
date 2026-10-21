@@ -198,21 +198,23 @@ namespaced scores и metadata:
 ```json
 {
   "contract": "detector-event.v1",
-  "event_id": "unique-id",
-  "class": "siren",
+  "type": "event",
+  "event": "siren",
   "state": "confirmed",
   "confidence": 0.87,
   "timestamp": "2026-10-21T10:15:30.125Z",
-  "source_id": "0",
-  "engine_ids": ["default-audio-chain"],
-  "evidence": [{"stage_id": "mlp", "score": 0.87}],
-  "clip_url": "/clips/example.wav"
+  "source": "north-mic",
+  "source_id": 0,
+  "engine_id": "yamnet",
+  "clip_url": "/clips/example.wav",
+  "threshold": 0.1
 }
 ```
 
-Для нескольких решений событие должно сохранять происхождение и evidence.
-Правило подтверждения, дедупликации и объединения — часть конфигурации event
-policy, а не скрытая логика UI или MQTT адаптера.
+Legacy producers обновляются на границе Runtime Hub, дополнительные поля
+сохраняются. Неизвестная версия контракта и неверные обязательные поля
+отвергаются. Пока событие содержит один `engine_id`; дальнейшее объединение
+добавит несколько решений и evidence без изменения текущего single-engine вида.
 
 ### Контракт политики событий `event-policy.v1`
 
