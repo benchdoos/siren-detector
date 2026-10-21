@@ -100,9 +100,14 @@ retrain:
 	$(MAKE) train
 	$(MAKE) audit
 	-$(MAKE) audit-compare
+	$(MAKE) package-retrain-release
 	$(MAKE) _clean-trained
 	$(MAKE) deploy-model
 	$(MAKE) restart
+
+## Package current retrain outputs for a future GitHub Release
+package-retrain-release:
+	ml/.venv/bin/python ml/package_retrain_release.py
 
 ## Move labeled WAVs from dataset/recorder/ into main dataset/ on RPi
 _merge-recorder:
@@ -281,10 +286,11 @@ help:
 	@echo "    make augment-uav Augment uav (normal + quiet)"
 	@echo "    make audit           Run dataset/model audit snapshot"
 	@echo "    make audit-compare   Compare latest vs previous audit"
+	@echo "    make package-retrain-release  Package retrain outputs for GitHub"
 	@echo ""
 
 .PHONY: deploy deploy-audio deploy-ui deploy-firmware logs-esp deploy-compose restart logs settings \
-        sync-dataset train train-dsp deploy-model retrain _merge-recorder _wait-calibration _clean-trained \
+        sync-dataset train train-dsp deploy-model retrain package-retrain-release _merge-recorder _wait-calibration _clean-trained \
         clean-clips clean-dataset clean-docker \
         augment augment-siren augment-explosion augment-uav \
         audit audit-compare \
