@@ -19,7 +19,7 @@ Inference runs on the Detector host, not the ESP32. `inference_interval_seconds`
 |---|---:|---:|---|
 | `siren_threshold` | `0.10` | `0–1` | Minimum siren score to trigger. When the MLP is active, this applies to its output. Lower values increase sensitivity and false positives. |
 | `explosion_threshold` | `0.15` | `0–1` | YAMNet threshold for Explosion, Burst/pop, and Gunshot/gunfire classes. |
-| `uav_threshold` | `0.15` | `0–1` | Threshold for the Motorcycle class, used as a proxy for UAV engine sounds. |
+| `uav_threshold` | `0.15` | `0–1` | Threshold for the UAV class, used as a proxy for UAV engine sounds. |
 | `yamnet_min_gate` | `0.01` | `0–1` | Minimum YAMNet score required before trusting the siren MLP prediction. `0` disables this check. |
 
 ## DSP pre-filter

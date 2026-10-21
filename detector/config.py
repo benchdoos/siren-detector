@@ -17,7 +17,7 @@ ANALYSIS_SECONDS = 2.0
 DETECTORS = {
     "siren":      (("Siren",), 0.10, ""),
     "explosion":  (("Explosion", "Burst, pop", "Gunshot, gunfire"), 0.15, "exp-"),
-    "uav": (("Motorcycle",), 0.15, "uav-"),
+    "uav": (("UAV",), 0.15, "uav-"),
 }
 
 CLIP_SECONDS = 10

@@ -42,6 +42,16 @@ and never randomly split excerpts from the same source across train and test.
 Treat results as a quick baseline only: microphone, room, distance, and recording
 conditions differ from our ESP32 setup. Add local recordings for real evaluation.
 
+## UAV reference candidates
+
+`python3 dataset/fetch_freesound_uav.py --limit 20` searches Freesound for
+quadcopter, multirotor, UAV, and drone recordings. Set `FREESOUND_API_KEY` as
+described by the script. Downloads go to `dataset/inbox/uav_candidates/`, not
+the training folder. They are only previews/candidates: listen to each clip,
+check that it is an actual UAV and useful audio, and review its license and
+attribution in `manifest.jsonl` before copying an approved WAV into `dataset/uav/`.
+Exclude wrong or ambiguous sounds; do not train on the candidate folder.
+
 Do not mix these files into `dataset/siren/` or `dataset/background/`; that
 would erase their provenance and make future evaluation harder to trust.
 
