@@ -13,7 +13,7 @@ Open-source project for detecting civil-alert sirens, explosions, and nearby UAV
 
 ## Documentation
 
-**[Read the English documentation](docs/en/index.md)** for setup, architecture, operation, data and model training, and multi-microphone configuration. The docs are also available in [Russian](docs/ru/index.md).
+**[Read the English documentation](https://benchdoos.github.io/siren-detector/)** for setup, architecture, operation, data and model training, and multi-microphone configuration. The docs are also available in [Russian](docs/ru/index.md).
 
 ## Quick start
 
