@@ -38,6 +38,7 @@ class MqttEventTests(unittest.TestCase):
             if call.args[0] == "sound_detector/events"
         )
         payload = json.loads(event_call.args[1])
+        self.assertEqual(payload["contract"], "detector-event.v1")
         self.assertEqual(payload["engine_id"], "yamnet")
         self.assertEqual(payload["source_id"], 12)
         self.assertEqual(payload["confidence"], 0.812)

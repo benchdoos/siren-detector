@@ -198,21 +198,23 @@ An event is created by event policy and carries at least:
 ```json
 {
   "contract": "detector-event.v1",
-  "event_id": "unique-id",
-  "class": "siren",
+  "type": "event",
+  "event": "siren",
   "state": "confirmed",
   "confidence": 0.87,
   "timestamp": "2026-10-21T10:15:30.125Z",
-  "source_id": "0",
-  "engine_ids": ["default-audio-chain"],
-  "evidence": [{"stage_id": "mlp", "score": 0.87}],
-  "clip_url": "/clips/example.wav"
+  "source": "north-mic",
+  "source_id": 0,
+  "engine_id": "yamnet",
+  "clip_url": "/clips/example.wav",
+  "threshold": 0.1
 }
 ```
 
-For multiple solutions, an event preserves provenance and evidence. Confirmation,
-deduplication, and fusion rules belong to event policy, not hidden UI or MQTT
-adapter logic.
+Legacy event producers are upgraded at the Runtime Hub boundary and keep their
+extra fields. Unknown event contract versions and invalid core fields are
+rejected. Events carry one producing `engine_id`; later fusion can represent
+multiple engines and evidence without changing the current single-engine form.
 
 ### `event-policy.v1` contract
 

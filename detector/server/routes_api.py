@@ -26,6 +26,7 @@ from ..config import (
 from .. import settings as settings_mod
 from ..engine.registry import engine_registry
 from ..runtime.engine_graph import EMPTY_GRAPH, validate_graph, validate_settings_schema
+from ..runtime.contracts import normalize_detector_event
 from .routes_clips import save_clip_meta, _load_clip_meta
 
 if TYPE_CHECKING:
@@ -719,17 +720,17 @@ async def manual_event(body: dict | None = Body(None)):
     meta = {
         "event": "unknown", "confidence": 0.0,
         "timestamp": ts_iso, "source": "manual", "engine": "user",
-        "source_id": source_id,
+        "source_id": source_id, "engine_id": "manual",
     }
     save_clip_meta(clip_name, meta)
     ev = {
         "type": "event", "event": "unknown", "state": "confirmed",
         "confidence": 0.0, "timestamp": ts_iso,
         "source": "manual", "engine": "user", "clip_url": clip_url,
-        "source_id": source_id,
+        "source_id": source_id, "engine_id": "manual",
         "yamnet": 0.0, "mlp": None, "yamnet_top": "",
         "yamnet_top3": [], "mlp_top3": [],
     }
-    _bus.broadcast(ev)
+    _bus.broadcast(normalize_detector_event(ev))
     print(f"[{ts_iso}] manual event saved: {clip_url} (source: {source_id})", flush=True)
     return {"ok": True, "clip_url": clip_url}

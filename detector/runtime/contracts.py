@@ -3,12 +3,53 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Literal, Mapping
 
 import numpy as np
+from jsonschema import Draft202012Validator
 
 
 MessageKind = Literal["score", "event"]
+DETECTOR_EVENT_CONTRACT = "detector-event.v1"
+DETECTOR_EVENT_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "required": ["contract", "type", "event", "state", "confidence", "timestamp",
+                 "source", "source_id", "engine_id"],
+    "properties": {
+        "contract": {"const": DETECTOR_EVENT_CONTRACT},
+        "type": {"const": "event"},
+        "event": {"type": "string", "minLength": 1},
+        "state": {"enum": ["idle", "possible", "confirmed"]},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "timestamp": {"type": "string", "minLength": 1},
+        "source": {"type": "string"},
+        "source_id": {"type": ["integer", "null"], "minimum": 0},
+        "engine_id": {"type": "string", "minLength": 1},
+    },
+    "additionalProperties": True,
+}
+_DETECTOR_EVENT_VALIDATOR = Draft202012Validator(DETECTOR_EVENT_SCHEMA)
+
+
+def normalize_detector_event(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Upgrade a legacy event payload to the versioned public event contract."""
+    event = dict(payload)
+    if event.get("contract", DETECTOR_EVENT_CONTRACT) != DETECTOR_EVENT_CONTRACT:
+        raise ValueError(f"unsupported event contract: {event.get('contract')!r}")
+    event.setdefault("contract", DETECTOR_EVENT_CONTRACT)
+    event.setdefault("state", "confirmed")
+    event.setdefault("confidence", 0.0)
+    event.setdefault("timestamp", datetime.now(timezone.utc).isoformat())
+    event.setdefault("source", "unknown")
+    event.setdefault("source_id", None)
+    event.setdefault("engine_id", event.get("engine") or "legacy")
+    error = next(iter(_DETECTOR_EVENT_VALIDATOR.iter_errors(event)), None)
+    if error is not None:
+        path = ".".join(map(str, error.absolute_path)) or "event"
+        raise ValueError(f"invalid {DETECTOR_EVENT_CONTRACT} at {path}: {error.message}")
+    return event
 
 
 @dataclass(frozen=True)
@@ -75,11 +116,10 @@ class ClipSaveRequest:
 
 @dataclass(frozen=True)
 class RuntimeMessage:
-    """A score update or detector event ready for runtime routing.
+    """A score update or versioned detector event ready for runtime routing.
 
-    ``payload`` temporarily retains the existing WebSocket/MQTT message shape.
-    This lets the runtime boundary be introduced without breaking current
-    consumers while the public component schemas are being finalized.
+    Scores retain their legacy-compatible shape. Events are normalized to
+    ``detector-event.v1`` while retaining extra fields for existing clients.
     """
 
     kind: MessageKind
@@ -95,7 +135,8 @@ class RuntimeMessage:
         kind = payload.get("type")
         if kind not in ("score", "event"):
             raise ValueError(f"Unsupported runtime message type: {kind!r}")
-        return cls(kind=kind, payload=dict(payload))
+        normalized = normalize_detector_event(payload) if kind == "event" else dict(payload)
+        return cls(kind=kind, payload=normalized)
 
     def as_legacy(self) -> dict[str, Any]:
         """Return a copy in the existing output format."""
