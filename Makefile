@@ -102,6 +102,7 @@ retrain:
 	-$(MAKE) audit-compare
 	$(MAKE) _clean-trained
 	$(MAKE) deploy-model
+	$(MAKE) restart
 
 ## Move labeled WAVs from dataset/recorder/ into main dataset/ on RPi
 _merge-recorder:
