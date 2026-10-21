@@ -75,7 +75,9 @@ Runtime Hub применяет `default`/`by_source` к его аудиопод�
 класс нельзя назначить под несколькими `engine_id`, так как manifest, runtime
 подписка и ключ event policy используют уникальный ID. В graph mode настройки и
 smoothers YAMNet изолированы в его записи, а event policy получает её settings.
-Settings UI управляет графом; та же конфигурация доступна через REST API.
+Settings UI управляет графом и показывает lifecycle/ошибки рядом с карточкой
+движка; отдельная Runtime panel показывает здоровье аудиоподписок. Та же
+конфигурация доступна через REST API.
 
 Целевое разделение границ и форматов описано в [API компонентов](component-api.md).
 HTTP и WebSocket API приложения описаны отдельно в [справочнике API](api.md),

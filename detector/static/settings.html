@@ -317,11 +317,7 @@
           <div class="s-title" style="margin:0;flex:1">Runtime Health</div>
           <button class="btn-reset-panel" onclick="loadRuntimeStatus()">Refresh</button>
         </div>
-        <p style="font-size:12px;color:#666;margin:0 0 12px 0;line-height:1.5">Engine lifecycle/version and live audio delivery health. A degraded engine may have lost an inference worker; inspect the error and source logs.</p>
-        <div class="s-title" style="margin-top:14px">Engines</div>
-        <div id="runtime-components" style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">
-          <div style="font-size:13px;color:#666">Loading engine status...</div>
-        </div>
+        <p style="font-size:12px;color:#666;margin:0 0 12px 0;line-height:1.5">Live audio delivery health for processing components. Engine lifecycle, version, and startup errors appear in each engine card.</p>
         <div class="s-title">Audio Subscribers</div>
         <div id="runtime-subscribers" style="display:flex;flex-direction:column;gap:8px">
           <div style="font-size:13px;color:#666">Loading runtime status...</div>
@@ -575,6 +571,7 @@ async function loadEngineGraph() {
       }
     }
     renderEngineGraph();
+    updateEngineRuntimeStatus(runtimeData.components || []);
   } catch (err) {
     cards.innerHTML = `<div style="font-size:13px;color:#ef5350">${esc(err.message || 'Failed to load engines')}</div>`;
   }
@@ -639,10 +636,12 @@ function renderEngineGraph() {
           <div class="engine-card-title"><h3>${esc(manifest?.name || id)}</h3><code>${esc(id)}</code>
             ${manifest ? `<div class="engine-meta">${esc(manifest.version)} · ${esc(manifest.classes?.join(', ') || 'no classes')}</div>` : ''}
           </div>
+          <span data-engine-runtime="${esc(id)}" class="engine-runtime-state" style="font-size:11px;color:#777">Not running</span>
           ${unavailable ? `<button class="engine-remove" data-remove-engine="${esc(id)}">Remove</button>` : ''}
         </div>
         ${manifest?.description ? `<p class="engine-meta" style="display:block;margin:9px 0 0 27px;line-height:1.5">${esc(manifest.description)}</p>` : ''}
         ${unavailable ? `<div class="engine-error">Saved selector “${esc(selector)}” is not available locally. Its settings are preserved. Register the engine or remove this entry.</div>` : ''}
+        <div data-engine-runtime-error="${esc(id)}"></div>
         ${fields ? `<div class="engine-settings">${fields}</div>` : ''}
       </div>`;
     }).join('');
@@ -935,34 +934,38 @@ async function loadSources() {
 }
 
 /* ── Runtime component status ── */
+function updateEngineRuntimeStatus(components) {
+  const byId = new Map((components || []).map(component => [component.component_id, component]));
+  document.querySelectorAll('[data-engine-runtime]').forEach(status => {
+    const component = byId.get(status.dataset.engineRuntime);
+    const errorContainer = status.closest('.engine-card')?.querySelector('[data-engine-runtime-error]');
+    if (!component) {
+      status.textContent = 'Not running';
+      status.style.color = '#777';
+      if (errorContainer) errorContainer.innerHTML = '';
+      return;
+    }
+    const stateColor = component.state === 'ready' ? '#4caf50'
+      : component.state === 'degraded' ? '#ffa726'
+      : component.state === 'error' ? '#ef5350'
+      : component.state === 'stopped' ? '#777' : '#64b5f6';
+    const version = component.version ? ` · v${esc(component.version)}` : '';
+    status.innerHTML = `<span style="color:${stateColor}">${esc(component.state)}</span>${version} · ${component.error_count || 0} errors`;
+    if (errorContainer) {
+      errorContainer.innerHTML = component.last_error
+        ? `<div class="engine-error">${esc(component.last_error)}</div>` : '';
+    }
+  });
+}
+
 async function loadRuntimeStatus() {
   const container = document.getElementById('runtime-subscribers');
-  const componentsContainer = document.getElementById('runtime-components');
   try {
     const res = await fetch('/api/runtime/status', { headers: adminHeaders() });
     if (!res.ok) throw new Error(`Request failed (${res.status})`);
     const data = await res.json();
     const components = data.components || [];
-    if (!data.available || components.length === 0) {
-      componentsContainer.innerHTML = '<div style="font-size:13px;color:#666">No engine registered.</div>';
-    } else {
-      componentsContainer.innerHTML = components.map(component => {
-        const stateColor = component.state === 'ready' ? '#4caf50'
-          : component.state === 'degraded' ? '#ffa726'
-          : component.state === 'error' ? '#ef5350'
-          : component.state === 'stopped' ? '#777' : '#64b5f6';
-        const version = component.version ? `v${esc(component.version)}` : 'version unavailable';
-        const error = component.last_error
-          ? `<div style="font-size:11px;color:#ef9a9a;margin-top:6px;overflow-wrap:anywhere">${esc(component.last_error)}</div>` : '';
-        return `<div style="background:#1a1a1a;border:1px solid #292929;border-radius:6px;padding:10px 12px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-            <strong style="font-size:13px;color:#ddd">${esc(component.name)} <span style="color:#777;font-weight:400">(${esc(component.component_id)})</span></strong>
-            <span style="font-size:11px;color:${stateColor};margin-left:auto">${esc(component.state)}</span>
-          </div>
-          <div style="font-size:11px;color:#777">${version} · ${component.error_count || 0} errors</div>${error}
-        </div>`;
-      }).join('');
-    }
+    updateEngineRuntimeStatus(data.available ? components : []);
     const subscribers = data.subscribers || [];
     if (subscribers.length === 0) {
       container.innerHTML = '<div style="font-size:13px;color:#666">No audio-processing components are currently subscribed.</div>';

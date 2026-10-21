@@ -75,8 +75,9 @@ effect after restart. An explicit `--engine` is rejected while a graph is
 active. The same Python class cannot be assigned multiple `engine_id` values
 because its manifest identity, runtime subscription, and policy keys are unique.
 In graph mode YAMNet settings and smoothers are scoped to its entry, and its
-event policy receives that entry's settings. Settings UI manages the graph; the
-REST API exposes the same configuration.
+event policy receives that entry's settings. Settings UI manages the graph and
+shows lifecycle/errors on each engine card; its Runtime panel shows audio
+subscriber health. The REST API exposes the same configuration.
 
 The target boundaries and formats are described in the [component API](component-api.md).
 The application HTTP and WebSocket interfaces are covered separately in the
