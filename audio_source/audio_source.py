@@ -108,25 +108,26 @@ def run(
         seq = (seq + 1) & 0xFFFFFFFF
 
     try:
-        with sd.InputStream(
-            device=device,
-            samplerate=native_rate,
-            channels=1,
-            dtype="float32",
-            blocksize=chunk_samples,
-            latency="high",
-            callback=audio_callback,
-        ):
-            print("Streaming... (Ctrl+C to stop)", flush=True)
-            while True:
-                time.sleep(1.0)
+        while True:
+            try:
+                with sd.InputStream(
+                    device=device,
+                    samplerate=native_rate,
+                    channels=1,
+                    dtype="float32",
+                    blocksize=chunk_samples,
+                    latency="high",
+                    callback=audio_callback,
+                ) as stream:
+                    print("Streaming... (Ctrl+C to stop)", flush=True)
+                    while stream.active:
+                        time.sleep(1.0)
+                    print("Audio stream stopped; reconnecting in 2s...", file=sys.stderr, flush=True)
+            except sd.PortAudioError as exc:
+                print(f"Audio error: {exc}; reconnecting in 2s...", file=sys.stderr, flush=True)
+            time.sleep(2.0)
     except KeyboardInterrupt:
         print("\nStopped.", flush=True)
-    except sd.PortAudioError as exc:
-        print(f"Audio error: {exc}", file=sys.stderr, flush=True)
-        print("\nAvailable devices:", file=sys.stderr, flush=True)
-        list_devices()
-        sys.exit(1)
     finally:
         sock.close()
 
