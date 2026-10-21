@@ -2,8 +2,8 @@
 """
 Sound Detector — modular entry point.
 
-Wires together: EventBus, Engine (YAMNet by default), Server (FastAPI),
-and Integrations (MQTT).
+Wires together: RuntimeHub/EventBus, Engine (YAMNet by default), Server
+(FastAPI), and Integrations (MQTT).
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ import uvicorn
 from .bus import EventBus
 from .config import WEB_PORT
 from .integrations.mqtt import mqtt_connect, mqtt_subscribe
+from .runtime.hub import RuntimeHub
 from .server.app import create_app
 from .settings import load_settings
 
@@ -59,6 +60,7 @@ def main() -> None:
     args = parser.parse_args()
 
     bus = EventBus()
+    runtime = RuntimeHub(bus)
     settings = load_settings()
 
     # MQTT (non-blocking, works without broker)
@@ -67,7 +69,7 @@ def main() -> None:
 
     # Engine in background thread
     engine = engine_cls()
-    threading.Thread(target=engine.start, args=(bus, settings, args), daemon=True).start()
+    threading.Thread(target=engine.start, args=(runtime, settings, args), daemon=True).start()
 
     # FastAPI in main thread (captures the event loop)
     app = create_app(bus)

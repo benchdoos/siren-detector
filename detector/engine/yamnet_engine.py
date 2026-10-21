@@ -2,7 +2,7 @@
 
 Implements ``EngineInterface``: receives audio via UDP, runs YAMNet
 embeddings + optional MLP classifier, pushes scores and events through
-the EventBus.
+the RuntimeHub.
 
 Supports multiple audio sources (multi-microphone).  Each source gets
 its own buffers and smoothers; YAMNet + MLP are loaded once and shared.
@@ -28,7 +28,8 @@ import numpy as np
 import tensorflow_hub as hub
 
 from ..audio import AudioRingBuffer, ClipBuffer
-from ..bus import EventBus
+from ..runtime.contracts import RuntimeMessage
+from ..runtime.hub import RuntimeHub
 from ..config import (
     ANALYSIS_SECONDS,
     CLIP_DIR,
@@ -179,7 +180,10 @@ class YAMNetEngine:
         parser.add_argument("--no-dsp", action="store_true",
                             help="Disable DSP pre-filter even if model files exist")
 
-    def start(self, bus: EventBus, settings: dict, args: argparse.Namespace) -> None:
+    def start(self, runtime: RuntimeHub, settings: dict, args: argparse.Namespace) -> None:
+        # Keep the current bus for source/clip state and live audio; scores and
+        # events go through RuntimeHub to the output layer.
+        bus = runtime.event_bus
         settings_mod.settings.update(settings)
         print(f"Settings: {settings_mod.settings}", flush=True)
 
@@ -296,7 +300,7 @@ class YAMNetEngine:
                     continue
                 self._process_source(
                     source, waveform, yamnet, class_names, detector_indices,
-                    clf, det_engine, bus, args, sources, dsp,
+                    clf, det_engine, runtime, args, sources, dsp,
                 )
 
         def _stop_parallel():
@@ -339,7 +343,7 @@ class YAMNetEngine:
                     heartbeat.update(udp_stats_snapshot(bus.source_names))
                     if dsp is not None:
                         heartbeat["dsp_stats"] = _dsp_stats_snapshot(dsp, sources)
-                    bus.broadcast(heartbeat)
+                    runtime.publish(RuntimeMessage.from_legacy(heartbeat))
                     _last_heartbeat = now
                 time.sleep(0.5)
             else:
@@ -355,7 +359,7 @@ class YAMNetEngine:
                         continue
                     self._process_source(
                         source, waveform, yamnet, class_names, detector_indices,
-                        clf, det_engine, bus, args, sources, dsp,
+                        clf, det_engine, runtime, args, sources, dsp,
                     )
 
                 now = time.monotonic()
@@ -366,7 +370,7 @@ class YAMNetEngine:
                         heartbeat.update(udp_stats_snapshot(bus.source_names))
                         if dsp is not None:
                             heartbeat["dsp_stats"] = _dsp_stats_snapshot(dsp, sources)
-                        bus.broadcast(heartbeat)
+                        runtime.publish(RuntimeMessage.from_legacy(heartbeat))
                         _last_heartbeat = now
                 else:
                     _last_heartbeat = now
@@ -382,7 +386,7 @@ class YAMNetEngine:
         detector_indices: dict[str, list[int]],
         clf,
         det_engine: str,
-        bus: EventBus,
+        runtime: RuntimeHub,
         args: argparse.Namespace,
         sources: dict | None = None,
         dsp=None,
@@ -515,11 +519,11 @@ class YAMNetEngine:
                         score_msg[f"{name}_refractory"] = round(source.smoothers[name].refractory_remaining, 1)
                         # Push zero score through smoothers (decays triggers)
                         source.smoothers[name].push(0.0)
-                    score_msg.update(udp_stats_snapshot(bus.source_names))
+                    score_msg.update(udp_stats_snapshot(runtime.event_bus.source_names))
                     score_msg["dsp_stats"] = _dsp_stats_snapshot(dsp, sources or {source.source_id: source})
                     if sources:
                         score_msg["source_names"] = {sid: src.name for sid, src in sources.items()}
-                    bus.broadcast(score_msg)
+                    runtime.publish(RuntimeMessage.from_legacy(score_msg))
                     return
         elif dsp is not None:
             source.dsp_feature_buf.clear()
@@ -633,10 +637,10 @@ class YAMNetEngine:
         if dsp is not None:
             score_msg["dsp_stats"] = _dsp_stats_snapshot(dsp, sources or {source.source_id: source})
 
-        score_msg.update(udp_stats_snapshot(bus.source_names))
+        score_msg.update(udp_stats_snapshot(runtime.event_bus.source_names))
         if sources:
             score_msg["source_names"] = {sid: src.name for sid, src in sources.items()}
-        bus.broadcast(score_msg)
+        runtime.publish(RuntimeMessage.from_legacy(score_msg))
 
         # Handle state transitions → events + clips
         for name, (_, _, prefix) in DETECTORS.items():
@@ -690,7 +694,7 @@ class YAMNetEngine:
                 "triggers": source.smoothers[name].trigger_count,
                 "triggers_needed": settings_mod.settings["confirmed_triggers"] if new_state == "confirmed" else settings_mod.settings["possible_triggers"],
             }
-            bus.broadcast(event)
+            runtime.publish(RuntimeMessage.from_legacy(event))
             print(f"EVENT {json.dumps(event)}", flush=True)
             if new_state == "confirmed":
                 source.peaks[name] = dict(_EMPTY_PEAK)

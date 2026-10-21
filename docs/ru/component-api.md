@@ -200,12 +200,13 @@ policy, а не скрытая логика UI или MQTT адаптера.
 
 ## Текущая реализация и переход
 
-Сейчас `detector/main.py` выбирает один engine через `--engine`. Контракт в
-`detector/engine/interface.py` передаёт engine весь `EventBus`, настройки и CLI
-args; engine сам поднимает UDP и публикует уже готовые score/event сообщения.
-`EventBus` (`detector/bus.py`) служит внутрипроцессным мостом к WebSocket и
-интеграциям, а UDP Hub — отдельный relay. Настройки порогов и сглаживания в
-основном глобальные.
+Сейчас `detector/main.py` выбирает один engine через `--engine`. Engine получает
+`RuntimeHub` и публикует score/event через него. Пока это только результатный
+маршрут: `EventBusOutput` сохраняет старый формат сообщений и передаёт их в
+`EventBus` (`detector/bus.py`), откуда их получают WebSocket и интеграции.
+Аудио-вход, буферы, обработка и сглаживание всё ещё находятся в основном в
+`yamnet_engine.py`; UDP Hub по-прежнему отдельный relay. `RuntimeMessage` пока
+оборачивает legacy payload и не фиксирует финальную схему `v1`.
 
 Рекомендуемый путь миграции:
 

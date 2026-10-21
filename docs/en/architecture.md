@@ -56,8 +56,9 @@ The current engine loads YAMNet once and uses its audio embeddings with an optio
 The Python package is split into transport, engine, server, and integration
 layers connected by an in-process `EventBus`. This does not yet mean every layer
 can be replaced through a stable public API: `EngineInterface.start()` receives
-the `EventBus`, settings, and CLI args, and the current engine starts its own
-transport. Bus message formats are described in code and partly in
+Runtime Hub, settings, and CLI args. Results from the current engine now pass
+through Hub and `EventBusOutput` into `EventBus`, though the engine still starts
+its own transport. Legacy message formats are described in code and partly in
 [`detector/engine/interface.py`](../../detector/engine/interface.py), but are
 not yet a versioned public contract.
 
