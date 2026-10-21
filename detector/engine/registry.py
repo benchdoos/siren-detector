@@ -44,6 +44,15 @@ class EngineRegistry:
         """Return the currently registered short selectors."""
         return tuple(sorted(self._registrations))
 
+    def manifests(self) -> list[dict]:
+        """Return manifests for registered engines, omitting legacy classes."""
+        result = []
+        for selector in self.selectors():
+            _, manifest = self.resolve(selector)
+            if manifest is not None:
+                result.append({"selector": selector, **manifest.to_dict()})
+        return result
+
     def resolve(self, selector: str) -> tuple[type, EngineManifest | None]:
         """Import and validate an engine class and its optional manifest."""
         registration = self._registrations.get(selector)
@@ -101,3 +110,7 @@ class EngineRegistry:
 
 engine_registry = EngineRegistry()
 engine_registry.register("yamnet", "detector.engine.yamnet_engine.YAMNetEngine")
+engine_registry.register(
+    "energy-threshold-example",
+    "detector.examples.energy_threshold_engine.EnergyThresholdEngine",
+)

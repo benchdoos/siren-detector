@@ -35,6 +35,7 @@ class AudioSubscription:
     consumer: AudioConsumer
     max_queue_size: int = 8
     overflow: str = "drop_oldest"
+    source_ids: frozenset[int] | None = None
     _queue: queue.Queue = field(init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
     _thread: threading.Thread = field(init=False, repr=False)
@@ -93,6 +94,7 @@ class AudioSubscription:
                 "queue_depth": self._queue.qsize(),
                 "queue_capacity": self.max_queue_size,
                 "overflow": self.overflow,
+                "source_ids": sorted(self.source_ids) if self.source_ids is not None else None,
                 "frames_received": self.frames_received,
                 "frames_processed": self.frames_processed,
                 "frames_dropped": self.frames_dropped,
@@ -199,7 +201,7 @@ class RuntimeHub:
         self._next_subscription_id = 1
         self._subscriptions_lock = threading.RLock()
         self._components: dict[str, dict] = {}
-        self._event_policy: EventPolicy | None = None
+        self._event_policies: dict[str, EventPolicy] = {}
         self._clip_storage: ClipStorageAdapter | None = None
         self._inputs: list[AudioInputAdapter] = []
         self._started_inputs: set[int] = set()
@@ -237,6 +239,7 @@ class RuntimeHub:
         *,
         max_queue_size: int = 8,
         overflow: str = "drop_oldest",
+        source_ids: set[int] | frozenset[int] | None = None,
     ) -> AudioSubscription:
         """Register an isolated consumer with a bounded, non-blocking queue.
 
@@ -254,6 +257,7 @@ class RuntimeHub:
                 consumer=consumer,
                 max_queue_size=max_queue_size,
                 overflow=overflow,
+                source_ids=frozenset(source_ids) if source_ids is not None else None,
             )
             self._audio_subscriptions[subscriber_id] = subscription
             component = self._components.get(subscriber_id)
@@ -354,18 +358,22 @@ class RuntimeHub:
         with self._subscriptions_lock:
             subscriptions = tuple(self._audio_subscriptions.values())
         for subscription in subscriptions:
-            subscription.submit(frame)
+            if subscription.source_ids is None or frame.source_id in subscription.source_ids:
+                subscription.submit(frame)
         self.broadcast_audio(frame.samples, frame.source_id)
 
-    def set_event_policy(self, policy: EventPolicy) -> None:
-        """Select the event policy that handles inference results."""
-        self._event_policy = policy
+    def set_event_policy(self, policy: EventPolicy, engine_id: str = "default") -> None:
+        """Select the policy for one engine's inference results."""
+        if not engine_id.strip():
+            raise ValueError("engine_id must not be empty")
+        self._event_policies[engine_id] = policy
 
     def publish_inference(self, result: InferenceResult) -> None:
         """Route model output to the selected event policy."""
-        if self._event_policy is None:
+        policy = self._event_policies.get(result.engine_id) or self._event_policies.get("default")
+        if policy is None:
             raise RuntimeError("No event policy is configured")
-        self._event_policy.process(result)
+        policy.process(result)
 
     def publish(self, message: RuntimeMessage) -> None:
         """Route a score or event from a processing component to outputs."""

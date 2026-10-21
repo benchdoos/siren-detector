@@ -101,11 +101,12 @@ Each processing component receives frames through its own bounded queue and
 worker. The input adapter only fans frames out to queues; it does not wait for
 model inference. Subscribe with
 `runtime.subscribe_audio(callback, subscriber_id=..., max_queue_size=8,
-overflow="drop_oldest")`.
+overflow="drop_oldest", source_ids={0, 2})`; omit `source_ids` to receive all sources.
 
 | Field | Contract |
 |---|---|
 | `subscriber_id` | Unique within Runtime Hub; use a stable component/engine ID. |
+| `source_ids` | Optional set of source IDs; when set, the subscriber receives only those sources. |
 | `max_queue_size` | Positive number of frames; defaults to 8. Bounded to prevent unbounded latency and memory growth. |
 | `overflow` | `drop_oldest` (default, favor fresh audio) or `drop_newest`. Enqueue never blocks the input adapter. |
 | `frames_received` / `frames_processed` | Frames accepted by the subscription and frames successfully handled by its callback. |
@@ -157,15 +158,15 @@ input or inference; each output defines buffering, retry, and drop behavior.
 
 ## Shared inference result
 
-Processing components publish scores in a common shape. The exact schema will
-be finalized and versioned during implementation; the minimum proposed form:
+Processing components publish scores in the current internal
+`inference-result.v1` shape with source, engine and stage IDs, timestamp,
+namespaced scores and metadata:
 
 ```json
 {
   "contract": "inference-result.v1",
   "source_id": "0",
-  "engine_id": "default-audio-chain",
-  "frame_sequence": 1842,
+  "engine_id": "yamnet",
   "timestamp": "2026-10-21T10:15:30.125Z",
   "stage_id": "mlp",
   "scores": {"siren": 0.87, "background": 0.08},
@@ -173,8 +174,9 @@ be finalized and versioned during implementation; the minimum proposed form:
 }
 ```
 
-`engine_id` and `stage_id` provide attribution without embedding model-specific
-names in the common protocol. A score is model output; by itself it is not a
+`engine_id` is required and refers to a stable ID in the manifest; `stage_id`
+identifies a stage within that engine. These IDs provide attribution without
+embedding model-specific names in the common protocol. A score is model output; by itself it is not a
 confirmed event.
 
 An event is created by event policy and carries at least:
@@ -278,7 +280,8 @@ settings application must be declared explicitly.
 
 The current implementation registers the selected engine with its manifest
 `engine_id`, `name`, and `version`; state is available from
-`GET /api/runtime/status`. If a third-party engine starts additional background
+`GET /api/runtime/status`. Audio subscriptions can be restricted to explicit
+`source_ids`, and Runtime Hub selects event policy by `engine_id`. If a third-party engine starts additional background
 workers, it can report their state with
 `runtime.set_component_state(engine_id, "degraded", error)` and restore `ready`
 after recovery. If a child worker has failed, do not report the engine as fully

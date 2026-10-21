@@ -18,6 +18,9 @@ When authentication is enabled (`AUTH_ENABLED` in `hub/.env`), protected request
 | `POST /api/auth/check` | Public | Checks a token from JSON body `{"token":"…"}`. |
 | `GET /api/settings` | Viewer | Current settings, defaults, and DSP model availability. |
 | `GET /api/runtime/status` | Viewer | Audio subscriber states, queue depth, dropped frames, and callback errors. |
+| `GET /api/engines/manifests` | Viewer | Locally registered engine manifests. |
+| `GET /api/engine-graph` | Viewer | Stored graph and configured engine availability. |
+| `PUT /api/engine-graph` | Admin | Validates and stores `engine-graph.v1`. |
 | `POST /api/settings` | Admin | Updates provided settings; invalid types, ranges, or modes return `400`. |
 | `POST /api/settings/reset` | Admin | Resets settings to defaults. |
 | `GET /api/sources` | Viewer | Known source status and custom names. |
@@ -49,6 +52,11 @@ subscription includes `subscriber_id`, `state`, `queue_depth`,
 third-party plugins with their own background threads should report failures
 through `runtime.set_component_state(component_id, "degraded", error)`. Hard
 timeouts and forced interruption of Python callbacks are not supported.
+
+`GET /api/engines/manifests` lists locally registered engines.
+`GET/PUT /api/engine-graph` read and store graph configuration while preserving
+unknown fields. A stored graph does not yet start engines; the active runtime
+still uses the single `--engine` selector.
 
 ## WebSocket
 

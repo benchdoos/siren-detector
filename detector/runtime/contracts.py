@@ -40,11 +40,18 @@ class InferenceResult:
     """Raw model output routed from an inference stage to event policy."""
 
     source_id: int
+    engine_id: str
     stage_id: str
     timestamp: str
     scores: Mapping[str, float]
     metadata: Mapping[str, Any]
     contract: Literal["inference-result.v1"] = "inference-result.v1"
+
+    def __post_init__(self) -> None:
+        if not self.engine_id.strip():
+            raise ValueError("engine_id must not be empty")
+        if not self.stage_id.strip():
+            raise ValueError("stage_id must not be empty")
 
 
 @dataclass(frozen=True)

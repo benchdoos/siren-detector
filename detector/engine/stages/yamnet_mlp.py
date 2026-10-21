@@ -109,6 +109,7 @@ class YAMNetMlpStage:
             })
         return InferenceResult(
             source_id=source_id,
+            engine_id="yamnet",
             stage_id="yamnet-mlp",
             timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
             scores=namespaced_scores,
