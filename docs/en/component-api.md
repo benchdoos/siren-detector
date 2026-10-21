@@ -198,19 +198,20 @@ follow once contracts are stable.
 
 ## Current implementation and migration
 
-Today `detector/main.py` selects one engine with `--engine`. The engine receives
-`RuntimeHub` and publishes scores/events through it. For now, only the result
-route is migrated: `EventBusOutput` preserves legacy message payloads and sends
-them to `EventBus` (`detector/bus.py`), which delivers to WebSocket and
-integrations. Audio ingress, buffers, processing, and smoothing mostly remain
-inside `yamnet_engine.py`; UDP Hub remains a separate relay. `RuntimeMessage`
-wraps the legacy payload and does not yet define the final `v1` schema.
+Today `detector/main.py` selects one engine with `--engine` and registers a
+`UDPSourceAdapter` in Runtime Hub. The adapter publishes `AudioFrame`; the
+engine subscribes to frames and publishes scores/events back through the Hub.
+The Hub routes results to `EventBusOutput`, which preserves legacy payloads
+for `EventBus` (`detector/bus.py`), WebSocket, and integrations. Buffers,
+processing, and smoothing mostly remain inside `yamnet_engine.py`; UDP Hub is a
+separate network relay. `RuntimeMessage` wraps the legacy payload and does not
+yet define the final `v1` schema.
 
 Recommended migration:
 
 1. Document current score/event and audio wire formats as a legacy profile.
-2. Add an internal normalized `AudioFrame` and input adapter without changing
-   SDR1 on the network.
+2. [x] Add an internal `audio-frame.v1` and SDR1 input adapter without changing
+   the SDR1 network format.
 3. Move the current chain into the first pipeline provider while preserving
    behavior.
 4. Add separate event policy and output adapters over the shared result.

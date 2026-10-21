@@ -28,7 +28,7 @@ import numpy as np
 import tensorflow_hub as hub
 
 from ..audio import AudioRingBuffer, ClipBuffer
-from ..runtime.contracts import RuntimeMessage
+from ..runtime.contracts import AudioFrame, RuntimeMessage
 from ..runtime.hub import RuntimeHub
 from ..config import (
     ANALYSIS_SECONDS,
@@ -42,7 +42,7 @@ from ..config import (
     SAMPLE_RATE,
 )
 from ..server.routes_clips import save_clip_meta
-from ..transport.udp import udp_receiver, udp_stats_snapshot
+from ..transport.udp import udp_stats_snapshot
 from .smoother import TemporalSmoother
 from .source_state import SourceState
 from .. import settings as settings_mod
@@ -251,15 +251,13 @@ class YAMNetEngine:
                     all_smoothers[key] = sm
             settings_mod.smoothers = all_smoothers
 
-        def get_buffers(source_id: int) -> tuple[AudioRingBuffer, ClipBuffer] | None:
-            """Callback for UDP receiver: get or create buffers for source_id."""
+        def get_source(source_id: int) -> SourceState:
+            """Get or register per-source processing state."""
             if source_id in sources:
-                s = sources[source_id]
-                return s.inference_buf, s.clip_buf
+                return sources[source_id]
             with sources_lock:
                 if source_id in sources:
-                    s = sources[source_id]
-                    return s.inference_buf, s.clip_buf
+                    return sources[source_id]
                 name = source_names.get(source_id, f"source-{source_id}")
                 s = _create_source(source_id, name)
                 sources[source_id] = s
@@ -267,18 +265,19 @@ class YAMNetEngine:
                 bus.source_names[source_id] = name
                 _sync_smoothers()
                 print(f"[multi-source] source {source_id} ({name}) registered", flush=True)
-            return s.inference_buf, s.clip_buf
+            return s
 
         # Pre-create default source (id=0)
-        get_buffers(0)
+        get_source(0)
 
-        # ── Start UDP receiver thread ────────────────────────────────────
-        stop = threading.Event()
-        threading.Thread(
-            target=udp_receiver,
-            args=(get_buffers, bus, args.bind, args.port, stop),
-            daemon=True,
-        ).start()
+        # The input adapter emits normalized frames; the runtime routes them
+        # to this processing chain and the live-audio output.
+        def on_audio_frame(frame: AudioFrame) -> None:
+            source = get_source(frame.source_id)
+            source.inference_buf.push(frame.samples)
+            source.clip_buf.push(frame.samples)
+
+        runtime.subscribe_audio(on_audio_frame)
 
         print("Ready.", flush=True)
 

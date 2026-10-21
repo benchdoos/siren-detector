@@ -5,8 +5,34 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal, Mapping
 
+import numpy as np
+
 
 MessageKind = Literal["score", "event"]
+
+
+@dataclass(frozen=True)
+class AudioFrame:
+    """Normalized mono PCM frame emitted by an input adapter."""
+
+    source_id: int
+    sequence: int
+    timestamp: str
+    sample_rate_hz: int
+    samples: np.ndarray
+    metadata: Mapping[str, Any]
+    contract: Literal["audio-frame.v1"] = "audio-frame.v1"
+    channels: int = 1
+    sample_format: Literal["float32"] = "float32"
+
+    def __post_init__(self) -> None:
+        if self.sample_rate_hz <= 0:
+            raise ValueError("sample_rate_hz must be positive")
+        if self.channels != 1:
+            raise ValueError("audio-frame.v1 currently supports mono audio only")
+        if (not isinstance(self.samples, np.ndarray) or self.samples.ndim != 1
+                or self.samples.dtype != np.float32):
+            raise ValueError("samples must be a one-dimensional float32 array")
 
 
 @dataclass(frozen=True)

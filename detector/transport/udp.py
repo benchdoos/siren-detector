@@ -5,13 +5,14 @@ from __future__ import annotations
 import socket
 import threading
 import time
+from datetime import datetime, timezone
 from typing import Callable
 
 import numpy as np
 
-from ..audio import AudioRingBuffer, ClipBuffer, i2s32_to_float32
-from ..bus import EventBus
-from ..config import HEADER, MAGIC, PACKET_MAX
+from ..audio import i2s32_to_float32
+from ..config import HEADER, MAGIC, PACKET_MAX, SAMPLE_RATE
+from ..runtime.contracts import AudioFrame
 
 
 # ── Per-source tracking ─────────────────────────────────────────────────────
@@ -88,18 +89,12 @@ def udp_stats_snapshot(source_names: dict[int, str] | None = None) -> dict:
 # ── UDP receiver ─────────────────────────────────────────────────────────────
 
 def udp_receiver(
-    get_buffers: Callable[[int], tuple[AudioRingBuffer, ClipBuffer] | None],
-    bus: EventBus,
+    publish_frame: Callable[[AudioFrame], None],
     bind: str,
     port: int,
     stop: threading.Event,
 ) -> None:
-    """Receive SDR1 packets, demux by source_id, push to per-source buffers.
-
-    ``get_buffers(source_id)`` returns ``(inference_buf, clip_buf)`` for a
-    known source, or creates a new source on-the-fly.  Return ``None`` to
-    reject unknown sources.
-    """
+    """Receive SDR1 packets and emit normalized mono PCM frames."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((bind, port))
     sock.settimeout(1.0)
@@ -126,11 +121,6 @@ def udp_receiver(
         if magic != MAGIC or payload_size > len(data) - HEADER.size:
             continue
 
-        bufs = get_buffers(source_id)
-        if bufs is None:
-            continue
-        inference_buf, clip_buf = bufs
-
         with _stats_lock:
             tracker = _get_tracker(source_id)
 
@@ -148,14 +138,25 @@ def udp_receiver(
         gap = seq - tracker.expected_seq
         if gap:
             silence = np.zeros(payload_size // 4 * gap, dtype=np.float32)
-            inference_buf.push(silence)
-            clip_buf.push(silence)
+            publish_frame(AudioFrame(
+                source_id=source_id,
+                sequence=tracker.expected_seq,
+                timestamp=datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+                sample_rate_hz=SAMPLE_RATE,
+                samples=silence,
+                metadata={"transport": "sdr1/udp", "reconstructed_silence_packets": gap},
+            ))
 
         payload = data[HEADER.size : HEADER.size + payload_size]
         samples = i2s32_to_float32(payload)
-        inference_buf.push(samples)
-        clip_buf.push(samples)
-        bus.broadcast_audio(samples, source_id)
+        publish_frame(AudioFrame(
+            source_id=source_id,
+            sequence=seq,
+            timestamp=datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+            sample_rate_hz=SAMPLE_RATE,
+            samples=samples,
+            metadata={"transport": "sdr1/udp"},
+        ))
 
         with _stats_lock:
             tracker.last_recv = time.monotonic()
@@ -163,3 +164,30 @@ def udp_receiver(
         tracker.expected_seq = seq + 1
 
     sock.close()
+
+
+class UDPSourceAdapter:
+    """Lifecycle wrapper for the SDR1/UDP audio input adapter."""
+
+    def __init__(self, bind: str, port: int) -> None:
+        self.bind = bind
+        self.port = port
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self, publish_frame: Callable[[AudioFrame], None]) -> None:
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(
+            target=udp_receiver,
+            args=(publish_frame, self.bind, self.port, self._stop),
+            daemon=True,
+            name="audio-source-sdr1-udp",
+        )
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=2.0)
