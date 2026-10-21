@@ -38,7 +38,7 @@ Authentication is controlled by `AUTH_ENABLED` and `ADMIN_TOKEN` in `hub/.env`. 
 
 ## MQTT and Home Assistant
 
-MQTT is optional. Set `MQTT_HOST`, `MQTT_PORT`, and, if needed, `MQTT_USER`/`MQTT_PASSWORD` in `hub/.env`, then recreate the detector container. The integration publishes detector state and event information under the `sound_detector` topic namespace and supports Home Assistant discovery when a broker is available.
+MQTT is optional. Set `MQTT_HOST`, `MQTT_PORT`, and, if needed, `MQTT_USER`/`MQTT_PASSWORD` in `hub/.env`, then recreate the detector container. The integration publishes detector state and event information under the `sound_detector` topic namespace and supports Home Assistant discovery when a broker is available. `sound_detector/events` carries JSON event updates with `engine_id`, `source_id`, source name, event, state, confidence, and timestamp; existing retained Home Assistant state topics remain available.
 
 ## HTTP and WebSocket API
 
