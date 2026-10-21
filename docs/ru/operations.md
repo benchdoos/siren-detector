@@ -38,7 +38,7 @@ docker compose logs -f detector
 
 ## MQTT и Home Assistant
 
-MQTT необязателен. Укажите `MQTT_HOST`, `MQTT_PORT` и, если нужно, `MQTT_USER`/`MQTT_PASSWORD` в `hub/.env`, затем пересоздайте контейнер детектора. При доступном брокере интеграция публикует состояние и события в пространстве топиков `sound_detector` и поддерживает обнаружение Home Assistant.
+MQTT необязателен. Укажите `MQTT_HOST`, `MQTT_PORT` и, если нужно, `MQTT_USER`/`MQTT_PASSWORD` в `hub/.env`, затем пересоздайте контейнер детектора. При доступном брокере интеграция публикует состояние и события в пространстве топиков `sound_detector` и поддерживает обнаружение Home Assistant. `sound_detector/events` содержит JSON-сообщения с `engine_id`, `source_id`, именем источника, событием, состоянием, confidence и timestamp; существующие retained-топики Home Assistant сохраняются.
 
 ## HTTP и WebSocket API
 
