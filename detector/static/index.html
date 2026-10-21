@@ -145,6 +145,7 @@
   .event-source { font-size: 11px; padding: 2px 7px; border-radius: 4px; background: #222; color: #666; margin-left: auto; white-space: nowrap; }
   .event-breakdown { font-size: 13px; color: #555; margin-bottom: 8px; }
   .clip-player { margin-top: 4px; position: relative; }
+  .clip-unavailable { margin-top: 4px; color: #777; font-size: 12px; font-style: italic; }
   .spec-canvas { width: 100%; height: 60px; border-radius: 4px; cursor: pointer; display: block; background: #111; touch-action: none; }
   .player-controls { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
   .player-controls audio { flex: 1; min-width: 180px; height: 36px; filter: invert(1) hue-rotate(180deg) brightness(0.8); }
@@ -438,7 +439,7 @@ const _cooldownStart = {};  // track when cooldown first began per detector
 const VALID_LABELS = ['siren', 'background', 'uav', 'explosion', 'unknown'];
 const _knownSources = {};  // source_id → display name (custom or original)
 const _sourceCustomNames = {};  // source_id → custom name (from settings, survives heartbeat)
-const _sourceScores = {};  // source_id → last score message (for multi-source aggregation)
+const _sourceScores = {};  // source_id + engine_id → last score message
 let _dspStats = null;  // aggregate DSP decisions across all sources
 const _STATE_PRIORITY = { idle: 0, possible: 1, confirmed: 2 };
 let activeEngineFilter = 'all';
@@ -585,10 +586,16 @@ function _updateSourcesDropdown() {
     summary.querySelector('.dsp-summary-header').setAttribute('aria-expanded', 'false');
   }
 
-  const sourceIds = new Set([...Object.keys(_knownSources), ...Object.keys(_sourceScores)]);
-  const sources = [...sourceIds].map(sid => _sourceScores[sid] || {
-    source_id: Number(sid), source: _knownSources[sid],
-  });
+  const sources = Object.values(_sourceScores);
+  const sourceIds = new Set([
+    ...Object.keys(_knownSources),
+    ...sources.map(s => String(s.source_id)),
+  ]);
+  for (const sid of sourceIds) {
+    if (!sources.some(s => String(s.source_id) === sid)) {
+      sources.push({ source_id: Number(sid), source: _knownSources[sid] });
+    }
+  }
   if (sources.length <= 1 && sources.length > 0) {
     const s = sources[0];
     // Single source: ensure structure exists, then update in-place
@@ -604,21 +611,25 @@ function _updateSourcesDropdown() {
     if (s.mlp_top3) wrap.querySelector('.dd-mlp').innerHTML = _renderTop3Html(s.mlp_top3);
     return;
   }
-  // Multi-source: update in-place, preserve open state
+  // Multiple source/engine streams: update in-place and keep them distinct.
   container.querySelector('[data-single]')?.remove();
   for (const s of sources) {
     const sid = s.source_id != null ? s.source_id : 0;
-    let section = container.querySelector(`[data-sid="${sid}"]`);
+    const scoreKey = `${sid}:${s.engine_id || 'legacy'}`;
+    let section = [...container.querySelectorAll('.src-section')]
+      .find(item => item.dataset.scoreKey === scoreKey);
     if (!section) {
       section = document.createElement('div');
       section.className = 'src-section';
       section.dataset.sid = sid;
+      section.dataset.scoreKey = scoreKey;
       section.onclick = function(e) { e.stopPropagation(); this.querySelector('.src-detail').classList.toggle('open'); };
       section.innerHTML = '<div class="src-header"><span class="src-name"></span><span class="src-stats"></span></div>'
         + '<div class="src-detail"><h3>YAMNet</h3><div class="dd-yam"></div><h3>MLP</h3><div class="dd-mlp"></div></div>';
       container.appendChild(section);
     }
-    const name = s.source || `source-${sid}`;
+    const engineLabel = s.engine_id ? ` · ${s.engine_id}` : '';
+    const name = `${s.source || `source-${sid}`}${engineLabel}`;
     const yPct = s.yamnet != null ? (s.yamnet * 100).toFixed(0) + '%' : '—';
     const mPct = s.mlp != null ? (s.mlp * 100).toFixed(0) + '%' : '—';
     const top = s.top ? esc(s.top) : '';
@@ -649,7 +660,8 @@ function updateScores(msg) {
   // Store per-source score and aggregate across all sources
   const isHeartbeat = msg.source_id == null;
   if (!isHeartbeat) {
-    _sourceScores[msg.source_id] = msg;
+    const scoreKey = `${msg.source_id}:${msg.engine_id || 'legacy'}`;
+    _sourceScores[scoreKey] = msg;
     if (!_sourceCustomNames[msg.source_id]) _knownSources[msg.source_id] = msg.source;
   }
   if (msg.source_names) {
@@ -662,23 +674,32 @@ function updateScores(msg) {
   const scoredSources = Object.keys(_sourceScores).length > 0
     ? Object.values(_sourceScores)
     : [msg];
-  const sourceCount = new Set([...Object.keys(_knownSources), ...Object.keys(_sourceScores)]).size;
+  const sourceCount = new Set([
+    ...Object.keys(_knownSources),
+    ...scoredSources.map(s => String(s.source_id)).filter(sid => sid !== 'undefined'),
+  ]).size;
   const sources = scoredSources;
 
   // Aggregate per detector: worst state, max score, max triggers
   for (const name of DETECTOR_NAMES) {
     let bestScore = 0, bestState = 'idle', bestTriggers = 0;
+    let bestStatePriority = 0;
     let bestEngineId = '';
     let possNeeded = 4, confNeeded = 8, maxCooldown = 0, maxRefractory = 0;
     for (const s of sources) {
       const sc = s[name + '_score'] || 0;
       const st = s[name + '_state'] || 'idle';
       const tr = s[name + '_triggers'] || 0;
-      if (sc > bestScore) { bestScore = sc; bestEngineId = s.engine_id || ''; }
-      if ((_STATE_PRIORITY[st] || 0) > (_STATE_PRIORITY[bestState] || 0)) bestState = st;
-      if (tr > bestTriggers) bestTriggers = tr;
-      if (s[name + '_possible_needed'] != null) possNeeded = s[name + '_possible_needed'];
-      if (s[name + '_confirmed_needed'] != null) confNeeded = s[name + '_confirmed_needed'];
+      const statePriority = _STATE_PRIORITY[st] || 0;
+      if (statePriority > bestStatePriority || (statePriority === bestStatePriority && sc > bestScore)) {
+        bestScore = sc;
+        bestState = st;
+        bestTriggers = tr;
+        bestEngineId = s.engine_id || '';
+        bestStatePriority = statePriority;
+        if (s[name + '_possible_needed'] != null) possNeeded = s[name + '_possible_needed'];
+        if (s[name + '_confirmed_needed'] != null) confNeeded = s[name + '_confirmed_needed'];
+      }
       const cd = s[name + '_cooldown'] || 0;
       const rf = s[name + '_refractory'] || 0;
       if (cd > maxCooldown) maxCooldown = cd;
@@ -702,7 +723,7 @@ function updateScores(msg) {
     if (s.top) parts.push(`<span class="top-label">top:</span> ${esc(s.top)}`);
     if (s.yamnet != null) parts.push(`<span class="top-label">yamnet:</span> ${(s.yamnet * 100).toFixed(0)}%`);
     if (s.mlp != null) parts.push(`<span class="top-label">mlp:</span> ${(s.mlp * 100).toFixed(0)}%`);
-  } else if (sourceCount > 1) {
+  } else if (sourceCount > 1 || sources.length > 1) {
     let yamSum = 0, yamN = 0, mlpSum = 0, mlpN = 0;
     for (const s of sources) {
       if (s.yamnet != null) { yamSum += s.yamnet; yamN++; }
@@ -838,13 +859,13 @@ function buildDetailsHtml(ev) {
 }
 
 function addEvent(ev) {
-  if (!ev.clip_url) return;  // show only confirmed events with audio
-  const eventKey = `${ev.timestamp}:${ev.clip_url}`;
+  if (!ev.clip_url && ev.state !== 'confirmed') return;
+  const eventKey = ev.event_id || `${ev.timestamp}:${ev.engine_id || ''}:${ev.source_id ?? ''}:${ev.event}:${ev.clip_url || ''}`;
   if (seenEvents.has(eventKey)) return;
   seenEvents.add(eventKey);
   if (emptyEl) { emptyEl.remove(); emptyEl = null; }
   const ts = new Date(ev.timestamp).toLocaleTimeString();
-  const filename = ev.clip_url.split('/').pop();
+  const filename = ev.clip_url ? ev.clip_url.split('/').pop() : '';
   registerEngineFilter(ev.engine_id);
   const card = document.createElement('div');
   card.className = 'event-card';
@@ -856,7 +877,8 @@ function addEvent(ev) {
     if (ev.mlp != null)    p.push(`mlp: ${(ev.mlp * 100).toFixed(0)}%`);
     return p.join('  ·  ');
   })();
-  card.dataset.filename = filename;
+  if (filename) card.dataset.filename = filename;
+  if (ev.event_id) card.dataset.eventId = ev.event_id;
 
   const detailsHtml = buildDetailsHtml(ev);
 
@@ -872,7 +894,7 @@ function addEvent(ev) {
     </div>
     ${breakdown ? `<div class="event-breakdown">${breakdown}</div>` : ''}
     <div class="ev-details">${detailsHtml}</div>
-    <div class="clip-player" data-clip-url="${esc(ev.clip_url)}">
+    ${ev.clip_url ? `<div class="clip-player" data-clip-url="${esc(ev.clip_url)}">
       <canvas class="spec-canvas"></canvas>
       <div class="player-controls"${isAdmin() ? '' : ' style="display:none"'}>
         <div class="pc-buttons">
@@ -882,14 +904,14 @@ function addEvent(ev) {
         </div>
         <audio controls preload="metadata"${isAdmin() ? ` src="${esc(ev.clip_url)}${_adminToken ? '?token=' + encodeURIComponent(_adminToken) : ''}"` : ''}></audio>
       </div>
-    </div>
-    <div class="label-row">
+    </div>` : '<div class="clip-unavailable">Audio clip unavailable</div>'}
+    <div class="label-row"${ev.clip_url ? '' : ' style="display:none"'}>
       <span>Label:</span>
       ${VALID_LABELS.map(l =>
         `<button class="lbtn" data-label="${l}" onclick="sendLabel(this,'${filename}','${l}')">${l}</button>`
       ).join('')}
     </div>
-    <div class="seg-section">
+    <div class="seg-section"${ev.clip_url ? '' : ' style="display:none"'}>
       <button class="seg-toggle" onclick="toggleSegments(this)">segments ▸</button>
       <div class="seg-body">
         <div class="seg-list"></div>
@@ -921,7 +943,7 @@ function addEvent(ev) {
     card._segments = ev.segments;
     renderSegments(card);
   }
-  initClipPlayer(card);
+  if (ev.clip_url) initClipPlayer(card);
   const authed = isAdmin();
   card.querySelectorAll('.ev-check').forEach(el => el.classList.toggle('visible', authed));
   card.querySelectorAll('.label-row').forEach(el => el.classList.toggle('visible', authed));

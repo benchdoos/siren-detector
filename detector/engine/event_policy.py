@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 
 from .. import settings as settings_mod
@@ -13,6 +14,7 @@ from ..transport.udp import udp_stats_snapshot
 from .source_state import SourceState
 
 _EMPTY_PEAK = {"score": 0.0, "yamnet": 0.0, "mlp": None, "top": "", "yamnet_top3": [], "mlp_top3": []}
+logger = logging.getLogger(__name__)
 
 
 def _dsp_stats_snapshot(dsp, sources: dict, settings: dict | None = None) -> dict | None:
@@ -161,6 +163,7 @@ class EventPolicy:
                 continue
             pk = source.peaks[name]
             engine_name = det_engine if (name == "siren" and model_has_classifier) else "yamnet"
+            event_id = f"{result.engine_id}:{source.source_id}:{name}:{time.time_ns()}"
             thr_key = f"{name}_threshold"
             clip_url = None
             if new_state == "confirmed":
@@ -171,6 +174,7 @@ class EventPolicy:
                     clip_seconds = self._settings.get("clip_seconds", CLIP_SECONDS)
                     clip_duration = min(elapsed, clip_seconds)
                 meta = {
+                    "event_id": event_id,
                     "event": name, "confidence": round(pk["score"], 3),
                     "timestamp": ts, "source": source.name, "engine": engine_name,
                     "engine_id": result.engine_id,
@@ -186,19 +190,29 @@ class EventPolicy:
                 }
                 if source.window_scores[name]:
                     meta["window_scores"] = source.window_scores[name]
-                clip_url = runtime.save_clip(ClipSaveRequest(
-                    filename=clip_name,
-                    sample_rate_hz=SAMPLE_RATE,
-                    samples=source.clip_buf.snapshot(last_seconds=clip_duration),
-                    metadata=meta,
-                ))
-                print(f"[{ts}] {name} clip saved: {clip_url} (source: {source.name})", flush=True)
+                try:
+                    clip_url = runtime.save_clip(ClipSaveRequest(
+                        filename=clip_name,
+                        sample_rate_hz=SAMPLE_RATE,
+                        samples=source.clip_buf.snapshot(last_seconds=clip_duration),
+                        metadata=meta,
+                    ))
+                    print(f"[{ts}] {name} clip saved: {clip_url} (source: {source.name})", flush=True)
+                except Exception:
+                    # A full or unavailable clips volume must not suppress the
+                    # detection event itself. The event remains useful without
+                    # its optional audio artifact.
+                    logger.exception(
+                        "Could not save confirmed %s clip for source %s; publishing event without clip",
+                        name, source.name,
+                    )
                 source.possible_start[name] = None
                 source.window_scores[name] = []
 
             event = {
                 "type": "event", "event": name, "state": new_state,
                 "confidence": round(pk["score"], 3), "timestamp": ts,
+                "event_id": event_id,
                 "source": source.name, "engine": engine_name, "clip_url": clip_url,
                 "engine_id": result.engine_id,
                 "source_id": source.source_id,

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
 from fastapi.responses import StreamingResponse
+from starlette.websockets import WebSocketDisconnect
 
 from ..auth import require_viewer, ws_check_token
 from ..config import CLIP_DIR
@@ -105,21 +106,27 @@ async def ws_endpoint(ws: WebSocket):
     await ws.send_json(_bus.last_score)
     for ev in list(_bus.event_history):
         clip_url = ev.get("clip_url")
-        if not clip_url:
-            continue
-        filename = clip_url.split("/")[-1]
-        resolved = (CLIP_DIR / filename).resolve()
-        if not resolved.is_relative_to(CLIP_DIR.resolve()) or not resolved.exists():
-            continue
         ev_out = dict(ev)
-        if filename in _bus.feedback:
-            ev_out["label"] = _bus.feedback[filename]
+        if clip_url:
+            filename = clip_url.split("/")[-1]
+            resolved = (CLIP_DIR / filename).resolve()
+            if not resolved.is_relative_to(CLIP_DIR.resolve()) or not resolved.exists():
+                # Preserve the event in history even when its optional clip is
+                # missing (for example, after a storage failure).
+                ev_out["clip_url"] = None
+            elif filename in _bus.feedback:
+                ev_out["label"] = _bus.feedback[filename]
         await ws.send_json(ev_out)
 
     async def sender():
-        while True:
-            msg = await queue.get()
-            await ws.send_json(msg)
+        try:
+            while True:
+                msg = await queue.get()
+                await ws.send_json(msg)
+        except WebSocketDisconnect:
+            # Browsers routinely close/reconnect while inference is running.
+            # Treat that as client lifecycle, not a server error.
+            return
 
     async def receiver():
         while True:
@@ -136,6 +143,7 @@ async def ws_endpoint(ws: WebSocket):
         )
         for task in pending:
             task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
     except Exception:
         pass
     finally:
