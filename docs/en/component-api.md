@@ -262,14 +262,15 @@ manifest is available from `GET /api/engines/manifests`; registered manifest
 settings also drive the Settings UI when the engine is selected in the saved
 graph. Array and object settings are edited as JSON.
 
-The graph API validates this JSON Schema subset: `type` (including type unions),
-`enum`, numeric bounds and `multipleOf`, string length and `pattern`, array
-length, `uniqueItems` and `items`, and object `required`, `properties`,
-`additionalProperties`, and property counts. Annotation keywords such as
-`default`, `description`, and `title` are preserved. Unsupported assertion
-keywords are rejected instead of being silently ignored. `pattern` uses Python's
-regular-expression syntax; `$ref`, `format`, conditional schemas, and tuple
-validation for array items are not supported.
+Settings validation uses the `jsonschema` Draft 2020-12 validator by default, or
+the draft declared by the manifest's `$schema`. This includes composition,
+conditional schemas, local references, tuple validation, and the standard
+assertions. Schemas are checked before settings are accepted. Remote references
+are not fetched. `format` remains an annotation unless a format checker is
+explicitly configured. Unknown graph-level and
+engine-entry fields are preserved when the graph is loaded and saved; a manifest
+with `additionalProperties: false` can still reject unknown keys inside its
+settings object.
 
 An embedding application can register a short selector before startup:
 
