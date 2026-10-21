@@ -65,7 +65,7 @@ engine subscribes to frames, and results pass back through Hub and
 engine; inference lives in `detector/engine/stages/yamnet_mlp.py` and event
 policy lives in `detector/engine/event_policy.py`.
 Legacy message formats are described in code and partly in
-[`detector/engine/interface.py`](../../detector/engine/interface.py), but are
+[`detector/engine/interface.py`](https://github.com/benchdoos/siren-detector/blob/main/detector/engine/interface.py), but are
 not yet a versioned public contract.
 
 When `engine_configs` is non-empty, startup uses the stored `engine-graph.v1`:

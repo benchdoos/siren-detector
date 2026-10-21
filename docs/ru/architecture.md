@@ -65,7 +65,7 @@ settings и CLI args. `main.py` регистрирует UDP-адаптер, eng
 вынесен в `detector/engine/stages/yamnet_mlp.py`, политика событий — в
 `detector/engine/event_policy.py`.
 Формат legacy-сообщений описан в коде и частично в
-[`detector/engine/interface.py`](../../detector/engine/interface.py), но ещё
+[`detector/engine/interface.py`](https://github.com/benchdoos/siren-detector/blob/main/detector/engine/interface.py), но ещё
 не является версионируемым публичным контрактом.
 
 При непустом `engine_configs` запускается сохранённый `engine-graph.v1`:
@@ -144,7 +144,7 @@ SDR1 состоит из 12-байтового заголовка в сетев�
 
 ### Настройка
 
-Параметры DSP — в [Настройках](settings.md#dsp-предварительный-фильтр). Per-source overrides позволяют задавать разные пороги для разных микрофонов. DSP-модель должна присутствовать в директории моделей; при отсутствии фильтр автоматически отключается.
+Параметры DSP — в [Настройках](settings.md#dsp-предфильтр). Per-source overrides позволяют задавать разные пороги для разных микрофонов. DSP-модель должна присутствовать в директории моделей; при отсутствии фильтр автоматически отключается.
 
 ## Режимы распознавания
 
