@@ -73,6 +73,9 @@ class _FakeRuntimeHub:
     def add_input(self, adapter):
         self.input = adapter
 
+    def add_output(self, adapter):
+        self.output = adapter
+
     def register_component(self, component_id, name, version=None):
         self.components[component_id] = {"name": name, "version": version, "state": "starting"}
 

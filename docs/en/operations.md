@@ -40,6 +40,10 @@ Authentication is controlled by `AUTH_ENABLED` and `ADMIN_TOKEN` in `hub/.env`. 
 
 MQTT is optional. Set `MQTT_HOST`, `MQTT_PORT`, and, if needed, `MQTT_USER`/`MQTT_PASSWORD` in `hub/.env`, then recreate the detector container. The integration publishes detector state and event information under the `sound_detector` topic namespace and supports Home Assistant discovery when a broker is available. `sound_detector/events` carries JSON event updates with `engine_id`, `source_id`, source name, event, state, confidence, and timestamp; existing retained Home Assistant state topics remain available.
 
+## Webhooks
+
+Set `WEBHOOK_URLS` to a comma-separated list of HTTP(S) endpoints to receive POST requests containing `detector-event.v1` JSON. `WEBHOOK_TOKEN` optionally sends a shared Bearer token, and `WEBHOOK_TIMEOUT_SECONDS` controls the per-endpoint timeout (default 2 seconds). Delivery uses a bounded queue of 128 events and drops the oldest pending event when full. Failed requests are logged and counted in Settings → Runtime; they are not retried. Webhooks receive events, not score updates.
+
 ## HTTP and WebSocket API
 
 The [API reference](api.md) lists routes and access rules. FastAPI's interactive REST docs are at `http://<host>:8080/docs`; the OpenAPI specification is at `http://<host>:8080/openapi.json`.

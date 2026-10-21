@@ -40,6 +40,10 @@ docker compose logs -f detector
 
 MQTT необязателен. Укажите `MQTT_HOST`, `MQTT_PORT` и, если нужно, `MQTT_USER`/`MQTT_PASSWORD` в `hub/.env`, затем пересоздайте контейнер детектора. При доступном брокере интеграция публикует состояние и события в пространстве топиков `sound_detector` и поддерживает обнаружение Home Assistant. `sound_detector/events` содержит JSON-сообщения с `engine_id`, `source_id`, именем источника, событием, состоянием, confidence и timestamp; существующие retained-топики Home Assistant сохраняются.
 
+## Webhook
+
+Задайте `WEBHOOK_URLS` — список HTTP(S) адресов через запятую. На них отправляются POST-запросы с JSON `detector-event.v1`. Переменная `WEBHOOK_TOKEN` опционально добавляет общий Bearer token, а `WEBHOOK_TIMEOUT_SECONDS` задаёт timeout каждого адреса (по умолчанию 2 секунды). События отправляются через ограниченную очередь на 128 элементов; при переполнении отбрасывается самое старое ожидающее событие. Ошибки запросов логируются и видны в Settings → Runtime; повторной отправки нет. Webhook получает события, но не score updates.
+
 ## HTTP и WebSocket API
 
 Подробный перечень маршрутов и правила доступа вынесены в [справочник API](api.md). Интерактивная REST-документация FastAPI доступна по адресу `http://<хост>:8080/docs`, спецификация OpenAPI — `http://<хост>:8080/openapi.json`.
