@@ -35,17 +35,20 @@ INMP441 → ESP32-S3 → UDP / SDR1 → UDP Hub → Detector → Web UI / MQTT
                                              └──────→ event clips
 ```
 
-The current Hub is a small UDP relay. The detector receives audio, while the
-selected engine manages audio reception/processing and publishes scores and
-events. The target component architecture still requires refactoring.
+The current UDP Hub is a small network relay. `UDPSourceAdapter` in Detector
+decodes SDR1 and emits `AudioFrame`; Runtime Hub routes the frame to
+subscribers. The YAMNet engine subscribes to frames but still owns buffers,
+inference, and event smoothing. Its scores and events flow back through Runtime
+Hub to the legacy EventBus, which feeds WebSocket and MQTT.
 
 ## Components
 
 | Component | Responsibility | Code/configuration |
 |---|---|---|
 | Audio node | Capture 16 kHz audio and send SDR1 datagrams | `esp32/siren-detector.yaml` |
-| Hub | Forward each datagram to configured destinations | `hub/hub.py`, `hub/docker-compose.yml` |
-| Detector | Receive audio, maintain per-source state, run inference, publish events | `detector/` |
+| UDP Hub | Forward each datagram to configured destinations | `hub/hub.py`, `hub/docker-compose.yml` |
+| Runtime Hub | Route normalized audio frames and processing results | `detector/runtime/` |
+| Detector | Own the UDP input adapter, buffers, processing, UI/API, and integrations | `detector/` |
 | Recorder | Record incoming audio to labeled WAV files on demand | `recorder/` |
 | ML tools | Prepare data, train classifier heads, and evaluate models | `dataset/`, `ml/` |
 
@@ -56,9 +59,10 @@ The current engine loads YAMNet once and uses its audio embeddings with an optio
 The Python package is split into transport, engine, server, and integration
 layers connected by an in-process `EventBus`. This does not yet mean every layer
 can be replaced through a stable public API: `EngineInterface.start()` receives
-Runtime Hub, settings, and CLI args. Results from the current engine now pass
-through Hub and `EventBusOutput` into `EventBus`, though the engine still starts
-its own transport. Legacy message formats are described in code and partly in
+Runtime Hub, settings, and CLI args. `main.py` registers the UDP adapter, the
+engine subscribes to frames, and results pass back through Hub and
+`EventBusOutput` into `EventBus`. Buffers, inference, and smoothing still live
+inside the engine. Legacy message formats are described in code and partly in
 [`detector/engine/interface.py`](../../detector/engine/interface.py), but are
 not yet a versioned public contract.
 

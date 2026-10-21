@@ -21,6 +21,7 @@ from .integrations.mqtt import mqtt_connect, mqtt_subscribe
 from .runtime.hub import RuntimeHub
 from .server.app import create_app
 from .settings import load_settings
+from .transport.udp import UDPSourceAdapter
 
 # Built-in engines: name → module.ClassName
 ENGINE_REGISTRY = {
@@ -61,6 +62,7 @@ def main() -> None:
 
     bus = EventBus()
     runtime = RuntimeHub(bus)
+    runtime.add_input(UDPSourceAdapter(args.bind, args.port))
     settings = load_settings()
 
     # MQTT (non-blocking, works without broker)
@@ -78,7 +80,10 @@ def main() -> None:
 
     async def serve():
         bus.loop = asyncio.get_running_loop()
-        await server.serve()
+        try:
+            await server.serve()
+        finally:
+            runtime.stop_inputs()
 
     asyncio.run(serve())
 

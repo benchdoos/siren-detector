@@ -1,8 +1,9 @@
-"""Legacy engine entry point and current Runtime Hub message contract.
+"""Engine entry point and current Runtime Hub message contract.
 
 Engines implement ``start(runtime, settings, args)``. The current YAMNet engine
-still owns UDP reception and event smoothing; this interface is the first
-migration step that routes its score/event output through ``RuntimeHub``.
+subscribes to normalized audio frames through ``RuntimeHub`` but still owns
+buffering, inference, and event smoothing. Score/event output is routed through
+the Hub.
 
 During the compatibility period, an engine publishes the existing message
 shape through ``RuntimeMessage.from_legacy``::

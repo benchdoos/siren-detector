@@ -200,20 +200,21 @@ policy, а не скрытая логика UI или MQTT адаптера.
 
 ## Текущая реализация и переход
 
-Сейчас `detector/main.py` выбирает один engine через `--engine`. Engine получает
-`RuntimeHub` и публикует score/event через него. Пока это только результатный
-маршрут: `EventBusOutput` сохраняет старый формат сообщений и передаёт их в
-`EventBus` (`detector/bus.py`), откуда их получают WebSocket и интеграции.
-Аудио-вход, буферы, обработка и сглаживание всё ещё находятся в основном в
-`yamnet_engine.py`; UDP Hub по-прежнему отдельный relay. `RuntimeMessage` пока
-оборачивает legacy payload и не фиксирует финальную схему `v1`.
+Сейчас `detector/main.py` выбирает один engine через `--engine` и регистрирует
+`UDPSourceAdapter` в Runtime Hub. Адаптер публикует `AudioFrame`; engine
+подписывается на кадры и публикует score/event обратно через Hub. Hub направляет
+результаты в `EventBusOutput`, который сохраняет старый формат для
+`EventBus` (`detector/bus.py`), WebSocket и интеграций. Буферы, обработка и
+сглаживание всё ещё находятся в основном в `yamnet_engine.py`; UDP Hub —
+отдельный сетевой relay. `RuntimeMessage` оборачивает legacy payload и не
+фиксирует финальную схему `v1`.
 
 Рекомендуемый путь миграции:
 
 1. Описать текущие score/event и audio wire formats и сохранить примеры как
    legacy профиль.
-2. Ввести внутренний нормализованный `AudioFrame` и входной adapter, оставив
-   SDR1 без изменений на сети.
+2. [x] Ввести внутренний `audio-frame.v1` и SDR1 input adapter, оставив
+   сетевой формат SDR1 без изменений.
 3. Перевести текущую цепочку в первый pipeline provider, сохранив поведение.
 4. Ввести отдельный event policy и output adapters поверх общего результата.
 5. Добавить конфигурируемый routing и второй независимый компонент; затем
