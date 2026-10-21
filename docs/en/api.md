@@ -43,8 +43,8 @@ When authentication is enabled (`AUTH_ENABLED` in `hub/.env`), protected request
 
 Protected routes return `401` or `403` for invalid or missing tokens. See the [settings reference](settings.md) for setting names and ranges.
 
-`GET /api/runtime/status` returns `available`, a `components` array, and a
-`subscribers` array. Each component includes `component_id`, `name`, `version`,
+`GET /api/runtime/status` returns `available`, and `components`, `subscribers`,
+and `outputs` arrays. Each component includes `component_id`, `name`, `version`,
 `state`, `started_at`, `updated_at`, `error_count`, and `last_error`. Each audio
 subscription includes `subscriber_id`, `state`, `queue_depth`,
 `queue_capacity`, `overflow`, counters for `frames_received`,

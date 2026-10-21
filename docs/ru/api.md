@@ -43,8 +43,8 @@ REST API обслуживается тем же сервером, что и ве
 
 Защищённые маршруты при неверном или отсутствующем токене возвращают `401` либо `403`. Поля настроек и их диапазоны приведены в [справочнике настроек](settings.md).
 
-`GET /api/runtime/status` возвращает `available`, массив `components` и массив
-`subscribers`. Компонент содержит `component_id`, `name`, `version`, `state`,
+`GET /api/runtime/status` возвращает `available` и массивы `components`,
+`subscribers` и `outputs`. Компонент содержит `component_id`, `name`, `version`, `state`,
 `started_at`, `updated_at`, `error_count` и `last_error`. Для каждой аудиоподписки
 доступны `subscriber_id`, `state`, `queue_depth`,
 `queue_capacity`, `overflow`, счётчики `frames_received`, `frames_processed`,
