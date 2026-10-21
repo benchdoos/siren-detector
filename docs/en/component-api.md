@@ -198,12 +198,13 @@ follow once contracts are stable.
 
 ## Current implementation and migration
 
-Today `detector/main.py` selects one engine with `--engine`. The contract in
-`detector/engine/interface.py` passes the engine the entire `EventBus`, settings,
-and CLI args; the engine starts its own UDP transport and publishes complete
-score/event messages. `EventBus` (`detector/bus.py`) is the in-process bridge
-to WebSocket and integrations, while UDP Hub is a separate relay. Threshold
-and smoothing settings are mostly global.
+Today `detector/main.py` selects one engine with `--engine`. The engine receives
+`RuntimeHub` and publishes scores/events through it. For now, only the result
+route is migrated: `EventBusOutput` preserves legacy message payloads and sends
+them to `EventBus` (`detector/bus.py`), which delivers to WebSocket and
+integrations. Audio ingress, buffers, processing, and smoothing mostly remain
+inside `yamnet_engine.py`; UDP Hub remains a separate relay. `RuntimeMessage`
+wraps the legacy payload and does not yet define the final `v1` schema.
 
 Recommended migration:
 
