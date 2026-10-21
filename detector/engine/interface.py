@@ -1,9 +1,9 @@
 """Engine entry point and current Runtime Hub message contract.
 
 Engines implement ``start(runtime, settings, args)``. The current YAMNet engine
-subscribes to normalized audio frames through ``RuntimeHub`` but still owns
-buffering, inference, and event smoothing. Score/event output is routed through
-the Hub.
+subscribes to normalized audio frames through ``RuntimeHub`` and owns buffering
+and orchestration. Its inference stage returns results through the Hub to an
+event policy; the policy publishes score/event output through the Hub.
 
 During the compatibility period, an engine publishes the existing message
 shape through ``RuntimeMessage.from_legacy``::
