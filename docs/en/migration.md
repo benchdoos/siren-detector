@@ -34,8 +34,16 @@ Runtime Hub, versioned contracts, and multiple engines.
 
    Record the image reference printed by the second command; Compose may use a
    name other than `siren-detector`.
-2. Back up the server's `clips` volume, which stores `settings.json` and clips.
-   Find the volume name with:
+2. To save only the current settings, run this on the server from the directory
+   where you want the backup:
+
+   ```bash
+   docker cp siren-detector-engine:/clips/settings.json ./settings-before-upgrade.json
+   ```
+
+   The file includes legacy settings and `engine_configs`/routes if a graph is
+   configured. To also preserve clips and sidecar metadata, archive the full
+   `clips` volume. Find its name with:
 
    ```bash
    docker inspect siren-detector-engine \
