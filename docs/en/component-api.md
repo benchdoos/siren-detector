@@ -81,8 +81,11 @@ through CLI or Settings UI is not part of the user workflow yet. The file adapte
 accepts mono PCM WAV at 16 kHz, publishes float32 frames of
 100 ms (the final frame may be shorter), and can pace playback in real time. It
 uses the existing NumPy and SoundFile dependencies and needs no device. USB
-microphones are not implemented yet; for a concrete target device, choose ALSA
-(`sounddevice`/PortAudio) or a native backend and document its system dependencies.
+microphones are already supported by the separate `audio_source/` service:
+`sounddevice`/PortAudio captures audio and sends SDR1/UDP to the Hub; its Docker
+setup provides PipeWire/PulseAudio and an ALSA `/dev/snd` fallback. This is an
+external network source adapter, not a direct Detector driver. The WAV adapter
+is a local programmatic input for tests.
 
 Proposed frame shape:
 

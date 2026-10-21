@@ -1,5 +1,9 @@
 # Operations
 
+For an existing installation, see the [upgrade and migration guide](migration.md)
+for backing up `clips`, preserving production `.env` files, and enabling the
+multi-engine graph.
+
 ## Services and ports
 
 | Service | Default port | Notes |

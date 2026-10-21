@@ -21,6 +21,7 @@ The current deployment is a remote inference setup: the ESP32 captures and trans
 - [Component API](component-api.md) — target contracts for sources, routing, processing, and outputs.
 - [Custom engine example](custom-engine-example.md) — runnable example using Runtime Hub.
 - [Operations](operations.md) — deployment, settings, API, and troubleshooting.
+- [Upgrading and migration](migration.md) — backups, update commands, legacy settings, and USB/ALSA.
 - [Data and models](data-and-models.md) — collect data and retrain the classifiers.
 - [Multi-microphone setup](multi-microphone.md) — add a USB audio source or understand the current ESP32 dual-mic wiring.
 - [Siren Detector settings](settings.md) — detailed runtime options and modes.
