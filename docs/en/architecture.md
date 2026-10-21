@@ -54,7 +54,7 @@ Hub to the legacy EventBus, which feeds WebSocket and MQTT.
 
 ## Detector pipeline
 
-The current engine uses a separate YAMNet + MLP inference stage; DSP/TFLite remains a pre-filter. The stage returns `inference-result.v1` through Runtime Hub. The current event policy applies thresholds and smoothing, then publishes legacy score/event messages back through Hub to `EventBusOutput`. Smoothing, clips, and event rules still belong to this project rather than a pluggable API.
+The current engine uses a separate YAMNet + MLP inference stage; DSP/TFLite remains a pre-filter. The stage returns `inference-result.v1` through Runtime Hub. A separate `EventPolicy` applies thresholds and smoothing, manages clips, and publishes legacy score/event messages back through Hub to `EventBusOutput`. The policy is separated from the engine but is still a project implementation, not a pluggable API.
 
 The Python package is split into transport, engine, server, and integration
 layers connected by an in-process `EventBus`. This does not yet mean every layer
@@ -62,8 +62,8 @@ can be replaced through a stable public API: `EngineInterface.start()` receives
 Runtime Hub, settings, and CLI args. `main.py` registers the UDP adapter, the
 engine subscribes to frames, and results pass back through Hub and
 `EventBusOutput` into `EventBus`. Buffers and DSP preprocessing remain in the
-engine; inference lives in `detector/engine/stages/yamnet_mlp.py`, while event
-policy is routed through Runtime Hub but still implemented as an engine method.
+engine; inference lives in `detector/engine/stages/yamnet_mlp.py` and event
+policy lives in `detector/engine/event_policy.py`.
 Legacy message formats are described in code and partly in
 [`detector/engine/interface.py`](../../detector/engine/interface.py), but are
 not yet a versioned public contract.

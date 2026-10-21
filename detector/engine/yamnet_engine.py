@@ -17,10 +17,8 @@ Detection modes:
 from __future__ import annotations
 
 import argparse
-import json
 import threading
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -30,7 +28,6 @@ from ..runtime.contracts import AudioFrame, InferenceResult, RuntimeMessage
 from ..runtime.hub import RuntimeHub
 from ..config import (
     ANALYSIS_SECONDS,
-    CLIP_DIR,
     CLIP_SECONDS,
     DETECTORS,
     DSP_LABELS_PATH,
@@ -38,14 +35,12 @@ from ..config import (
     DSP_NORM_STATS_PATH,
     SAMPLE_RATE,
 )
-from ..server.routes_clips import save_clip_meta
 from ..transport.udp import udp_stats_snapshot
 from .smoother import TemporalSmoother
 from .source_state import SourceState
+from .event_policy import EventPolicy, _EMPTY_PEAK, _dsp_stats_snapshot
 from .stages.yamnet_mlp import YAMNetMlpStage
 from .. import settings as settings_mod
-
-_EMPTY_PEAK = {"score": 0.0, "yamnet": 0.0, "mlp": None, "top": "", "yamnet_top3": [], "mlp_top3": []}
 
 # ── Click removal (impulse noise suppression) ─────────────────────────
 # MAD-based outlier detection: finds samples that deviate > threshold * MAD
@@ -99,26 +94,6 @@ def _remove_clicks(waveform: np.ndarray, threshold: float = 10.0,
 def _inference_hop_samples() -> int:
     interval = float(settings_mod.settings.get("inference_interval_seconds", 0.5))
     return int(SAMPLE_RATE * min(2.0, max(0.25, interval)))
-
-
-def _dsp_stats_snapshot(dsp, sources: dict) -> dict | None:
-    if dsp is None:
-        return None
-    stats = dsp.stats_snapshot()
-    disabled = set(settings_mod.settings.get("disabled_sources", []))
-    active_source_ids = set(sources) - disabled
-    overrides = settings_mod.settings.get("dsp_source_overrides", {})
-    dsp_source_ids = {
-        sid for sid in active_source_ids
-        if bool(overrides.get(str(sid), {}).get(
-            "dsp_enabled", settings_mod.settings.get("dsp_enabled", 1),
-        ))
-    }
-    skipping_ids = set(stats.pop("skipping_source_ids", []))
-    stats["source_count"] = len(dsp_source_ids)
-    stats["active_sources"] = len(dsp_source_ids & skipping_ids)
-    stats["enabled"] = bool(dsp_source_ids)
-    return stats
 
 
 def _create_source(source_id: int, name: str) -> SourceState:
@@ -255,11 +230,8 @@ class YAMNetEngine:
             source.inference_buf.push(frame.samples)
             source.clip_buf.push(frame.samples)
 
-        runtime.subscribe_inference(
-            lambda result: self._apply_inference_result(
-                result, get_source, runtime, sources, dsp,
-            )
-        )
+        event_policy = EventPolicy(runtime, get_source, sources, dsp)
+        runtime.subscribe_inference(event_policy)
         runtime.subscribe_audio(on_audio_frame)
 
         print("Ready.", flush=True)
@@ -281,7 +253,7 @@ class YAMNetEngine:
                 if source.source_id in disabled:
                     continue
                 self._process_source(
-                    source, waveform, model_stage, det_engine, runtime,
+                    source, waveform, model_stage, det_engine, runtime, event_policy,
                     sources, dsp,
                 )
 
@@ -340,7 +312,7 @@ class YAMNetEngine:
                     if source.source_id in disabled:
                         continue
                     self._process_source(
-                        source, waveform, model_stage, det_engine, runtime,
+                        source, waveform, model_stage, det_engine, runtime, event_policy,
                         sources, dsp,
                     )
 
@@ -366,6 +338,7 @@ class YAMNetEngine:
         model_stage: YAMNetMlpStage,
         det_engine: str,
         runtime: RuntimeHub,
+        event_policy: EventPolicy,
         sources: dict | None = None,
         dsp=None,
     ) -> None:
@@ -478,30 +451,7 @@ class YAMNetEngine:
                     )
 
                 if skip_yamnet:
-                    # Confident background — skip YAMNet, broadcast minimal score
-                    score_msg: dict = {
-                        "type": "score", "top": "(dsp:background)",
-                        "source": source.name, "source_id": source.source_id,
-                        "dsp": dsp_result["probs"],
-                        "dsp_label": dsp_label,
-                        "dsp_confidence": round(dsp_conf, 3),
-                        "dsp_skipped_yamnet": True,
-                    }
-                    for name in DETECTORS:
-                        score_msg[f"{name}_score"] = 0.0
-                        score_msg[f"{name}_state"] = source.smoothers[name].state
-                        score_msg[f"{name}_triggers"] = source.smoothers[name].trigger_count
-                        score_msg[f"{name}_possible_needed"] = source.smoothers[name].possible_needed
-                        score_msg[f"{name}_confirmed_needed"] = source.smoothers[name].confirmed_needed
-                        score_msg[f"{name}_cooldown"] = round(source.smoothers[name].cooldown_remaining, 1)
-                        score_msg[f"{name}_refractory"] = round(source.smoothers[name].refractory_remaining, 1)
-                        # Push zero score through smoothers (decays triggers)
-                        source.smoothers[name].push(0.0)
-                    score_msg.update(udp_stats_snapshot(runtime.event_bus.source_names))
-                    score_msg["dsp_stats"] = _dsp_stats_snapshot(dsp, sources or {source.source_id: source})
-                    if sources:
-                        score_msg["source_names"] = {sid: src.name for sid, src in sources.items()}
-                    runtime.publish(RuntimeMessage.from_legacy(score_msg))
+                    event_policy.publish_dsp_skip(source, dsp_result)
                     return
         elif dsp is not None:
             source.dsp_feature_buf.clear()
@@ -520,163 +470,6 @@ class YAMNetEngine:
             scores=prediction.scores,
             metadata=metadata,
         ))
-
-    @staticmethod
-    def _apply_inference_result(
-        result: InferenceResult,
-        get_source,
-        runtime: RuntimeHub,
-        sources: dict,
-        dsp,
-    ) -> None:
-        """Apply project event policy to generic model results from Runtime Hub."""
-        source = get_source(result.source_id)
-        yamnet_scores = {
-            name: float(result.scores.get(f"yamnet:{name}", 0.0))
-            for name in DETECTORS
-        }
-        mlp_score = result.scores.get("mlp:siren")
-        mlp_top1 = result.metadata.get("mlp_top1")
-        yamnet_top = result.metadata.get("yamnet_top", "")
-        cur_yamnet_top3 = result.metadata.get("yamnet_top3", [])
-        cur_mlp_top3 = result.metadata.get("mlp_top3", [])
-        model_has_classifier = bool(result.metadata.get("has_classifier"))
-        det_engine = result.metadata.get("det_engine", "yamnet")
-        dsp_result = result.metadata.get("dsp_result")
-        ts = result.timestamp
-
-        effective: dict[str, float] = {}
-        for name in DETECTORS:
-            if name == "siren" and mlp_score is not None:
-                if yamnet_scores["siren"] >= settings_mod.settings["yamnet_min_gate"]:
-                    if mlp_top1 == name or mlp_score >= 0.5:
-                        effective[name] = mlp_score
-                    else:
-                        effective[name] = 0.0
-                else:
-                    effective[name] = 0.0
-            else:
-                effective[name] = yamnet_scores[name]
-
-        state_changes: dict[str, str | None] = {}
-        for name, smoother in source.smoothers.items():
-            state_changes[name] = smoother.push(effective[name])
-
-        for name in DETECTORS:
-            if source.smoothers[name].state == "idle":
-                source.peaks[name] = dict(_EMPTY_PEAK)
-            elif effective[name] > source.peaks[name]["score"]:
-                source.peaks[name] = {
-                    "score": effective[name],
-                    "yamnet": yamnet_scores[name],
-                    "mlp": mlp_score if name == "siren" else None,
-                    "top": yamnet_top,
-                    "yamnet_top3": cur_yamnet_top3,
-                    "mlp_top3": cur_mlp_top3,
-                }
-
-        for name in DETECTORS:
-            st = source.smoothers[name].state
-            if st == "possible" and source.possible_start[name] is None:
-                source.possible_start[name] = time.monotonic()
-                source.window_scores[name] = []
-            if st in ("possible", "confirmed"):
-                source.window_scores[name].append({
-                    "t": round(time.monotonic() - (source.possible_start[name] or time.monotonic()), 2),
-                    "score": round(effective[name], 3),
-                })
-            if st == "idle":
-                source.possible_start[name] = None
-                source.window_scores[name] = []
-
-        # Build and broadcast score message
-        score_msg: dict = {
-            "type": "score", "top": yamnet_top,
-            "source": source.name, "source_id": source.source_id,
-        }
-        for name in DETECTORS:
-            score_msg[f"{name}_score"] = round(effective[name], 3)
-            score_msg[f"{name}_state"] = source.smoothers[name].state
-            score_msg[f"{name}_triggers"] = source.smoothers[name].trigger_count
-            score_msg[f"{name}_possible_needed"] = source.smoothers[name].possible_needed
-            score_msg[f"{name}_confirmed_needed"] = source.smoothers[name].confirmed_needed
-            score_msg[f"{name}_cooldown"] = round(source.smoothers[name].cooldown_remaining, 1)
-            score_msg[f"{name}_refractory"] = round(source.smoothers[name].refractory_remaining, 1)
-        score_msg["yamnet"] = round(yamnet_scores.get("siren", 0.0), 3)
-        score_msg["mlp"] = round(mlp_score, 3) if mlp_score is not None else None
-        score_msg["yamnet_top3"] = cur_yamnet_top3
-        if cur_mlp_top3:
-            score_msg["mlp_top3"] = cur_mlp_top3
-
-        if dsp_result and dsp_result["ready"]:
-            score_msg["dsp"] = dsp_result["probs"]
-            score_msg["dsp_label"] = dsp_result["label"]
-            score_msg["dsp_confidence"] = round(dsp_result["confidence"], 3)
-            score_msg["dsp_skipped_yamnet"] = False
-        if dsp is not None:
-            score_msg["dsp_stats"] = _dsp_stats_snapshot(dsp, sources or {source.source_id: source})
-
-        score_msg.update(udp_stats_snapshot(runtime.event_bus.source_names))
-        if sources:
-            score_msg["source_names"] = {sid: src.name for sid, src in sources.items()}
-        runtime.publish(RuntimeMessage.from_legacy(score_msg))
-
-        # Handle state transitions → events + clips
-        for name, (_, _, prefix) in DETECTORS.items():
-            new_state = state_changes[name]
-            if new_state not in ("idle", "possible", "confirmed"):
-                continue
-            pk = source.peaks[name]
-            engine_name = det_engine if (name == "siren" and model_has_classifier) else "yamnet"
-            thr_key = f"{name}_threshold"
-            clip_url = None
-            if new_state == "confirmed":
-                clip_name = f"{prefix}{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.wav"
-                clip_duration = None
-                if settings_mod.settings.get("clip_from_possible") and source.possible_start[name] is not None:
-                    elapsed = time.monotonic() - source.possible_start[name] + 2.0
-                    clip_seconds = settings_mod.settings.get("clip_seconds", CLIP_SECONDS)
-                    clip_duration = min(elapsed, clip_seconds)
-                source.clip_buf.save(CLIP_DIR / clip_name, last_seconds=clip_duration)
-                clip_url = f"/clips/{clip_name}"
-                print(f"[{ts}] {name} clip saved: {clip_url} (source: {source.name})", flush=True)
-                meta = {
-                    "event": name, "confidence": round(pk["score"], 3),
-                    "timestamp": ts, "source": source.name, "engine": engine_name,
-                    "source_id": source.source_id,
-                    "yamnet": round(pk["yamnet"], 3),
-                    "mlp": round(pk["mlp"], 3) if pk["mlp"] is not None else None,
-                    "yamnet_top": pk["top"],
-                    "yamnet_top3": pk.get("yamnet_top3", []),
-                    "mlp_top3": pk.get("mlp_top3", []),
-                    "threshold": settings_mod.settings.get(thr_key, 0.15),
-                    "triggers": source.smoothers[name].trigger_count,
-                    "triggers_needed": settings_mod.settings["confirmed_triggers"],
-                }
-                if source.window_scores[name]:
-                    meta["window_scores"] = source.window_scores[name]
-                save_clip_meta(clip_name, meta)
-                source.possible_start[name] = None
-                source.window_scores[name] = []
-
-            event = {
-                "type": "event", "event": name, "state": new_state,
-                "confidence": round(pk["score"], 3), "timestamp": ts,
-                "source": source.name, "engine": engine_name, "clip_url": clip_url,
-                "source_id": source.source_id,
-                "yamnet": round(pk["yamnet"], 3),
-                "mlp": round(pk["mlp"], 3) if pk["mlp"] is not None else None,
-                "yamnet_top": pk["top"],
-                "yamnet_top3": pk.get("yamnet_top3", []),
-                "mlp_top3": pk.get("mlp_top3", []),
-                "threshold": settings_mod.settings.get(thr_key, 0.15),
-                "triggers": source.smoothers[name].trigger_count,
-                "triggers_needed": settings_mod.settings["confirmed_triggers"] if new_state == "confirmed" else settings_mod.settings["possible_triggers"],
-            }
-            runtime.publish(RuntimeMessage.from_legacy(event))
-            print(f"EVENT {json.dumps(event)}", flush=True)
-            if new_state == "confirmed":
-                source.peaks[name] = dict(_EMPTY_PEAK)
 
     @staticmethod
     def _build_heartbeat(sources: dict[int, SourceState]) -> dict:

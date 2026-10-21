@@ -53,7 +53,7 @@ Runtime Hub в legacy EventBus, на который подписаны WebSocket
 
 ## Текущий конвейер детектора
 
-Текущий движок использует отдельный YAMNet + MLP inference stage; DSP/TFLite остаётся предварительным фильтром. Stage возвращает `inference-result.v1` через Runtime Hub. Текущая политика событий применяет пороги и сглаживание и публикует legacy score/event обратно через Hub в `EventBusOutput`. Сглаживание, клипы и правила событий пока принадлежат коду этого проекта, а не подключаемому API.
+Текущий движок использует отдельный YAMNet + MLP inference stage; DSP/TFLite остаётся предварительным фильтром. Stage возвращает `inference-result.v1` через Runtime Hub. Отдельная `EventPolicy` применяет пороги и сглаживание, управляет клипами и публикует legacy score/event обратно через Hub в `EventBusOutput`. Политика отделена от engine, но пока остаётся реализацией проекта, а не подключаемым API.
 
 Python-пакет разделён на транспорт, engine, сервер и интеграции, связанные
 `EventBus`. Однако это пока не означает, что любой слой уже можно подменить
@@ -61,8 +61,8 @@ Python-пакет разделён на транспорт, engine, сервер
 settings и CLI args. `main.py` регистрирует UDP-адаптер, engine подписывается
 на кадры, а результаты проходят обратно через Hub и `EventBusOutput` в
 `EventBus`. Буферы и DSP-предобработка пока остаются внутри engine; инференс
-вынесен в `detector/engine/stages/yamnet_mlp.py`, а политика событий отделена
-вызовом через Runtime Hub, но пока реализована как метод engine.
+вынесен в `detector/engine/stages/yamnet_mlp.py`, политика событий — в
+`detector/engine/event_policy.py`.
 Формат legacy-сообщений описан в коде и частично в
 [`detector/engine/interface.py`](../../detector/engine/interface.py), но ещё
 не является версионируемым публичным контрактом.
