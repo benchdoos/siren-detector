@@ -6,7 +6,7 @@ import logging
 from typing import Protocol
 
 from ..bus import EventBus
-from .contracts import AudioFrame, RuntimeMessage
+from .contracts import AudioFrame, InferenceResult, RuntimeMessage
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,13 @@ class AudioInputAdapter(Protocol):
         ...
 
 
+class InferenceConsumer(Protocol):
+    """Consumes model output and applies an event/detection policy."""
+
+    def __call__(self, result: InferenceResult) -> None:
+        ...
+
+
 class OutputAdapter(Protocol):
     """Receives normalized runtime messages for a concrete output layer."""
 
@@ -46,17 +53,17 @@ class EventBusOutput:
 
 
 class RuntimeHub:
-    """Receive component outputs and route them to configured output adapters.
+    """Route normalized audio, inference results, and component outputs.
 
-    The first migration step registers the existing EventBus as the output
-    adapter. Audio ingress and pipeline routing remain in the legacy engine
-    until those boundaries are extracted in a later step.
+    The current migration registers the existing EventBus as an output adapter
+    and routes inference results to the current event policy.
     """
 
     def __init__(self, event_bus: EventBus) -> None:
         self.event_bus = event_bus
         self._outputs: list[OutputAdapter] = [EventBusOutput(event_bus)]
         self._audio_consumers: list[AudioConsumer] = []
+        self._inference_consumers: list[InferenceConsumer] = []
         self._inputs: list[AudioInputAdapter] = []
         self._started_inputs: set[int] = set()
 
@@ -106,6 +113,15 @@ class RuntimeHub:
                     frame.source_id, frame.sequence,
                 )
         self.broadcast_audio(frame.samples, frame.source_id)
+
+    def subscribe_inference(self, consumer: InferenceConsumer) -> None:
+        """Register a policy or downstream component for model outputs."""
+        self._inference_consumers.append(consumer)
+
+    def publish_inference(self, result: InferenceResult) -> None:
+        """Route model output to downstream policy components."""
+        for consumer in tuple(self._inference_consumers):
+            consumer(result)
 
     def publish(self, message: RuntimeMessage) -> None:
         """Route a score or event from a processing component to outputs."""

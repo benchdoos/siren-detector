@@ -1,8 +1,8 @@
 """YAMNet + MLP detection engine.
 
-Implements ``EngineInterface``: receives audio via UDP, runs YAMNet
-embeddings + optional MLP classifier, pushes scores and events through
-the RuntimeHub.
+Implements ``EngineInterface``: receives normalized audio frames through
+RuntimeHub, runs YAMNet embeddings + an optional MLP classifier, and routes
+inference results back through RuntimeHub to the current event policy.
 
 Supports multiple audio sources (multi-microphone).  Each source gets
 its own buffers and smoothers; YAMNet + MLP are loaded once and shared.
@@ -17,7 +17,6 @@ Detection modes:
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import threading
 import time
@@ -25,10 +24,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
-import tensorflow_hub as hub
 
 from ..audio import AudioRingBuffer, ClipBuffer
-from ..runtime.contracts import AudioFrame, RuntimeMessage
+from ..runtime.contracts import AudioFrame, InferenceResult, RuntimeMessage
 from ..runtime.hub import RuntimeHub
 from ..config import (
     ANALYSIS_SECONDS,
@@ -38,13 +36,13 @@ from ..config import (
     DSP_LABELS_PATH,
     DSP_MODEL_PATH,
     DSP_NORM_STATS_PATH,
-    MODEL_URL,
     SAMPLE_RATE,
 )
 from ..server.routes_clips import save_clip_meta
 from ..transport.udp import udp_stats_snapshot
 from .smoother import TemporalSmoother
 from .source_state import SourceState
+from .stages.yamnet_mlp import YAMNetMlpStage
 from .. import settings as settings_mod
 
 _EMPTY_PEAK = {"score": 0.0, "yamnet": 0.0, "mlp": None, "top": "", "yamnet_top3": [], "mlp_top3": []}
@@ -197,31 +195,11 @@ class YAMNetEngine:
         # Default source 0 gets --source name
         source_names.setdefault(0, args.source)
 
-        # ── Load YAMNet (shared across all sources) ──────────────────────
-        print(f"Loading YAMNet from {MODEL_URL} ...", flush=True)
-        yamnet = hub.load(MODEL_URL)
-
-        with open(yamnet.class_map_path().numpy().decode(), newline="", encoding="utf-8") as f:
-            class_names = [row["display_name"] for row in csv.DictReader(f)]
-
-        detector_indices: dict[str, list[int]] = {}
-        for name, (yamnet_classes, _, _) in DETECTORS.items():
-            indices = [i for i, n in enumerate(class_names) if n in yamnet_classes]
-            detector_indices[name] = indices
-            print(f"Detector '{name}' YAMNet classes: {[class_names[i] for i in indices]}", flush=True)
-
-        # ── Load MLP classifier (shared) ─────────────────────────────────
-        clf = None
-        det_engine = "yamnet"
-        weights_path = Path(args.classifier_weights)
-        labels_path = Path(args.classifier_labels)
-        if weights_path.exists() and labels_path.exists():
-            from ..classifier_infer import SirenClassifier
-            clf = SirenClassifier(weights_path, labels_path)
-            det_engine = "yamnet+mlp"
-            print(f"Classifier loaded: {clf.labels}", flush=True)
-        else:
-            print("No classifier weights — using raw YAMNet siren score.", flush=True)
+        # ── Load replaceable model stage (shared across sources) ─────────
+        model_stage = YAMNetMlpStage.load(
+            args.classifier_weights, args.classifier_labels,
+        )
+        det_engine = model_stage.engine_name
 
         # ── Load DSP pre-filter (optional cascade) ──────────────────────
         dsp = None
@@ -277,6 +255,11 @@ class YAMNetEngine:
             source.inference_buf.push(frame.samples)
             source.clip_buf.push(frame.samples)
 
+        runtime.subscribe_inference(
+            lambda result: self._apply_inference_result(
+                result, get_source, runtime, sources, dsp,
+            )
+        )
         runtime.subscribe_audio(on_audio_frame)
 
         print("Ready.", flush=True)
@@ -298,8 +281,8 @@ class YAMNetEngine:
                 if source.source_id in disabled:
                     continue
                 self._process_source(
-                    source, waveform, yamnet, class_names, detector_indices,
-                    clf, det_engine, runtime, args, sources, dsp,
+                    source, waveform, model_stage, det_engine, runtime,
+                    sources, dsp,
                 )
 
         def _stop_parallel():
@@ -357,8 +340,8 @@ class YAMNetEngine:
                     if source.source_id in disabled:
                         continue
                     self._process_source(
-                        source, waveform, yamnet, class_names, detector_indices,
-                        clf, det_engine, runtime, args, sources, dsp,
+                        source, waveform, model_stage, det_engine, runtime,
+                        sources, dsp,
                     )
 
                 now = time.monotonic()
@@ -380,13 +363,9 @@ class YAMNetEngine:
     def _process_source(
         source: SourceState,
         waveform: np.ndarray,
-        yamnet,
-        class_names: list[str],
-        detector_indices: dict[str, list[int]],
-        clf,
+        model_stage: YAMNetMlpStage,
         det_engine: str,
         runtime: RuntimeHub,
-        args: argparse.Namespace,
         sources: dict | None = None,
         dsp=None,
     ) -> None:
@@ -528,24 +507,43 @@ class YAMNetEngine:
             source.dsp_feature_buf.clear()
             dsp.reset_source_gate(source.source_id)
 
-        scores, embeddings, _ = yamnet(waveform)
-        scores_np = scores.numpy()
-        top_idx = int(scores_np.mean(axis=0).argmax())
-        yamnet_top = class_names[top_idx]
+        prediction = model_stage.predict(source.source_id, waveform)
+        metadata = dict(prediction.metadata)
+        metadata.update({
+            "det_engine": det_engine,
+            "dsp_result": dsp_result,
+        })
+        runtime.publish_inference(InferenceResult(
+            source_id=prediction.source_id,
+            stage_id=prediction.stage_id,
+            timestamp=prediction.timestamp,
+            scores=prediction.scores,
+            metadata=metadata,
+        ))
 
-        yamnet_scores: dict[str, float] = {}
-        for name, indices in detector_indices.items():
-            yamnet_scores[name] = float(scores_np[:, indices].max()) if indices else 0.0
-
-        mlp_score = None
-        mlp_top1 = None
-        probs = None
-        if clf is not None and "siren" in clf.labels:
-            probs = clf.predict(embeddings.numpy())
-            mean_probs = probs.mean(axis=0)
-            siren_idx = clf.labels.index("siren")
-            mlp_score = float(mean_probs[siren_idx])
-            mlp_top1 = clf.labels[int(mean_probs.argmax())]
+    @staticmethod
+    def _apply_inference_result(
+        result: InferenceResult,
+        get_source,
+        runtime: RuntimeHub,
+        sources: dict,
+        dsp,
+    ) -> None:
+        """Apply project event policy to generic model results from Runtime Hub."""
+        source = get_source(result.source_id)
+        yamnet_scores = {
+            name: float(result.scores.get(f"yamnet:{name}", 0.0))
+            for name in DETECTORS
+        }
+        mlp_score = result.scores.get("mlp:siren")
+        mlp_top1 = result.metadata.get("mlp_top1")
+        yamnet_top = result.metadata.get("yamnet_top", "")
+        cur_yamnet_top3 = result.metadata.get("yamnet_top3", [])
+        cur_mlp_top3 = result.metadata.get("mlp_top3", [])
+        model_has_classifier = bool(result.metadata.get("has_classifier"))
+        det_engine = result.metadata.get("det_engine", "yamnet")
+        dsp_result = result.metadata.get("dsp_result")
+        ts = result.timestamp
 
         effective: dict[str, float] = {}
         for name in DETECTORS:
@@ -563,24 +561,6 @@ class YAMNetEngine:
         state_changes: dict[str, str | None] = {}
         for name, smoother in source.smoothers.items():
             state_changes[name] = smoother.push(effective[name])
-
-        ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-        mean_scores = scores_np.mean(axis=0)
-        top3_idx = mean_scores.argsort()[::-1][:3]
-        cur_yamnet_top3 = [
-            {"name": class_names[i], "score": round(float(mean_scores[i]), 3)}
-            for i in top3_idx
-        ]
-
-        cur_mlp_top3 = []
-        if clf is not None:
-            mp = probs.mean(axis=0) if mlp_score is not None else clf.predict(embeddings.numpy()).mean(axis=0)
-            mlp_top3_idx = mp.argsort()[::-1][:3]
-            cur_mlp_top3 = [
-                {"name": clf.labels[i], "score": round(float(mp[i]), 3)}
-                for i in mlp_top3_idx
-            ]
 
         for name in DETECTORS:
             if source.smoothers[name].state == "idle":
@@ -647,7 +627,7 @@ class YAMNetEngine:
             if new_state not in ("idle", "possible", "confirmed"):
                 continue
             pk = source.peaks[name]
-            engine_name = det_engine if (name == "siren" and clf is not None) else "yamnet"
+            engine_name = det_engine if (name == "siren" and model_has_classifier) else "yamnet"
             thr_key = f"{name}_threshold"
             clip_url = None
             if new_state == "confirmed":

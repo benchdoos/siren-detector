@@ -200,20 +200,24 @@ follow once contracts are stable.
 
 Today `detector/main.py` selects one engine with `--engine` and registers a
 `UDPSourceAdapter` in Runtime Hub. The adapter publishes `AudioFrame`; the
-engine subscribes to frames and publishes scores/events back through the Hub.
-The Hub routes results to `EventBusOutput`, which preserves legacy payloads
-for `EventBus` (`detector/bus.py`), WebSocket, and integrations. Buffers,
-processing, and smoothing mostly remain inside `yamnet_engine.py`; UDP Hub is a
-separate network relay. `RuntimeMessage` wraps the legacy payload and does not
-yet define the final `v1` schema.
+engine subscribes to frames, and the YAMNet + MLP stage publishes an
+`InferenceResult` with `source_id`, `stage_id`, timestamp, namespaced scores,
+and metadata back through the Hub. The current policy receives it through the
+Hub, applies smoothing, and publishes legacy score/event messages. The Hub
+routes those to `EventBusOutput`, which preserves the old format for
+`EventBus` (`detector/bus.py`), WebSocket, and integrations. Buffers and DSP
+preprocessing remain in `yamnet_engine.py`; policy is routed separately but
+still implemented as an engine method. UDP Hub is a separate network relay.
+`RuntimeMessage` wraps the legacy payload and does not yet define the final
+public `v1` schema.
 
 Recommended migration:
 
 1. Document current score/event and audio wire formats as a legacy profile.
 2. [x] Add an internal `audio-frame.v1` and SDR1 input adapter without changing
    the SDR1 network format.
-3. Move the current chain into the first pipeline provider while preserving
-   behavior.
+3. [~] Move YAMNet + MLP inference into a stage with `inference-result.v1`;
+   extract DSP/buffers and register the full chain as a pipeline provider.
 4. Add separate event policy and output adapters over the shared result.
 5. Add configurable routing and a second independent component, then update
    the management UI and APIs.

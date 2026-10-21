@@ -202,12 +202,15 @@ policy, а не скрытая логика UI или MQTT адаптера.
 
 Сейчас `detector/main.py` выбирает один engine через `--engine` и регистрирует
 `UDPSourceAdapter` в Runtime Hub. Адаптер публикует `AudioFrame`; engine
-подписывается на кадры и публикует score/event обратно через Hub. Hub направляет
-результаты в `EventBusOutput`, который сохраняет старый формат для
-`EventBus` (`detector/bus.py`), WebSocket и интеграций. Буферы, обработка и
-сглаживание всё ещё находятся в основном в `yamnet_engine.py`; UDP Hub —
+подписывается на кадры, а YAMNet + MLP stage публикует `InferenceResult` с
+`source_id`, `stage_id`, timestamp, namespaced scores и metadata обратно через
+Hub. Текущая политика получает результат через Hub, применяет сглаживание и
+публикует score/event в legacy-формате. Hub направляет итог в `EventBusOutput`,
+который сохраняет старый формат для `EventBus` (`detector/bus.py`), WebSocket и
+интеграций. Буферы и DSP-предобработка всё ещё находятся в `yamnet_engine.py`;
+политика выделена маршрутом, но пока остаётся методом engine. UDP Hub —
 отдельный сетевой relay. `RuntimeMessage` оборачивает legacy payload и не
-фиксирует финальную схему `v1`.
+фиксирует финальную публичную схему `v1`.
 
 Рекомендуемый путь миграции:
 
@@ -215,7 +218,8 @@ policy, а не скрытая логика UI или MQTT адаптера.
    legacy профиль.
 2. [x] Ввести внутренний `audio-frame.v1` и SDR1 input adapter, оставив
    сетевой формат SDR1 без изменений.
-3. Перевести текущую цепочку в первый pipeline provider, сохранив поведение.
+3. [~] Вынести YAMNet + MLP inference в stage с `inference-result.v1`; отдельно
+   извлечь DSP/буферы и оформить регистрацию цепочки как pipeline provider.
 4. Ввести отдельный event policy и output adapters поверх общего результата.
 5. Добавить конфигурируемый routing и второй независимый компонент; затем
    обновить UI и публичные API управления.
