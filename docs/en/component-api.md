@@ -167,6 +167,41 @@ For multiple solutions, an event preserves provenance and evidence. Confirmation
 deduplication, and fusion rules belong to event policy, not hidden UI or MQTT
 adapter logic.
 
+### `event-policy.v1` contract
+
+Runtime Hub selects one active policy. It receives each `InferenceResult` via
+`process(result)` and publishes score/event messages through
+`context.runtime.publish(RuntimeMessage)`. An implementation declares
+`policy_id` and `api_version = "event-policy.v1"`. Select the current policy as
+`default`; a locally installed Python class can be selected with
+`--event-policy package.module.ClassName`. The class is constructed with
+`EventPolicyContext`, which provides Runtime Hub, the per-source state registry,
+and an optional DSP component.
+
+```python
+from detector.runtime.contracts import RuntimeMessage
+
+
+class MyPolicy:
+    policy_id = "my-policy"
+    api_version = "event-policy.v1"
+
+    def __init__(self, context):
+        self.runtime = context.runtime
+
+    def process(self, result):
+        self.runtime.publish(RuntimeMessage.from_legacy({
+            "type": "score",
+            "top": "custom model",
+            "source_id": result.source_id,
+            "siren_score": result.scores.get("my-model:siren", 0.0),
+        }))
+```
+
+Python classes are intended for developer-managed local configuration; the UI
+does not install or load user code. `EventPolicyContext` currently exposes
+Detector internals and is not yet a portable public SDK.
+
 ## Configuration and lifecycle
 
 A component declares a stable ID, type, version, supported contract versions,

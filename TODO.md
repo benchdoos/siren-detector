@@ -348,7 +348,8 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
   YAMNet engine; обычные результаты и DSP-пропуски проходят через Runtime Hub.
 - [~] Отделить хранение клипов в output/storage adapter (`WavClipStorage` уже
   подключён через Runtime Hub); определить независимый контракт и регистрацию
-  альтернативных event policies.
+  альтернативных event policies. `event-policy.v1`, выбор `default` или локального
+  Python-класса через CLI уже есть; контекст пока содержит внутренности Detector.
 - [ ] Описать manifest решения: стабильный `engine_id`, имя/версия, классы,
   формат входа, схема настроек, требования к ресурсам и способ запуска.
 - [ ] Поддержать регистрацию встроенных и пользовательских Python-движков;

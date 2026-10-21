@@ -167,6 +167,41 @@ scores, события и состояние компонентов. WebSocket/U
 Правило подтверждения, дедупликации и объединения — часть конфигурации event
 policy, а не скрытая логика UI или MQTT адаптера.
 
+### Контракт политики событий `event-policy.v1`
+
+Runtime Hub выбирает одну активную политику. Она получает каждый
+`InferenceResult` через `process(result)` и публикует score/event через
+`context.runtime.publish(RuntimeMessage)`. Реализация объявляет `policy_id` и
+`api_version = "event-policy.v1"`. Текущую можно выбрать как `default`; локально
+установленный Python-класс — передать через `--event-policy
+package.module.ClassName`. Класс создаётся с `EventPolicyContext`, где доступны
+Runtime Hub, реестр per-source состояния и необязательный DSP компонент.
+
+```python
+from detector.runtime.contracts import RuntimeMessage
+
+
+class MyPolicy:
+    policy_id = "my-policy"
+    api_version = "event-policy.v1"
+
+    def __init__(self, context):
+        self.runtime = context.runtime
+
+    def process(self, result):
+        self.runtime.publish(RuntimeMessage.from_legacy({
+            "type": "score",
+            "top": "custom model",
+            "source_id": result.source_id,
+            "siren_score": result.scores.get("my-model:siren", 0.0),
+        }))
+```
+
+Загрузка Python-классов рассчитана на локальную конфигурацию разработчиком;
+загрузка или установка кода через UI не поддерживается. `EventPolicyContext`
+сейчас содержит внутреннее состояние Detector и ещё не является переносимым
+публичным SDK.
+
 ## Конфигурация и жизненный цикл
 
 Компонент должен объявлять стабильный ID, тип, версию, поддерживаемую версию

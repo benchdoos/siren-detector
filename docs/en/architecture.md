@@ -54,7 +54,7 @@ Hub to the legacy EventBus, which feeds WebSocket and MQTT.
 
 ## Detector pipeline
 
-The current engine uses a separate YAMNet + MLP inference stage; DSP/TFLite remains a pre-filter. The stage returns `inference-result.v1` through Runtime Hub. `EventPolicy` applies thresholds and smoothing, then sends clip storage requests through Hub to `WavClipStorage`. Legacy score/event messages flow through Hub to `EventBusOutput`. The policy is separated from the engine but is still a project implementation, not a pluggable API.
+The current engine uses a separate YAMNet + MLP inference stage; DSP/TFLite remains a pre-filter. The stage returns `inference-result.v1` through Runtime Hub. `EventPolicy` applies thresholds and smoothing, then sends clip storage requests through Hub to `WavClipStorage`. Legacy score/event messages flow through Hub to `EventBusOutput`. The policy can be selected as `default` or as a local Python class through the CLI. `event-policy.v1` exists, but its context still exposes Detector internals.
 
 The Python package is split into transport, engine, server, and integration
 layers connected by an in-process `EventBus`. This does not yet mean every layer
