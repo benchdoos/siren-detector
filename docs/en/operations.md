@@ -1,5 +1,9 @@
 # Operations
 
+For an existing installation, see the [upgrade and migration guide](migration.md)
+for backing up `clips`, preserving production `.env` files, and enabling the
+multi-engine graph.
+
 ## Services and ports
 
 | Service | Default port | Notes |
@@ -38,7 +42,11 @@ Authentication is controlled by `AUTH_ENABLED` and `ADMIN_TOKEN` in `hub/.env`. 
 
 ## MQTT and Home Assistant
 
-MQTT is optional. Set `MQTT_HOST`, `MQTT_PORT`, and, if needed, `MQTT_USER`/`MQTT_PASSWORD` in `hub/.env`, then recreate the detector container. The integration publishes detector state and event information under the `sound_detector` topic namespace and supports Home Assistant discovery when a broker is available.
+MQTT is optional. Set `MQTT_HOST`, `MQTT_PORT`, and, if needed, `MQTT_USER`/`MQTT_PASSWORD` in `hub/.env`, then recreate the detector container. The integration publishes detector state and event information under the `sound_detector` topic namespace and supports Home Assistant discovery when a broker is available. `sound_detector/events` carries JSON event updates with `engine_id`, `source_id`, source name, event, state, confidence, and timestamp; existing retained Home Assistant state topics remain available.
+
+## Webhooks
+
+Set `WEBHOOK_URLS` to a comma-separated list of HTTP(S) endpoints to receive POST requests containing `detector-event.v1` JSON. `WEBHOOK_TOKEN` optionally sends a shared Bearer token, and `WEBHOOK_TIMEOUT_SECONDS` controls the per-endpoint timeout (default 2 seconds). Delivery uses a bounded queue of 128 events and drops the oldest pending event when full. Failed requests are logged and counted in Settings → Runtime; they are not retried. Webhooks receive events, not score updates.
 
 ## HTTP and WebSocket API
 
@@ -50,6 +58,7 @@ The API shares the web UI port. Key routes include:
 |---|---|---|
 | `/api/settings` | GET/POST | Read or update settings (POST requires admin access) |
 | `/api/sources` | GET | List known audio sources |
+| `/metrics` | GET | Scrape Prometheus runtime counters and gauges (requires viewer auth) |
 | `/api/metrics` | GET | Read validation metrics when present |
 | `/api/audits` | GET | Read model/dataset audit snapshots |
 | `/api/calibrate` | GET/POST | Check or start background calibration |

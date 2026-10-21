@@ -37,6 +37,7 @@
   .s-row input[type="number"]:focus, .s-row select:focus { border-color: #4caf50; outline: none; }
   .s-row input.changed, .s-row select.changed { border-color: #ffa726; }
   .s-row select { cursor: pointer; -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; padding-right: 24px; }
+  #s-detection_mode { width: 150px; }
   .s-default { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: #555; cursor: pointer; white-space: nowrap; user-select: none; width: 55px; }
   .s-default:hover { color: #aaa; }
   .s-help { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid #444; color: #666; font-size: 11px; cursor: pointer; flex-shrink: 0; user-select: none; line-height: 1; }
@@ -50,6 +51,22 @@
   .s-tooltip .s-tip-default { color: #4caf50; }
   .dsp-warning { margin: 2px 0 10px 160px; padding: 7px 9px; border: 1px solid #6b531d; border-radius: 4px; background: #29220f; color: #ffd166; font-size: 12px; line-height: 1.45; }
   .dsp-warning[hidden] { display: none; }
+  .engine-card { border: 1px solid #292929; background: #171717; border-radius: 7px; padding: 14px; margin-bottom: 12px; }
+  .engine-card-head { display: flex; align-items: flex-start; gap: 10px; }
+  .engine-card-head input { margin-top: 4px; accent-color: #4caf50; }
+  .engine-card-title { flex: 1; min-width: 0; }
+  .engine-card-title h3 { font-size: 14px; font-weight: 600; color: #ddd; }
+  .engine-card-title code, .engine-meta { font-size: 11px; color: #777; }
+  .engine-settings { border-top: 1px solid #292929; margin-top: 12px; padding-top: 10px; }
+  .engine-settings .s-row label { width: 190px; }
+  .engine-json-setting { min-width: 240px; min-height: 58px; resize: vertical; font: 11px/1.45 monospace; }
+  .engine-json-invalid { border-color: #ef5350 !important; }
+  .engine-routes { display: flex; flex-direction: column; gap: 7px; }
+  .engine-route-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #292929; background: #171717; border-radius: 5px; font-size: 12px; }
+  .engine-route-row input { accent-color: #4caf50; }
+  .engine-error { margin-top: 8px; color: #ef9a9a; font-size: 12px; line-height: 1.5; }
+  .engine-remove { background: none; border: 1px solid #633; color: #e88; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px; }
+  .engine-restart-note { border: 1px solid #6b531d; background: #29220f; color: #ffd166; border-radius: 5px; padding: 9px 11px; font-size: 12px; line-height: 1.5; margin: 0 0 14px; }
 
   /* ── Buttons ── */
   .btn-save { background: #1a3a1a; border: 1px solid #4caf50; color: #4caf50; padding: 6px 20px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; width: 100%; }
@@ -136,6 +153,8 @@
     <button class="sp-nav-item" data-panel="sp-smoothing" onclick="switchPanel(this)">Smoothing</button>
     <button class="sp-nav-item" data-panel="sp-clips" onclick="switchPanel(this)">Clips</button>
     <button class="sp-nav-item" data-panel="sp-sources" onclick="switchPanel(this)">Sources</button>
+    <button class="sp-nav-item" data-panel="sp-engines" onclick="switchPanel(this); if (!_engineGraph) loadEngineGraph()">Engines</button>
+    <button class="sp-nav-item" data-panel="sp-runtime" onclick="switchPanel(this)">Runtime</button>
     <button class="sp-nav-item" data-panel="sp-calibration" onclick="switchPanel(this)">Calibration</button>
     <button class="sp-nav-item" data-panel="sp-about" onclick="switchPanel(this)">About</button>
     <div class="sp-nav-spacer"></div>
@@ -267,6 +286,50 @@
       </div>
     </div>
 
+    <!-- Engine graph -->
+    <div class="sp-panel" id="sp-engines">
+      <div class="s-section">
+        <div class="s-title">Detection Engines</div>
+        <p style="font-size:12px;color:#666;margin:0 0 12px;line-height:1.5">Enable locally available engines, edit their manifest-defined settings, and choose which audio sources they receive.</p>
+        <div class="engine-restart-note">Changes take effect after the detector restarts. Engine code can only be registered locally; this page does not install or import code.</div>
+        <div id="engine-cards"><div style="font-size:13px;color:#666">Loading engines...</div></div>
+      </div>
+      <div class="s-section">
+        <div class="s-title">Default sources</div>
+        <p style="font-size:12px;color:#666;margin:0 0 10px;line-height:1.5">This route applies to sources without a specific rule.</p>
+        <div class="engine-routes" id="engine-default-route"></div>
+      </div>
+      <div class="s-section">
+        <div class="s-title">Per-source routes</div>
+        <p style="font-size:12px;color:#666;margin:0 0 10px;line-height:1.5">Each source rule replaces the default list completely.</p>
+        <div id="engine-source-routes"></div>
+      </div>
+      <div class="sp-panel-footer">
+        <button class="btn-reset-panel" onclick="loadEngineGraph()">Reload</button>
+        <button class="btn-save" style="width:auto" onclick="saveEngineGraph()">Save engine graph</button>
+        <span class="sp-status" id="status-engines"></span>
+      </div>
+    </div>
+
+    <!-- Runtime -->
+    <div class="sp-panel" id="sp-runtime">
+      <div class="s-section">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
+          <div class="s-title" style="margin:0;flex:1">Runtime Health</div>
+          <button class="btn-reset-panel" onclick="loadRuntimeStatus()">Refresh</button>
+        </div>
+        <p style="font-size:12px;color:#666;margin:0 0 12px 0;line-height:1.5">Live audio delivery health for processing components. Engine lifecycle, version, and startup errors appear in each engine card.</p>
+        <div class="s-title">Audio Subscribers</div>
+        <div id="runtime-subscribers" style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:13px;color:#666">Loading runtime status...</div>
+        </div>
+        <div class="s-title" style="margin-top:18px">Output Adapters</div>
+        <div id="runtime-outputs" style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:13px;color:#666">Loading output status...</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Calibration -->
     <div class="sp-panel" id="sp-calibration">
       <div class="s-section">
@@ -364,6 +427,12 @@ const PANEL_KEYS = {
 let _defaults = {};
 let _loaded = {};   // values as loaded from server (strings)
 let _dspAvailable = true;
+let _engineGraph = null;
+let _engineGraphBaseline = '';
+let _engineManifests = [];
+let _engineSources = [];
+let _engineAvailability = {};
+let _legacySettings = {};
 
 /* ── Navigation ── */
 function switchPanel(btn) {
@@ -374,10 +443,12 @@ function switchPanel(btn) {
 }
 
 function hasUnsaved() {
+  if (document.querySelector('.engine-json-invalid')) return true;
   for (const k of SETTINGS_KEYS) {
     const el = document.getElementById('s-' + k);
     if (el && el.value !== _loaded[k]) return true;
   }
+  if (_engineGraph && JSON.stringify(_engineGraph) !== _engineGraphBaseline) return true;
   return false;
 }
 
@@ -445,6 +516,263 @@ async function loadSettings() {
   }
 }
 
+/* ── Engine graph ── */
+function cleanGraphForSave(graph = _engineGraph) {
+  if (!graph) return null;
+  const copy = {...graph};
+  delete copy.availability;
+  return copy;
+}
+
+function engineGraphDefaults() {
+  return {contract: 'engine-graph.v1', engine_configs: {},
+    engine_routes: {default: [], by_source: {}}};
+}
+
+async function loadEngineGraph() {
+  const cards = document.getElementById('engine-cards');
+  cards.innerHTML = '<div style="font-size:13px;color:#666">Loading engines...</div>';
+  try {
+    const [graphRes, manifestRes, sourceRes, runtimeRes, settingsRes] = await Promise.all([
+      fetch('/api/engine-graph', {headers: adminHeaders()}),
+      fetch('/api/engines/manifests', {headers: adminHeaders()}),
+      fetch('/api/sources', {headers: adminHeaders()}),
+      fetch('/api/runtime/status', {headers: adminHeaders()}),
+      fetch('/api/settings', {headers: adminHeaders()}),
+    ]);
+    for (const res of [graphRes, manifestRes, sourceRes, runtimeRes, settingsRes]) {
+      if (!res.ok) throw new Error(res.status === 401 ? 'Authentication required' : `Request failed (${res.status})`);
+    }
+    const [graphData, manifestData, sourceData, runtimeData, settingsData] = await Promise.all([
+      graphRes.json(), manifestRes.json(), sourceRes.json(), runtimeRes.json(), settingsRes.json(),
+    ]);
+    _engineManifests = manifestData.manifests || [];
+    _engineSources = sourceData.sources || [];
+    _engineAvailability = graphData.availability || {};
+    _legacySettings = settingsData;
+    _engineGraph = cleanGraphForSave(graphData) || engineGraphDefaults();
+    _engineGraph.engine_configs ||= {};
+    _engineGraph.engine_routes ||= {default: [], by_source: {}};
+    _engineGraph.engine_routes.default ||= [];
+    _engineGraph.engine_routes.by_source ||= {};
+    _engineGraphBaseline = JSON.stringify(_engineGraph);
+
+    // Seed an unsaved graph from the engine that is currently running.
+    if (!Object.keys(_engineGraph.engine_configs).length) {
+      const running = (runtimeData.components || []).find(c =>
+        _engineManifests.some(m => m.engine_id === c.component_id));
+      const seed = _engineManifests.find(m => m.engine_id === running?.component_id)
+        || _engineManifests.find(m => m.engine_id === 'yamnet');
+      if (seed) {
+        const seedSettings = {};
+        for (const key of Object.keys(seed.settings_schema?.properties || {})) {
+          if (settingsData[key] !== undefined) seedSettings[key] = settingsData[key];
+        }
+        _engineGraph.engine_configs[seed.engine_id] = {
+          selector: seed.selector, enabled: true, settings: seedSettings,
+        };
+        _engineGraph.engine_routes.default = [seed.engine_id];
+        _engineAvailability[seed.engine_id] = {available: true, manifest: seed};
+      }
+    }
+    renderEngineGraph();
+    updateEngineRuntimeStatus(runtimeData.components || []);
+  } catch (err) {
+    cards.innerHTML = `<div style="font-size:13px;color:#ef5350">${esc(err.message || 'Failed to load engines')}</div>`;
+  }
+}
+
+function graphManifest(engineId, config) {
+  const availability = _engineAvailability[engineId];
+  if (availability?.manifest) return availability.manifest;
+  return _engineManifests.find(m => m.engine_id === engineId && m.selector === config?.selector) || null;
+}
+
+function ensureEngineConfig(engineId) {
+  if (_engineGraph.engine_configs[engineId]) return _engineGraph.engine_configs[engineId];
+  const manifest = _engineManifests.find(m => m.engine_id === engineId);
+  if (!manifest) return null;
+  const settings = {};
+  for (const [key, spec] of Object.entries(manifest.settings_schema?.properties || {})) {
+    if (spec.default !== undefined) settings[key] = spec.default;
+  }
+  const config = {selector: manifest.selector, enabled: true, settings};
+  _engineGraph.engine_configs[engineId] = config;
+  return config;
+}
+
+function renderEngineGraph() {
+  if (!_engineGraph) return;
+  const configs = _engineGraph.engine_configs;
+  const known = new Map(_engineManifests.map(m => [m.engine_id, m]));
+  const ids = [...new Set([...known.keys(), ...Object.keys(configs)])].sort();
+  const cards = document.getElementById('engine-cards');
+  if (!ids.length) {
+    cards.innerHTML = '<div style="font-size:13px;color:#666">No locally registered engines are available.</div>';
+  } else {
+    cards.innerHTML = ids.map(id => {
+      const config = configs[id];
+      const manifest = config ? graphManifest(id, config) : known.get(id);
+      const enabled = Boolean(config?.enabled);
+      const selector = config?.selector || manifest?.selector || '';
+      const unavailable = Boolean(config && !manifest);
+      const settings = config?.settings || {};
+      const fields = manifest && config ? Object.entries(manifest.settings_schema?.properties || {}).map(([key, spec]) => {
+        const value = settings[key] ?? _legacySettings[key] ?? spec.default ?? '';
+        const fieldType = Array.isArray(spec.type) ? spec.type.find(type => type !== 'null') : spec.type;
+        let control;
+        if (spec.enum) {
+          control = `<select data-engine-id="${esc(id)}" data-setting="${esc(key)}">${spec.enum.map((v, index) =>
+            `<option value="${index}" ${JSON.stringify(value) === JSON.stringify(v) ? 'selected' : ''}>${esc(typeof v === 'string' ? v : JSON.stringify(v))}</option>`).join('')}</select>`;
+        } else if (fieldType === 'boolean') {
+          control = `<input type="checkbox" data-engine-id="${esc(id)}" data-setting="${esc(key)}" ${value ? 'checked' : ''}>`;
+        } else if (fieldType === 'number' || fieldType === 'integer') {
+          control = `<input type="number" data-engine-id="${esc(id)}" data-setting="${esc(key)}" value="${esc(String(value))}" ${spec.minimum !== undefined ? `min="${esc(String(spec.minimum))}"` : ''} ${spec.maximum !== undefined ? `max="${esc(String(spec.maximum))}"` : ''} step="${fieldType === 'integer' ? '1' : 'any'}">`;
+        } else if (fieldType === 'array' || fieldType === 'object') {
+          control = `<textarea class="engine-json-setting" data-engine-id="${esc(id)}" data-setting="${esc(key)}" data-json-setting="true" spellcheck="false">${esc(JSON.stringify(value, null, 2))}</textarea>`;
+        } else {
+          control = `<input type="text" data-engine-id="${esc(id)}" data-setting="${esc(key)}" value="${esc(String(value))}">`;
+        }
+        const label = spec.title || key;
+        const help = spec.description
+          ? ` <span class="s-help" onclick="toggleTip(this)">?</span>` : '';
+        const tip = spec.description
+          ? `<div class="s-tooltip"><strong>${esc(label)}</strong><br>${esc(spec.description)}${spec.minimum !== undefined || spec.maximum !== undefined ? `<hr><span class="s-tip-range">Range: <b>${esc(String(spec.minimum ?? '—'))} – ${esc(String(spec.maximum ?? '—'))}</b></span>` : ''}${spec.default !== undefined ? `<br><span class="s-tip-default">Default: <b>${esc(String(spec.default))}</b></span>` : ''}</div>` : '';
+        return `<div class="s-row"><label>${esc(label)}${help}</label>${control}<span class="engine-meta">${esc(spec.type || '')}${spec.default !== undefined ? ` · default ${esc(String(spec.default))}` : ''}</span></div>${tip}`;
+      }).join('') : '';
+      return `<div class="engine-card">
+        <div class="engine-card-head">
+          <input type="checkbox" class="engine-toggle" data-engine-id="${esc(id)}" ${enabled ? 'checked' : ''}>
+          <div class="engine-card-title"><h3>${esc(manifest?.name || id)}</h3><code>${esc(id)}</code>
+            ${manifest ? `<div class="engine-meta">${esc(manifest.version)} · ${esc(manifest.classes?.join(', ') || 'no classes')}</div>` : ''}
+          </div>
+          <span data-engine-runtime="${esc(id)}" class="engine-runtime-state" style="font-size:11px;color:#777">Not running</span>
+          ${unavailable ? `<button class="engine-remove" data-remove-engine="${esc(id)}">Remove</button>` : ''}
+        </div>
+        ${manifest?.description ? `<p class="engine-meta" style="display:block;margin:9px 0 0 27px;line-height:1.5">${esc(manifest.description)}</p>` : ''}
+        ${unavailable ? `<div class="engine-error">Saved selector “${esc(selector)}” is not available locally. Its settings are preserved. Register the engine or remove this entry.</div>` : ''}
+        <div data-engine-runtime-error="${esc(id)}"></div>
+        ${fields ? `<div class="engine-settings">${fields}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  const activeIds = ids.filter(id => Boolean(configs[id]?.enabled));
+  document.getElementById('engine-default-route').innerHTML = activeIds.length
+    ? activeIds.map(id => `<label class="engine-route-row"><input type="checkbox" data-default-engine="${esc(id)}" ${_engineGraph.engine_routes.default.includes(id) ? 'checked' : ''}><span>${esc(graphManifest(id, configs[id])?.name || id)}</span><code>${esc(id)}</code></label>`).join('')
+    : '<div style="font-size:12px;color:#666">Enable at least one engine to assign a default route.</div>';
+
+  const sourceRoutes = document.getElementById('engine-source-routes');
+  if (!_engineSources.length) {
+    sourceRoutes.innerHTML = '<div style="font-size:12px;color:#666">No audio sources are currently known. Source-specific routes can be added after a source connects.</div>';
+  } else {
+    sourceRoutes.innerHTML = _engineSources.map(source => {
+      const sid = String(source.source_id);
+      const custom = Object.prototype.hasOwnProperty.call(_engineGraph.engine_routes.by_source, sid);
+      const route = _engineGraph.engine_routes.by_source[sid] || [];
+      const routeOptions = activeIds.length ? activeIds.map(id =>
+        `<label class="engine-route-row"><input type="checkbox" data-source-engine="${esc(sid)}" data-engine-id="${esc(id)}" ${route.includes(id) ? 'checked' : ''} ${custom ? '' : 'disabled'}><span>${esc(graphManifest(id, configs[id])?.name || id)}</span></label>`).join('')
+        : '<div style="font-size:12px;color:#666">Enable an engine first.</div>';
+      return `<div style="margin-bottom:12px"><label class="engine-route-row"><input type="checkbox" data-source-override="${esc(sid)}" ${custom ? 'checked' : ''}><strong>${esc(source.name || `Source ${sid}`)}</strong><code>id ${esc(sid)}</code><span class="engine-meta">${custom ? 'custom route' : 'inherits default'}</span></label><div style="margin:5px 0 0 18px;display:${custom ? 'flex' : 'none'};flex-direction:column;gap:6px">${routeOptions}</div></div>`;
+    }).join('');
+  }
+
+  cards.querySelectorAll('.engine-toggle').forEach(el => el.addEventListener('change', () => {
+    const config = ensureEngineConfig(el.dataset.engineId);
+    if (!config) return;
+    config.enabled = el.checked;
+    if (!el.checked) removeEngineFromRoutes(el.dataset.engineId);
+    renderEngineGraph();
+  }));
+  cards.querySelectorAll('[data-setting]').forEach(el => el.addEventListener('change', () => {
+    const config = configs[el.dataset.engineId];
+    if (!config) return;
+    const manifest = graphManifest(el.dataset.engineId, config);
+    const spec = manifest?.settings_schema?.properties?.[el.dataset.setting] || {};
+    let value = el.type === 'checkbox' ? el.checked : el.value;
+    const fieldType = Array.isArray(spec.type) ? spec.type.find(type => type !== 'null') : spec.type;
+    if (el.tagName === 'SELECT' && Array.isArray(spec.enum)) value = spec.enum[Number(el.value)];
+    if (el.dataset.jsonSetting) {
+      try {
+        value = JSON.parse(value);
+        el.classList.remove('engine-json-invalid');
+      } catch (_) {
+        el.classList.add('engine-json-invalid');
+        return;
+      }
+    }
+    if (fieldType === 'number') value = Number(value);
+    if (fieldType === 'integer') value = Math.trunc(Number(value));
+    config.settings[el.dataset.setting] = value;
+  }));
+  cards.querySelectorAll('[data-remove-engine]').forEach(el => el.addEventListener('click', () => {
+    removeEngineFromRoutes(el.dataset.removeEngine);
+    delete configs[el.dataset.removeEngine];
+    renderEngineGraph();
+  }));
+  document.querySelectorAll('[data-default-engine]').forEach(el => el.addEventListener('change', () => {
+    const id = el.dataset.defaultEngine;
+    const route = new Set(_engineGraph.engine_routes.default);
+    if (el.checked) { ensureEngineConfig(id).enabled = true; route.add(id); }
+    else route.delete(id);
+    _engineGraph.engine_routes.default = [...route];
+    renderEngineGraph();
+  }));
+  document.querySelectorAll('[data-source-override]').forEach(el => el.addEventListener('change', () => {
+    const sid = el.dataset.sourceOverride;
+    if (el.checked) _engineGraph.engine_routes.by_source[sid] = [..._engineGraph.engine_routes.default];
+    else delete _engineGraph.engine_routes.by_source[sid];
+    renderEngineGraph();
+  }));
+  document.querySelectorAll('[data-source-engine]').forEach(el => el.addEventListener('change', () => {
+    const sid = el.dataset.sourceEngine;
+    const id = el.dataset.engineId;
+    const route = new Set(_engineGraph.engine_routes.by_source[sid] || []);
+    if (el.checked) { ensureEngineConfig(id).enabled = true; route.add(id); }
+    else route.delete(id);
+    _engineGraph.engine_routes.by_source[sid] = [...route];
+    renderEngineGraph();
+  }));
+}
+
+function removeEngineFromRoutes(engineId) {
+  _engineGraph.engine_routes.default = _engineGraph.engine_routes.default.filter(id => id !== engineId);
+  for (const [sid, route] of Object.entries(_engineGraph.engine_routes.by_source)) {
+    _engineGraph.engine_routes.by_source[sid] = route.filter(id => id !== engineId);
+  }
+}
+
+async function saveEngineGraph(silent = false) {
+  if (!_engineGraph) return false;
+  if (document.querySelector('.engine-json-invalid')) {
+    if (!silent) showStatus('Fix invalid JSON settings before saving', '#ef5350');
+    return false;
+  }
+  try {
+    const res = await fetch('/api/engine-graph', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json', ...adminHeaders()},
+      body: JSON.stringify(cleanGraphForSave()),
+    });
+    if (res.status === 401 || res.status === 403) {
+      if (!silent) showStatus('Admin access required', '#ef5350');
+      return false;
+    }
+    if (!res.ok) {
+      const error = await res.json();
+      if (!silent) showStatus(error.detail || 'Could not save engine graph', '#ef5350');
+      return false;
+    }
+    _engineGraph = await res.json();
+    _engineGraphBaseline = JSON.stringify(_engineGraph);
+    if (!silent) showStatus('Saved · restart detector to apply', '#4caf50');
+    return true;
+  } catch (err) {
+    if (!silent) showStatus('Network error', '#ef5350');
+    return false;
+  }
+}
+
 /* ── Save (all keys) ── */
 async function saveSettings() {
   const body = {};
@@ -473,7 +801,14 @@ async function saveSettings() {
         const el = document.getElementById('s-' + k);
         if (el) { _loaded[k] = el.value; el.classList.remove('changed'); }
       }
-      showStatus('Saved', '#4caf50');
+      if (document.querySelector('.engine-json-invalid')) {
+        showStatus('Settings saved; fix invalid JSON in Engines to save engine graph', '#ef5350');
+      } else if (_engineGraph && JSON.stringify(_engineGraph) !== _engineGraphBaseline) {
+        const graphSaved = await saveEngineGraph(true);
+        showStatus(graphSaved ? 'Settings and engine graph saved · restart detector to apply' : 'Settings saved; engine graph failed to save', graphSaved ? '#4caf50' : '#ef5350');
+      } else {
+        showStatus('Saved', '#4caf50');
+      }
     } else {
       const err = await res.json();
       showStatus(err.detail || 'Error', '#ef5350');
@@ -505,6 +840,7 @@ async function resetAllDefaults() {
     if (res.ok) {
       showStatus('All settings reset to defaults', '#ffa726');
       await loadSettings();
+      if (_engineGraph) await loadEngineGraph();
     }
   } catch(e) { showStatus('Network error', '#ef5350'); }
 }
@@ -604,6 +940,84 @@ async function loadSources() {
     }
   } catch(e) {
     list.innerHTML = '<div style="font-size:13px;color:#ef5350">Failed to load sources.</div>';
+  }
+}
+
+/* ── Runtime component status ── */
+function updateEngineRuntimeStatus(components) {
+  const byId = new Map((components || []).map(component => [component.component_id, component]));
+  document.querySelectorAll('[data-engine-runtime]').forEach(status => {
+    const component = byId.get(status.dataset.engineRuntime);
+    const errorContainer = status.closest('.engine-card')?.querySelector('[data-engine-runtime-error]');
+    if (!component) {
+      status.textContent = 'Not running';
+      status.style.color = '#777';
+      if (errorContainer) errorContainer.innerHTML = '';
+      return;
+    }
+    const stateColor = component.state === 'ready' ? '#4caf50'
+      : component.state === 'degraded' ? '#ffa726'
+      : component.state === 'error' ? '#ef5350'
+      : component.state === 'stopped' ? '#777' : '#64b5f6';
+    const version = component.version ? ` · v${esc(component.version)}` : '';
+    status.innerHTML = `<span style="color:${stateColor}">${esc(component.state)}</span>${version} · ${component.error_count || 0} errors`;
+    if (errorContainer) {
+      errorContainer.innerHTML = component.last_error
+        ? `<div class="engine-error">${esc(component.last_error)}</div>` : '';
+    }
+  });
+}
+
+async function loadRuntimeStatus() {
+  const container = document.getElementById('runtime-subscribers');
+  const outputsContainer = document.getElementById('runtime-outputs');
+  try {
+    const res = await fetch('/api/runtime/status', { headers: adminHeaders() });
+    if (!res.ok) throw new Error(`Request failed (${res.status})`);
+    const data = await res.json();
+    const components = data.components || [];
+    updateEngineRuntimeStatus(data.available ? components : []);
+    const outputs = data.outputs || [];
+    outputsContainer.innerHTML = outputs.length ? outputs.map(output => {
+      const failed = Number(output.failures || 0) > 0;
+      const detail = output.queue_capacity != null
+        ? `queue ${output.queue_depth || 0}/${output.queue_capacity} · ${output.sent || 0} sent · ${output.dropped || 0} dropped · ${output.failures || 0} failed`
+        : `${output.messages_delivered || 0} delivered · ${output.failures || 0} failed`;
+      const error = output.last_error
+        ? `<div class="engine-error">${esc(output.last_error)}</div>` : '';
+      return `<div style="background:#1a1a1a;border:1px solid #292929;border-radius:6px;padding:9px 11px">
+        <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#ccc"><strong>${esc(output.name || output.adapter_id)}</strong><span style="color:${failed ? '#ef5350' : '#4caf50'}">${failed ? 'degraded' : 'ready'}</span></div>
+        <div style="font-size:11px;color:#777;margin-top:4px">${detail}</div>${error}
+      </div>`;
+    }).join('') : '<div style="font-size:13px;color:#666">No output adapters registered.</div>';
+    const subscribers = data.subscribers || [];
+    if (subscribers.length === 0) {
+      container.innerHTML = '<div style="font-size:13px;color:#666">No audio-processing components are currently subscribed.</div>';
+      return;
+    }
+    container.innerHTML = subscribers.map(sub => {
+      const stateColor = sub.state === 'ready' ? '#4caf50'
+        : sub.state === 'degraded' ? '#ffa726'
+        : sub.state === 'stopped' ? '#777' : '#64b5f6';
+      const details = [
+        `${sub.frames_processed || 0} frames processed`,
+        `${sub.frames_dropped || 0} dropped`,
+        `${sub.sequence_gaps || 0} sequence gaps`,
+        `${sub.callback_errors || 0} callback errors`,
+        `queue ${sub.queue_depth || 0}/${sub.queue_capacity || 0}`,
+      ].join(' · ');
+      const error = sub.last_error
+        ? `<div style="font-size:11px;color:#ef9a9a;margin-top:6px;overflow-wrap:anywhere">${esc(sub.last_error)}</div>` : '';
+      return `<div style="background:#1a1a1a;border:1px solid #292929;border-radius:6px;padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+          <strong style="font-size:13px;color:#ddd">${esc(sub.subscriber_id)}</strong>
+          <span style="font-size:11px;color:${stateColor};margin-left:auto">${esc(sub.state)}</span>
+        </div>
+        <div style="font-size:11px;color:#777;line-height:1.5">${details}</div>${error}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    container.innerHTML = `<div style="font-size:13px;color:#ef5350">Could not load runtime status: ${esc(e.message)}</div>`;
   }
 }
 
@@ -1059,10 +1473,12 @@ async function deleteCalRecording(btn, path) {
 
 /* ── Init ── */
 loadSettings();
+loadRuntimeStatus();
 loadCalibrationSources();
 loadSources();
 loadCalRecordings();
 setInterval(loadCalRecordings, 15000);
+setInterval(loadRuntimeStatus, 3000);
 
 (async function init() {
   // Check if calibration is in progress — if so, open Calibration panel

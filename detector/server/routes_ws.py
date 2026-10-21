@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, WebSocket
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
+from fastapi.responses import StreamingResponse
+from starlette.websockets import WebSocketDisconnect
 
-from ..auth import ws_check_token
+from ..auth import require_viewer, ws_check_token
 from ..config import CLIP_DIR
 
 if TYPE_CHECKING:
@@ -21,6 +24,37 @@ _bus: EventBus | None = None
 def init(bus: EventBus) -> None:
     global _bus
     _bus = bus
+
+
+@router.get("/events", dependencies=[Depends(require_viewer)])
+async def sse_endpoint(request: Request):
+    """Stream score and event messages to one-way HTTP clients."""
+    if _bus is None:
+        raise HTTPException(status_code=503, detail="Detector not ready")
+    queue: asyncio.Queue = asyncio.Queue(maxsize=128)
+    client_key = object()
+    _bus.client_queues[client_key] = queue
+
+    async def stream():
+        try:
+            yield f"event: session\ndata: {json.dumps({'started_at': _bus.started_at})}\n\n"
+            yield f"event: score\ndata: {json.dumps(_bus.last_score, separators=(',', ':'))}\n\n"
+            while not await request.is_disconnected():
+                try:
+                    message = await asyncio.wait_for(queue.get(), timeout=15)
+                except asyncio.TimeoutError:
+                    yield ": keep-alive\n\n"
+                    continue
+                event_type = message.get("type", "message")
+                data = json.dumps(message, separators=(",", ":"), ensure_ascii=False)
+                yield f"event: {event_type}\ndata: {data}\n\n"
+        finally:
+            _bus.client_queues.pop(client_key, None)
+
+    return StreamingResponse(stream(), media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+    })
 
 
 @router.websocket("/ws/audio")
@@ -72,21 +106,27 @@ async def ws_endpoint(ws: WebSocket):
     await ws.send_json(_bus.last_score)
     for ev in list(_bus.event_history):
         clip_url = ev.get("clip_url")
-        if not clip_url:
-            continue
-        filename = clip_url.split("/")[-1]
-        resolved = (CLIP_DIR / filename).resolve()
-        if not resolved.is_relative_to(CLIP_DIR.resolve()) or not resolved.exists():
-            continue
         ev_out = dict(ev)
-        if filename in _bus.feedback:
-            ev_out["label"] = _bus.feedback[filename]
+        if clip_url:
+            filename = clip_url.split("/")[-1]
+            resolved = (CLIP_DIR / filename).resolve()
+            if not resolved.is_relative_to(CLIP_DIR.resolve()) or not resolved.exists():
+                # Preserve the event in history even when its optional clip is
+                # missing (for example, after a storage failure).
+                ev_out["clip_url"] = None
+            elif filename in _bus.feedback:
+                ev_out["label"] = _bus.feedback[filename]
         await ws.send_json(ev_out)
 
     async def sender():
-        while True:
-            msg = await queue.get()
-            await ws.send_json(msg)
+        try:
+            while True:
+                msg = await queue.get()
+                await ws.send_json(msg)
+        except WebSocketDisconnect:
+            # Browsers routinely close/reconnect while inference is running.
+            # Treat that as client lifecycle, not a server error.
+            return
 
     async def receiver():
         while True:
@@ -103,6 +143,7 @@ async def ws_endpoint(ws: WebSocket):
         )
         for task in pending:
             task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
     except Exception:
         pass
     finally:

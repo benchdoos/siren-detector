@@ -1,5 +1,11 @@
 # Siren Detector API
 
+This page documents the application's HTTP API and WebSocket interface. It is
+the API for managing and consuming application data, not the contract for a
+pluggable source, processor, or output adapter. Target component boundaries are
+described in the [component API](component-api.md); current and target system
+diagrams are in [Architecture](architecture.md).
+
 The REST API is served by the same server as the web UI. For a running instance, FastAPI's interactive docs are at `http://<host>:8080/docs` and OpenAPI JSON at `http://<host>:8080/openapi.json`. OpenAPI is generated automatically from the application's REST routes. WebSocket routes are not included and are documented below.
 
 When authentication is enabled (`AUTH_ENABLED` in `hub/.env`), protected requests must include a token checked for viewer or admin access. Reads generally require viewer access; settings updates, feedback, and calibration controls require admin access. Public exceptions include `/api/auth/status`, `/api/auth/check`, clip downloads, and calibration audio downloads; check the deployed configuration. With authentication disabled, requests are not restricted by tokens.
@@ -11,6 +17,12 @@ When authentication is enabled (`AUTH_ENABLED` in `hub/.env`), protected request
 | `GET /api/auth/status` | Public | Reports whether authentication is enabled. |
 | `POST /api/auth/check` | Public | Checks a token from JSON body `{"token":"…"}`. |
 | `GET /api/settings` | Viewer | Current settings, defaults, and DSP model availability. |
+| `GET /api/runtime/status` | Viewer | Audio subscriber states, queue depth, dropped frames, and callback errors. |
+| `GET /metrics` | Viewer | Prometheus 0.0.4 text metrics for engine, audio queue, and output health. |
+| `GET /events` | Viewer | One-way SSE stream of the current snapshot and score/event updates. |
+| `GET /api/engines/manifests` | Viewer | Locally registered engine manifests. |
+| `GET /api/engine-graph` | Viewer | Stored graph and configured engine availability. |
+| `PUT /api/engine-graph` | Admin | Validates and stores `engine-graph.v1`. |
 | `POST /api/settings` | Admin | Updates provided settings; invalid types, ranges, or modes return `400`. |
 | `POST /api/settings/reset` | Admin | Resets settings to defaults. |
 | `GET /api/sources` | Viewer | Known source status and custom names. |
@@ -32,7 +44,32 @@ When authentication is enabled (`AUTH_ENABLED` in `hub/.env`), protected request
 
 Protected routes return `401` or `403` for invalid or missing tokens. See the [settings reference](settings.md) for setting names and ranges.
 
+`GET /api/runtime/status` returns `available`, and `components`, `subscribers`,
+and `outputs` arrays. Each component includes `component_id`, `name`, `version`,
+`state`, `started_at`, `updated_at`, `error_count`, and `last_error`. Each audio
+subscription includes `subscriber_id`, `state`, `queue_depth`,
+`queue_capacity`, `overflow`, counters for `frames_received`,
+`frames_processed`, `frames_dropped`, `sequence_gaps`, `callback_errors`, and
+`last_error`. YAMNet also reports errors from its parallel inference workers;
+third-party plugins with their own background threads should report failures
+through `runtime.set_component_state(component_id, "degraded", error)`. Hard
+timeouts and forced interruption of Python callbacks are not supported.
+
+`GET /api/engines/manifests` lists locally registered engines.
+`GET/PUT /api/engine-graph` read and store graph configuration while preserving
+unknown fields. A stored graph is activated after the detector restarts and
+selects engines and source routes. When a graph is active, an explicit
+`--engine` is rejected so there is one source of engine selection.
+
 ## WebSocket
+
+### `/events` (Server-Sent Events)
+
+Connect with `GET http://<host>:8080/events` and `Accept: text/event-stream`.
+The stream starts with `session` and `score` events, then forwards event-bus
+updates; keep-alive comments are sent while idle. A viewer token is required
+when authentication is enabled. Slow clients receive recent messages: the
+oldest message is dropped when their bounded queue fills.
 
 ### `/ws`
 

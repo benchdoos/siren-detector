@@ -1,29 +1,87 @@
 # Architecture
 
-## Audio and event flow
+## Target replaceable-component architecture
 
 ```text
-INMP441 → ESP32-S3 → UDP / SDR1 → Hub → Detector → Web UI / MQTT
-                                          └──────→ event clips
+Audio sources → input adapters → Runtime Hub ──audio──→ processing chain
+                                       ↑                 DSP → YAMNet → MLP
+                                       └──── scores / events ────┘
+                                       │
+                                       ├→ score export / monitoring
+                                       └→ event policy → export layer
+                                                            ├→ Web UI / WS
+                                                            ├→ REST API
+                                                            ├→ MQTT and other outputs
+                                                            └→ clips / storage
 ```
 
-The Hub is a small UDP fan-out relay. It forwards incoming packets to the detector and to the recorder when the recorder is running. The detector owns the inference, event decision, clip storage, web server, and integrations.
+This is the target architecture, not a claim that every component is already
+replaceable. The principle is that each block has a contract, so a source,
+router, processing stage, or output adapter can be changed independently. For
+example, a user should be able to replace the MLP, the full recognition chain,
+or event delivery without rewriting microphone support or the UI.
+
+“Hub” currently means the UDP fan-out relay in `hub/hub.py`, which forwards
+packets to the detector and recorder. In the target design, Runtime Hub is the
+logical router inside Detector: it routes audio through chains, receives
+processing results, and forwards them to event policy and the export layer.
+These are different roles and should not be conflated in component contracts
+or documentation.
+
+## Current audio and event flow
+
+```text
+INMP441 → ESP32-S3 → UDP / SDR1 → UDP Hub → Detector → Web UI / MQTT
+                                             └──────→ event clips
+```
+
+The current UDP Hub is a small network relay. `UDPSourceAdapter` in Detector
+decodes SDR1 and emits `AudioFrame`; Runtime Hub routes the frame to
+subscribers through independent bounded queues. The YAMNet engine still owns
+buffers, inference, and event smoothing. Its scores and events flow back
+through Runtime Hub to the legacy EventBus, which feeds WebSocket and MQTT.
 
 ## Components
 
 | Component | Responsibility | Code/configuration |
 |---|---|---|
 | Audio node | Capture 16 kHz audio and send SDR1 datagrams | `esp32/siren-detector.yaml` |
-| Hub | Forward each datagram to configured destinations | `hub/hub.py`, `hub/docker-compose.yml` |
-| Detector | Receive audio, maintain per-source state, run inference, publish events | `detector/` |
+| UDP Hub | Forward each datagram to configured destinations | `hub/hub.py`, `hub/docker-compose.yml` |
+| Runtime Hub | Route normalized audio frames and processing results | `detector/runtime/` |
+| Detector | Own the UDP input adapter, buffers, processing, UI/API, and integrations | `detector/` |
 | Recorder | Record incoming audio to labeled WAV files on demand | `recorder/` |
 | ML tools | Prepare data, train classifier heads, and evaluate models | `dataset/`, `ml/` |
 
 ## Detector pipeline
 
-The current engine loads YAMNet once and uses its audio embeddings with an optional project-trained MLP classifier. An optional DSP/TFLite model can pre-filter background windows to reduce YAMNet work. The event smoother combines repeated window scores before confirming an event. Thresholds and timing settings can be changed from the web UI.
+The current engine uses a separate YAMNet + MLP inference stage; DSP/TFLite remains a pre-filter. The stage returns `inference-result.v1` through Runtime Hub. `EventPolicy` applies thresholds and smoothing, then sends clip storage requests through Hub to `WavClipStorage`. Legacy score/event messages flow through Hub to `EventBusOutput`. The policy can be selected as `default` or as a local Python class through the CLI. `event-policy.v1` exists, but its context still exposes Detector internals.
 
-The Python detector is split into transport, engine, server, and integration layers, connected by an in-process `EventBus`. Project modules can be replaced with custom implementations as long as they preserve the relevant API/contracts: an inference engine implements `detector/engine/interface.py`, while an audio source sends SDR1 packets expected by the transport. See the [settings reference](settings.md) for runtime options and the [API reference](api.md) for HTTP and WebSocket interfaces.
+The Python package is split into transport, engine, server, and integration
+layers connected by an in-process `EventBus`. This does not yet mean every layer
+can be replaced through a stable public API: `EngineInterface.start()` receives
+Runtime Hub, settings, and CLI args. `main.py` registers the UDP adapter, the
+engine subscribes to frames, and results pass back through Hub and
+`EventBusOutput` into `EventBus`. Buffers and DSP preprocessing remain in the
+engine; inference lives in `detector/engine/stages/yamnet_mlp.py` and event
+policy lives in `detector/engine/event_policy.py`.
+Legacy message formats are described in code and partly in
+[`detector/engine/interface.py`](../../detector/engine/interface.py), but are
+not yet a versioned public contract.
+
+When `engine_configs` is non-empty, startup uses the stored `engine-graph.v1`:
+each engine assigned to a route starts once with its own settings, and Runtime
+Hub applies `default`/`by_source` to its audio subscription. The graph takes
+effect after restart. An explicit `--engine` is rejected while a graph is
+active. The same Python class cannot be assigned multiple `engine_id` values
+because its manifest identity, runtime subscription, and policy keys are unique.
+In graph mode YAMNet settings and smoothers are scoped to its entry, and its
+event policy receives that entry's settings. Settings UI manages the graph and
+shows lifecycle/errors on each engine card; its Runtime panel shows audio
+subscriber health. The REST API exposes the same configuration.
+
+The target boundaries and formats are described in the [component API](component-api.md).
+The application HTTP and WebSocket interfaces are covered separately in the
+[API reference](api.md); current runtime options are in the [settings reference](settings.md).
 
 ## Audio protocol
 

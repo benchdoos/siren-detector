@@ -117,7 +117,10 @@ def _publish_discovery(client) -> None:
     print("MQTT discovery configs published.", flush=True)
 
 
-def _mqtt_publish_event(name: str, state: str, confidence: float, source: str = "") -> None:
+def _mqtt_publish_event(
+    name: str, state: str, confidence: float, source: str = "",
+    engine_id: str = "", source_id: int | None = None, timestamp: str = "",
+) -> None:
     """Publish detector state change to MQTT.
 
     When *source* is non-empty an additional per-source topic is published
@@ -125,6 +128,17 @@ def _mqtt_publish_event(name: str, state: str, confidence: float, source: str = 
     """
     if _mqtt_client is None:
         return
+    _mqtt_client.publish("sound_detector/events", json.dumps({
+        "contract": "detector-event.v1",
+        "type": "event",
+        "event": name,
+        "state": state,
+        "confidence": round(confidence, 3),
+        "source": source,
+        "source_id": source_id,
+        "engine_id": engine_id,
+        "timestamp": timestamp,
+    }), retain=False)
     _mqtt_client.publish(f"sound_detector/{name}/status", state, retain=True)
     if state == "confirmed":
         _mqtt_client.publish(f"sound_detector/{name}/state", "ON", retain=True)
@@ -145,7 +159,12 @@ def _on_bus_message(msg: dict) -> None:
     confidence = msg.get("confidence", 0.0)
     source = msg.get("source", "")
     if state in ("idle", "possible", "confirmed"):
-        _mqtt_publish_event(name, state, confidence, source)
+        _mqtt_publish_event(
+            name, state, confidence, source,
+            engine_id=msg.get("engine_id", ""),
+            source_id=msg.get("source_id"),
+            timestamp=msg.get("timestamp", ""),
+        )
 
 
 def mqtt_subscribe(bus: EventBus) -> None:

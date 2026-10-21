@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 
 from ..auth import AUTH_ENABLED, check_token, require_admin, require_viewer
 from ..config import (
@@ -24,19 +24,130 @@ from ..config import (
     SAMPLE_RATE,
 )
 from .. import settings as settings_mod
+from ..engine.registry import engine_registry
+from ..runtime.engine_graph import EMPTY_GRAPH, validate_graph, validate_settings_schema
+from ..runtime.contracts import normalize_detector_event
+from ..runtime.metrics import render_runtime_metrics
 from .routes_clips import save_clip_meta, _load_clip_meta
 
 if TYPE_CHECKING:
     from ..bus import EventBus
+    from ..runtime.hub import RuntimeHub
 
 router = APIRouter()
 
 _bus: EventBus | None = None
+_runtime: RuntimeHub | None = None
 
 
-def init(bus: EventBus) -> None:
-    global _bus
+def init(bus: EventBus, runtime: RuntimeHub | None = None) -> None:
+    global _bus, _runtime
     _bus = bus
+    _runtime = runtime
+
+
+@router.get("/api/runtime/status", dependencies=[Depends(require_viewer)])
+async def get_runtime_status():
+    """Return engine lifecycle and audio queue diagnostics."""
+    if _runtime is None:
+        return {"available": False, "components": [], "subscribers": [], "outputs": []}
+    return {
+        "available": True,
+        "components": _runtime.component_status(),
+        "subscribers": _runtime.audio_status(),
+        "outputs": _runtime.output_status(),
+    }
+
+
+@router.get("/metrics", dependencies=[Depends(require_viewer)])
+async def get_prometheus_metrics():
+    """Expose Runtime Hub diagnostics in Prometheus text format."""
+    status = {
+        "components": _runtime.component_status() if _runtime is not None else [],
+        "subscribers": _runtime.audio_status() if _runtime is not None else [],
+        "outputs": _runtime.output_status() if _runtime is not None else [],
+    }
+    return PlainTextResponse(
+        render_runtime_metrics(status),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
+
+
+@router.get("/api/engines/manifests", dependencies=[Depends(require_viewer)])
+async def get_engine_manifests():
+    """List locally registered engines and their configuration contracts."""
+    return {"manifests": engine_registry.manifests()}
+
+
+def _stored_engine_graph() -> dict:
+    return validate_graph({
+        "contract": settings_mod.settings.get("engine_graph_contract", EMPTY_GRAPH["contract"]),
+        "engine_configs": settings_mod.settings.get("engine_configs", {}),
+        "engine_routes": settings_mod.settings.get("engine_routes", EMPTY_GRAPH["engine_routes"]),
+    })
+
+
+@router.get("/api/engine-graph", dependencies=[Depends(require_viewer)])
+async def get_engine_graph():
+    """Return the stored graph with availability information for each engine."""
+    graph = _stored_engine_graph()
+    manifests = engine_registry.manifests()
+    by_id = {item["engine_id"]: item for item in manifests}
+    availability = {}
+    for engine_id, config in graph["engine_configs"].items():
+        manifest = by_id.get(engine_id)
+        if not manifest:
+            try:
+                _engine_class, resolved = engine_registry.resolve(config["selector"])
+                manifest = ({"selector": config["selector"], **resolved.to_dict()}
+                            if resolved else None)
+            except (AttributeError, ImportError, TypeError, ValueError):
+                manifest = None
+        available = bool(manifest and manifest["selector"] == config["selector"])
+        if manifest and manifest.get("engine_id") != engine_id:
+            available = False
+        availability[engine_id] = {
+            "available": available, "manifest": manifest if available else None,
+        }
+    return {**graph, "availability": availability}
+
+
+@router.put("/api/engine-graph", dependencies=[Depends(require_admin)])
+async def put_engine_graph(body: dict = Body(...)):
+    """Validate and persist graph configuration, retaining extension fields."""
+    try:
+        graph = validate_graph(body)
+        active_implementations: dict[str, str] = {}
+        for engine_id, config in graph["engine_configs"].items():
+            try:
+                engine_class, resolved = engine_registry.resolve(config["selector"])
+            except (AttributeError, ImportError, TypeError, ValueError):
+                continue  # Keep unavailable local selectors visible for later repair.
+            if resolved is None:
+                continue
+            manifest = resolved.to_dict()
+            if manifest["engine_id"] != engine_id:
+                raise ValueError(
+                    f"engine_id {engine_id!r} does not match selector manifest ID "
+                    f"{manifest['engine_id']!r}"
+                )
+            validate_settings_schema(config["settings"], manifest["settings_schema"])
+            if config["enabled"]:
+                implementation = (engine_class.__module__, engine_class.__qualname__)
+                previous = active_implementations.get(implementation)
+                if previous:
+                    raise ValueError(
+                        f"implementation {implementation!r} cannot be enabled under "
+                        f"both {previous!r} and {engine_id!r}"
+                    )
+                active_implementations[implementation] = engine_id
+    except (TypeError, ValueError, ImportError, AttributeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    settings_mod.settings["engine_graph_contract"] = graph["contract"]
+    settings_mod.settings["engine_configs"] = graph["engine_configs"]
+    settings_mod.settings["engine_routes"] = graph["engine_routes"]
+    settings_mod.save_settings()
+    return graph
 
 
 @router.get("/api/settings", dependencies=[Depends(require_viewer)])
@@ -625,17 +736,17 @@ async def manual_event(body: dict | None = Body(None)):
     meta = {
         "event": "unknown", "confidence": 0.0,
         "timestamp": ts_iso, "source": "manual", "engine": "user",
-        "source_id": source_id,
+        "source_id": source_id, "engine_id": "manual",
     }
     save_clip_meta(clip_name, meta)
     ev = {
         "type": "event", "event": "unknown", "state": "confirmed",
         "confidence": 0.0, "timestamp": ts_iso,
         "source": "manual", "engine": "user", "clip_url": clip_url,
-        "source_id": source_id,
+        "source_id": source_id, "engine_id": "manual",
         "yamnet": 0.0, "mlp": None, "yamnet_top": "",
         "yamnet_top3": [], "mlp_top3": [],
     }
-    _bus.broadcast(ev)
+    _bus.broadcast(normalize_detector_event(ev))
     print(f"[{ts_iso}] manual event saved: {clip_url} (source: {source_id})", flush=True)
     return {"ok": True, "clip_url": clip_url}

@@ -42,20 +42,24 @@ plugins:
             Getting started: Начало работы
             Architecture: Архитектура
             Operations: Эксплуатация
+            Upgrading and migration: Обновление и переход
             Data and models: Данные и модели
             Multi-microphone: Несколько микрофонов
             Settings reference: Настройки
             API reference: API
+            Custom engine example: Пример своего движка
 
 nav:
   - Home: index.md
   - Getting started: getting-started.md
   - Architecture: architecture.md
   - Operations: operations.md
+  - Upgrading and migration: migration.md
   - Data and models: data-and-models.md
   - Multi-microphone: multi-microphone.md
   - Settings reference: settings.md
   - API reference: api.md
+  - Custom engine example: custom-engine-example.md
 
 markdown_extensions:
   - admonition
