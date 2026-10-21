@@ -44,8 +44,8 @@ python -m detector.main \
 
 Если в `settings.json` заданы `energy_event_threshold`,
 `energy_release_threshold` или `energy_clip_seconds`, они имеют приоритет над
-CLI значениями. Текущий Settings UI пока не строится из manifest, поэтому эти
-параметры не появятся в форме автоматически.
+CLI значениями в legacy-режиме. В режиме графа эти параметры из manifest
+появятся в Settings → Engines и применятся после перезапуска детектора.
 
 При достаточной амплитуде UI score-bar `siren` поднимется, а карточка события
 появится после сохранения WAV-клипа. Та же score/event рассылка проходит через

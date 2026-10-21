@@ -73,8 +73,10 @@ each engine assigned to a route starts once with its own settings, and Runtime
 Hub applies `default`/`by_source` to its audio subscription. The graph takes
 effect after restart. An explicit `--engine` is rejected while a graph is
 active. The same Python class cannot be assigned multiple `engine_id` values
-until its state is isolated. Settings UI does not manage the graph yet; it can
-be read and changed through the REST API.
+because its manifest identity, runtime subscription, and policy keys are unique.
+In graph mode YAMNet settings and smoothers are scoped to its entry, and its
+event policy receives that entry's settings. Settings UI manages the graph; the
+REST API exposes the same configuration.
 
 The target boundaries and formats are described in the [component API](component-api.md).
 The application HTTP and WebSocket interfaces are covered separately in the

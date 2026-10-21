@@ -359,8 +359,9 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
    записи в process-level settings. Совместимый score/event stream остаётся общим,
    сообщения содержат `engine_id`.
 6. [~] API показывает локальные manifests и сохранённый graph и валидирует
-   используемый поднабор JSON Schema. Settings UI показывает недоступный selector;
-   расширить поддержку JSON Schema и отполировать ошибки валидации.
+   документированный поднабор JSON Schema; UI показывает недоступный selector и
+   редактирует массивы/объекты как JSON. Закончить UI polish и расширять схему при
+   появлении manifest-полей, которым нужны другие assertion keywords.
 7. [~] Settings-раздел «Решения» поддерживает включение, manifest settings,
    маршруты и удаление недоступного selector. Состояние движка видно отдельно в
    Runtime panel; объединить его с карточкой и закончить UI polish.
