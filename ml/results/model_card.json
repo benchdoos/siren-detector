@@ -1,75 +1,75 @@
 {
-  "audit_timestamp": "2026-10-21T13:30:58+00:00",
-  "model_trained_at": "2026-10-21T13:30:53+00:00",
+  "audit_timestamp": "2026-10-21T19:57:06+00:00",
+  "model_trained_at": "2026-10-21T19:57:02+00:00",
   "dsp_metrics": {
-    "trained_at": "2026-10-21T13:30:06+00:00",
+    "trained_at": "2026-10-21T19:55:20+00:00",
     "labels": [
       "siren",
       "background",
       "explosion",
       "uav"
     ],
-    "validation_windows": 2906,
-    "accuracy": 0.8789,
+    "validation_windows": 2917,
+    "accuracy": 0.8738,
     "classes": [
       {
         "label": "siren",
-        "windows": 309,
-        "precision": 0.6284,
-        "recall": 0.5307,
-        "f1": 0.5754
+        "windows": 324,
+        "precision": 0.6069,
+        "recall": 0.4907,
+        "f1": 0.5427
       },
       {
         "label": "background",
         "windows": 2185,
-        "precision": 0.9282,
-        "recall": 0.9588,
-        "f1": 0.9433
+        "precision": 0.9168,
+        "recall": 0.9579,
+        "f1": 0.9369
       },
       {
         "label": "explosion",
-        "windows": 208,
-        "precision": 0.8187,
-        "recall": 0.7596,
-        "f1": 0.788
+        "windows": 212,
+        "precision": 0.8377,
+        "recall": 0.7547,
+        "f1": 0.794
       },
       {
         "label": "uav",
-        "windows": 204,
-        "precision": 0.7026,
-        "recall": 0.6716,
-        "f1": 0.6867
+        "windows": 196,
+        "precision": 0.7569,
+        "recall": 0.699,
+        "f1": 0.7268
       }
     ],
     "confusion_matrix": [
       [
-        164,
-        121,
-        1,
-        23
-      ],
-      [
-        61,
-        2095,
-        10,
+        159,
+        144,
+        2,
         19
       ],
       [
-        7,
+        75,
+        2093,
+        8,
+        9
+      ],
+      [
+        9,
         27,
-        158,
+        160,
         16
       ],
       [
-        29,
-        14,
-        24,
+        19,
+        19,
+        21,
         137
       ]
     ],
     "background_gate_threshold": 0.92,
-    "siren_confident_background_rate": 0.0065,
-    "siren_argmax_background_rate": 0.3916,
+    "siren_confident_background_rate": 0.0031,
+    "siren_argmax_background_rate": 0.4444,
     "quantized_model_size_bytes": 29968
   },
   "labels": [
@@ -80,83 +80,83 @@
   ],
   "val_accuracy": {
     "siren": {
-      "accuracy": 0.801,
-      "windows": 3589
+      "accuracy": 0.787,
+      "windows": 3659
     },
     "background": {
-      "accuracy": 0.773,
+      "accuracy": 0.811,
       "windows": 8700
     },
     "explosion": {
-      "accuracy": 0.752,
-      "windows": 927
+      "accuracy": 0.63,
+      "windows": 946
     },
     "uav": {
-      "accuracy": 0.721,
-      "windows": 498
+      "accuracy": 0.669,
+      "windows": 538
     }
   },
   "confusion_matrix": [
     [
-      2874,
-      267,
-      152,
-      296
+      2880,
+      352,
+      88,
+      339
     ],
     [
-      716,
-      6725,
-      980,
-      279
+      926,
+      7058,
+      436,
+      280
     ],
     [
-      39,
-      145,
-      697,
-      46
+      75,
+      238,
+      596,
+      37
     ],
     [
-      67,
-      25,
-      47,
-      359
+      84,
+      45,
+      49,
+      360
     ]
   ],
   "file_counts": {
     "siren": {
-      "total": 294,
-      "real": 122,
+      "total": 295,
+      "real": 123,
       "aug": 172,
-      "aug_pct": 58.5,
+      "aug_pct": 58.3,
       "aug_real_ratio": 1.4,
-      "max_recommended_aug": 244
+      "max_recommended_aug": 246
     },
     "background": {
-      "total": 888,
-      "real": 888,
+      "total": 891,
+      "real": 891,
       "aug": 0,
       "aug_pct": 0.0,
       "aug_real_ratio": 0.0,
-      "max_recommended_aug": 1776
+      "max_recommended_aug": 1782
     },
     "explosion": {
-      "total": 438,
-      "real": 288,
+      "total": 439,
+      "real": 289,
       "aug": 150,
       "aug_pct": 34.2,
       "aug_real_ratio": 0.5,
-      "max_recommended_aug": 576
+      "max_recommended_aug": 578
     },
     "uav": {
-      "total": 311,
-      "real": 151,
+      "total": 312,
+      "real": 152,
       "aug": 160,
-      "aug_pct": 51.4,
+      "aug_pct": 51.3,
       "aug_real_ratio": 1.1,
-      "max_recommended_aug": 302
+      "max_recommended_aug": 304
     }
   },
   "issues": [
-    "background: 17.5× more windows than smallest class"
+    "background: 16.2× more windows than smallest class"
   ]
 }
