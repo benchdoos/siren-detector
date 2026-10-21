@@ -246,14 +246,16 @@ class EventPolicy:
         }
         for name in DETECTORS:
             smoother = source.smoothers[name]
-            score_msg[f"{name}_score"] = 0.0
+            # A DSP skip means YAMNet did not evaluate this window. Treating
+            # missing inference as a negative score drains the smoother and
+            # makes active score/progress bars flicker back to idle.
+            score_msg[f"{name}_score"] = source.peaks[name]["score"]
             score_msg[f"{name}_state"] = smoother.state
             score_msg[f"{name}_triggers"] = smoother.trigger_count
             score_msg[f"{name}_possible_needed"] = smoother.possible_needed
             score_msg[f"{name}_confirmed_needed"] = smoother.confirmed_needed
             score_msg[f"{name}_cooldown"] = round(smoother.cooldown_remaining, 1)
             score_msg[f"{name}_refractory"] = round(smoother.refractory_remaining, 1)
-            smoother.push(0.0)
         score_msg.update(udp_stats_snapshot(self._runtime.event_bus.source_names))
         score_msg["dsp_stats"] = _dsp_stats_snapshot(
             self._dsp, self._sources or {source.source_id: source}, self._settings,
