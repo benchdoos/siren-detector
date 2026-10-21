@@ -103,6 +103,12 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=9000)
     parser.add_argument("--source", default="siren-detector-01")
     parser.add_argument("--web-port", type=int, default=WEB_PORT)
+    # Source labels apply to every engine, including manifest engines that do
+    # not declare their own CLI arguments.
+    parser.add_argument(
+        "--source-name", action="append", default=None,
+        help="Map source_id to name, e.g. '0=esp32-main' (repeatable)",
+    )
     if stored_graph is None:
         parser.add_argument(
             "--engine", default="yamnet",
@@ -111,6 +117,13 @@ def main() -> None:
         )
         if hasattr(engine_cls, "add_arguments"):
             engine_cls.add_arguments(parser)
+    else:
+        # Existing Compose deployments pass YAMNet model paths even after the
+        # Settings UI switches to a different engine graph. Continue accepting
+        # these flags; only YAMNet receives them below.
+        yamnet_cls, _ = engine_registry.resolve("yamnet")
+        if hasattr(yamnet_cls, "add_arguments"):
+            yamnet_cls.add_arguments(parser)
     args = parser.parse_args()
 
     if stored_graph is not None:
@@ -120,8 +133,14 @@ def main() -> None:
                 cls.add_arguments(engine_parser)
             engine_parser.set_defaults(**engine_config["settings"])
             engine_args = vars(engine_parser.parse_args([]))
-            engine_args.update(vars(args))
-            # Shared arguments take precedence over engine parser defaults.
+            # Route only shared options and this engine's own parsed options.
+            # In particular, do not leak YAMNet-only model path flags into a
+            # third-party engine's args namespace.
+            for name in ("bind", "port", "source", "web_port", "source_name"):
+                engine_args[name] = getattr(args, name)
+            for action in engine_parser._actions:
+                if action.dest != "help" and hasattr(args, action.dest):
+                    engine_args[action.dest] = getattr(args, action.dest)
             graph_engine_args[engine_id] = argparse.Namespace(**engine_args)
 
     bus = EventBus()

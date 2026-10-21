@@ -49,6 +49,20 @@ class _FakeEngine:
         type(self).started.set()
 
 
+class _FakeYamnetCli:
+    """YAMNet-compatible CLI parser without importing model dependencies."""
+
+    @staticmethod
+    def add_arguments(parser: ArgumentParser) -> None:
+        parser.add_argument("--classifier-weights", default="/models/default.npz")
+        parser.add_argument("--classifier-labels", default="/models/default.json")
+        parser.add_argument("--dsp-model", default="/models/dsp.tflite")
+        parser.add_argument("--dsp-norm-stats", default="/models/stats.npz")
+        parser.add_argument("--dsp-labels", default="/models/dsp-labels.json")
+        parser.add_argument("--no-dsp", action="store_true")
+        parser.add_argument("--event-policy", default="default")
+
+
 class _FakeEventBus:
     def __init__(self):
         self.loop = None
@@ -176,7 +190,10 @@ class MainStartupTests(unittest.TestCase):
             patch.object(
                 main_module.engine_registry,
                 "resolve",
-                return_value=(_FakeEngine, MANIFEST),
+                side_effect=lambda selector: (
+                    (_FakeYamnetCli, None) if selector == "yamnet"
+                    else (_FakeEngine, MANIFEST)
+                ),
             ),
             patch.object(sys, "argv", ["detector", "--port", "9012"]),
         ]
@@ -200,6 +217,24 @@ class MainStartupTests(unittest.TestCase):
         self.assertEqual(_FakeEngine.settings["probe_value"], 0.73)
         self.assertEqual(_FakeEngine.args.probe_value, 0.73)
         self.assertEqual(_FakeEngine.args.port, 9012)
+
+    def test_graph_startup_accepts_compose_yamnet_flags_without_leaking_them(self) -> None:
+        argv = [
+            "detector", "--port", "9012", "--source-name", "1=rpi-usb",
+            "--classifier-weights", "/models/classifier_weights.npz",
+            "--classifier-labels", "/models/classifier_labels.json",
+            "--dsp-model", "/models/dsp_classifier_f32.tflite",
+            "--dsp-norm-stats", "/models/dsp_norm_stats.npz",
+            "--dsp-labels", "/models/dsp_classifier_labels.json",
+        ]
+        with patch.object(sys, "argv", argv):
+            main_module.main()
+
+        self.assertTrue(_FakeEngine.started.wait(1))
+        self.assertEqual(_FakeEngine.args.source_name, ["1=rpi-usb"])
+        self.assertEqual(_FakeEngine.args.port, 9012)
+        self.assertFalse(hasattr(_FakeEngine.args, "classifier_weights"))
+        self.assertFalse(hasattr(_FakeEngine.args, "dsp_model"))
 
     def test_graph_startup_rejects_explicit_legacy_engine_flag(self) -> None:
         with patch.object(sys, "argv", ["detector", "--engine", "yamnet"]):
