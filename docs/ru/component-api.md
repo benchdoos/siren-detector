@@ -208,7 +208,8 @@ Hub. Текущая политика получает результат чер�
 публикует score/event в legacy-формате. Hub направляет итог в `EventBusOutput`,
 который сохраняет старый формат для `EventBus` (`detector/bus.py`), WebSocket и
 интеграций. Буферы и DSP-предобработка всё ещё находятся в `yamnet_engine.py`;
-политика вынесена в `detector/engine/event_policy.py`, но ещё не имеет
+политика вынесена в `detector/engine/event_policy.py`; сохранение WAV и sidecar
+проходит через `WavClipStorage` по запросу Runtime Hub. Политика ещё не имеет
 публичного контракта и registry. UDP Hub — отдельный сетевой relay.
 `RuntimeMessage` оборачивает legacy payload и не
 фиксирует финальную публичную схему `v1`.
@@ -221,8 +222,8 @@ Hub. Текущая политика получает результат чер�
    сетевой формат SDR1 без изменений.
 3. [~] Вынести YAMNet + MLP inference в stage с `inference-result.v1`; отдельно
    извлечь DSP/буферы и оформить регистрацию цепочки как pipeline provider.
-4. [~] Вынести текущую event policy; определить общий контракт policy и
-   отделить output/storage adapters для событий и клипов.
+4. [~] Вынести текущую event policy и storage клипов; определить общий контракт
+   policy и output adapters для событий.
 5. Добавить конфигурируемый routing и второй независимый компонент; затем
    обновить UI и публичные API управления.
 

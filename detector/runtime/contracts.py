@@ -48,6 +48,17 @@ class InferenceResult:
 
 
 @dataclass(frozen=True)
+class ClipSaveRequest:
+    """Internal request for storing audio and metadata for a confirmed event."""
+
+    filename: str
+    sample_rate_hz: int
+    samples: np.ndarray
+    metadata: Mapping[str, Any]
+    contract: Literal["clip-save-request.v1"] = "clip-save-request.v1"
+
+
+@dataclass(frozen=True)
 class RuntimeMessage:
     """A score update or detector event ready for runtime routing.
 

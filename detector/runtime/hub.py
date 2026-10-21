@@ -6,7 +6,7 @@ import logging
 from typing import Protocol
 
 from ..bus import EventBus
-from .contracts import AudioFrame, InferenceResult, RuntimeMessage
+from .contracts import AudioFrame, ClipSaveRequest, InferenceResult, RuntimeMessage
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,13 @@ class OutputAdapter(Protocol):
         ...
 
 
+class ClipStorageAdapter(Protocol):
+    """Stores an audio clip and its event metadata, returning its public URL."""
+
+    def save_clip(self, request: ClipSaveRequest) -> str:
+        ...
+
+
 class EventBusOutput:
     """Compatibility adapter for current WebSocket and integration outputs."""
 
@@ -64,12 +71,23 @@ class RuntimeHub:
         self._outputs: list[OutputAdapter] = [EventBusOutput(event_bus)]
         self._audio_consumers: list[AudioConsumer] = []
         self._inference_consumers: list[InferenceConsumer] = []
+        self._clip_storage: ClipStorageAdapter | None = None
         self._inputs: list[AudioInputAdapter] = []
         self._started_inputs: set[int] = set()
 
     def add_output(self, output: OutputAdapter) -> None:
         """Register an output adapter."""
         self._outputs.append(output)
+
+    def set_clip_storage(self, storage: ClipStorageAdapter) -> None:
+        """Register the adapter used to persist event clips."""
+        self._clip_storage = storage
+
+    def save_clip(self, request: ClipSaveRequest) -> str:
+        """Route a clip artifact to the configured storage adapter."""
+        if self._clip_storage is None:
+            raise RuntimeError("No clip storage adapter is configured")
+        return self._clip_storage.save_clip(request)
 
     def add_input(self, input_adapter: AudioInputAdapter) -> None:
         """Register an input adapter; it starts when a processor subscribes."""

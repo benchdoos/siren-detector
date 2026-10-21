@@ -8,10 +8,9 @@ from datetime import datetime, timezone
 from typing import Callable
 
 from .. import settings as settings_mod
-from ..config import CLIP_DIR, CLIP_SECONDS, DETECTORS
-from ..runtime.contracts import InferenceResult, RuntimeMessage
+from ..config import CLIP_SECONDS, DETECTORS, SAMPLE_RATE
+from ..runtime.contracts import ClipSaveRequest, InferenceResult, RuntimeMessage
 from ..runtime.hub import RuntimeHub
-from ..server.routes_clips import save_clip_meta
 from ..transport.udp import udp_stats_snapshot
 from .source_state import SourceState
 
@@ -175,9 +174,6 @@ class EventPolicy:
                     elapsed = time.monotonic() - source.possible_start[name] + 2.0
                     clip_seconds = settings_mod.settings.get("clip_seconds", CLIP_SECONDS)
                     clip_duration = min(elapsed, clip_seconds)
-                source.clip_buf.save(CLIP_DIR / clip_name, last_seconds=clip_duration)
-                clip_url = f"/clips/{clip_name}"
-                print(f"[{ts}] {name} clip saved: {clip_url} (source: {source.name})", flush=True)
                 meta = {
                     "event": name, "confidence": round(pk["score"], 3),
                     "timestamp": ts, "source": source.name, "engine": engine_name,
@@ -193,7 +189,13 @@ class EventPolicy:
                 }
                 if source.window_scores[name]:
                     meta["window_scores"] = source.window_scores[name]
-                save_clip_meta(clip_name, meta)
+                clip_url = runtime.save_clip(ClipSaveRequest(
+                    filename=clip_name,
+                    sample_rate_hz=SAMPLE_RATE,
+                    samples=source.clip_buf.snapshot(last_seconds=clip_duration),
+                    metadata=meta,
+                ))
+                print(f"[{ts}] {name} clip saved: {clip_url} (source: {source.name})", flush=True)
                 source.possible_start[name] = None
                 source.window_scores[name] = []
 
