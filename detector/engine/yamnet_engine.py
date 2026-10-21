@@ -41,6 +41,7 @@ from .smoother import TemporalSmoother
 from .source_state import SourceState
 from .event_policy import _EMPTY_PEAK, _dsp_stats_snapshot
 from .stages.yamnet_mlp import YAMNetMlpStage
+from .manifest import YAMNET_ENGINE_MANIFEST
 from ..runtime.policies import EventPolicyContext, load_event_policy
 from .. import settings as settings_mod
 
@@ -134,6 +135,8 @@ def _create_source(source_id: int, name: str) -> SourceState:
 
 class YAMNetEngine:
     """YAMNet + optional MLP classifier engine."""
+
+    ENGINE_MANIFEST = YAMNET_ENGINE_MANIFEST
 
     @staticmethod
     def add_arguments(parser: argparse.ArgumentParser) -> None:

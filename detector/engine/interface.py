@@ -25,10 +25,13 @@ if TYPE_CHECKING:
     import argparse
 
     from detector.runtime.hub import RuntimeHub
+    from detector.runtime.manifest import EngineManifest
 
 
 class EngineInterface(Protocol):
     """Contract that every detection engine must satisfy."""
+
+    ENGINE_MANIFEST: EngineManifest
 
     def start(self, runtime: RuntimeHub, settings: dict, args: argparse.Namespace) -> None:
         """Start the engine, normally in a background thread.

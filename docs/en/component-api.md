@@ -204,6 +204,16 @@ Detector internals and is not yet a portable public SDK.
 
 ## Configuration and lifecycle
 
+### `engine-manifest.v1`
+
+Each engine declares an `ENGINE_MANIFEST` with a stable `engine_id`, name,
+`MAJOR.MINOR.PATCH` version, classes, input/output contracts, a JSON Schema for
+settings, resource requirements, and Python entrypoint. Inspect the built-in
+manifest with `python -m detector.main --engine yamnet --show-engine-manifest`.
+A third-party engine can declare the same `EngineManifest` on its class. The
+manifest is not yet exposed through the API/UI, and its settings schema does
+not yet drive the Settings form.
+
 A component declares a stable ID, type, version, supported contract versions,
 its settings schema, and capabilities. Settings are scoped globally, per
 source, per component/stage, and optionally per source-to-chain assignment.
