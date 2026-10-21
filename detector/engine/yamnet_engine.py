@@ -149,10 +149,6 @@ class YAMNetEngine:
                             help="Path to MLP classifier weights (.npz)")
         parser.add_argument("--classifier-labels", default="/models/classifier_labels.json",
                             help="Path to MLP classifier labels (.json)")
-        parser.add_argument(
-            "--source-name", action="append", default=None,
-            help="Map source_id to name, e.g. '0=esp32-main' (repeatable)",
-        )
         parser.add_argument("--dsp-model", default=DSP_MODEL_PATH,
                             help="Path to DSP TFLite model (.tflite)")
         parser.add_argument("--dsp-norm-stats", default=DSP_NORM_STATS_PATH,
