@@ -167,8 +167,11 @@ The export layer receives normalized results forwarded by Runtime Hub and
 converts them for recipients. Its adapters can subscribe to scores, events,
 and component status. WebSocket/UI provides live visualization, REST reads
 state and manages the system, MQTT/webhook delivers externally, and clip
-storage persists audio. Failure of an optional output must not stop audio
-input or inference; each output defines buffering, retry, and drop behavior.
+storage persists audio. Runtime Hub catches output exceptions, records delivery
+and failure counters, and continues with peer outputs. `GET /api/runtime/status`
+includes per-output diagnostics. Runtime Hub does not retry a failed publish;
+asynchronous adapters define their own bounded queue, timeout, and retry/drop
+policy.
 
 ## Shared inference result
 

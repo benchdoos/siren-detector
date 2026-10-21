@@ -322,6 +322,10 @@
         <div id="runtime-subscribers" style="display:flex;flex-direction:column;gap:8px">
           <div style="font-size:13px;color:#666">Loading runtime status...</div>
         </div>
+        <div class="s-title" style="margin-top:18px">Output Adapters</div>
+        <div id="runtime-outputs" style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:13px;color:#666">Loading output status...</div>
+        </div>
       </div>
     </div>
 
@@ -960,12 +964,26 @@ function updateEngineRuntimeStatus(components) {
 
 async function loadRuntimeStatus() {
   const container = document.getElementById('runtime-subscribers');
+  const outputsContainer = document.getElementById('runtime-outputs');
   try {
     const res = await fetch('/api/runtime/status', { headers: adminHeaders() });
     if (!res.ok) throw new Error(`Request failed (${res.status})`);
     const data = await res.json();
     const components = data.components || [];
     updateEngineRuntimeStatus(data.available ? components : []);
+    const outputs = data.outputs || [];
+    outputsContainer.innerHTML = outputs.length ? outputs.map(output => {
+      const failed = Number(output.failures || 0) > 0;
+      const detail = output.queue_capacity != null
+        ? `queue ${output.queue_depth || 0}/${output.queue_capacity} · ${output.sent || 0} sent · ${output.dropped || 0} dropped · ${output.failures || 0} failed`
+        : `${output.messages_delivered || 0} delivered · ${output.failures || 0} failed`;
+      const error = output.last_error
+        ? `<div class="engine-error">${esc(output.last_error)}</div>` : '';
+      return `<div style="background:#1a1a1a;border:1px solid #292929;border-radius:6px;padding:9px 11px">
+        <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#ccc"><strong>${esc(output.name || output.adapter_id)}</strong><span style="color:${failed ? '#ef5350' : '#4caf50'}">${failed ? 'degraded' : 'ready'}</span></div>
+        <div style="font-size:11px;color:#777;margin-top:4px">${detail}</div>${error}
+      </div>`;
+    }).join('') : '<div style="font-size:13px;color:#666">No output adapters registered.</div>';
     const subscribers = data.subscribers || [];
     if (subscribers.length === 0) {
       container.innerHTML = '<div style="font-size:13px;color:#666">No audio-processing components are currently subscribed.</div>';

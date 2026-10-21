@@ -49,11 +49,12 @@ def init(bus: EventBus, runtime: RuntimeHub | None = None) -> None:
 async def get_runtime_status():
     """Return engine lifecycle and audio queue diagnostics."""
     if _runtime is None:
-        return {"available": False, "components": [], "subscribers": []}
+        return {"available": False, "components": [], "subscribers": [], "outputs": []}
     return {
         "available": True,
         "components": _runtime.component_status(),
         "subscribers": _runtime.audio_status(),
+        "outputs": _runtime.output_status(),
     }
 
 

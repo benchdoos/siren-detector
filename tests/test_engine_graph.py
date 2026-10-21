@@ -19,7 +19,7 @@ import numpy as np
 from detector.engine.registry import engine_registry
 from detector.runtime.manifest import EngineManifest
 from detector.runtime.engine_graph import route_for_source, validate_graph, validate_settings_schema
-from detector.runtime.contracts import AudioFrame
+from detector.runtime.contracts import AudioFrame, RuntimeMessage
 from detector.runtime.engine_settings import settings_for_engine
 from detector.runtime.lifecycle import has_explicit_engine_option, run_engine_component
 from detector.settings import load_settings
@@ -174,6 +174,30 @@ class EngineGraphTests(unittest.TestCase):
         self.assertEqual(states["broken"]["error_count"], 1)
         self.assertIn("engine startup failed", states["broken"]["last_error"])
         self.assertEqual(states["healthy"]["state"], "ready")
+
+    def test_output_failures_are_isolated_and_reported(self) -> None:
+        runtime = RuntimeHub(_FakeEventBus())
+        delivered = []
+
+        class BrokenOutput:
+            def publish(self, _message):
+                raise RuntimeError("recipient unavailable")
+
+        class HealthyOutput:
+            def publish(self, message):
+                delivered.append(message.kind)
+
+        runtime.add_output(BrokenOutput())
+        runtime.add_output(HealthyOutput())
+        runtime.publish(RuntimeMessage.from_legacy({"type": "score"}))
+
+        self.assertEqual(delivered, ["score"])
+        outputs = runtime.output_status()
+        broken = next(item for item in outputs if item["name"] == "BrokenOutput")
+        healthy = next(item for item in outputs if item["name"] == "HealthyOutput")
+        self.assertEqual(broken["failures"], 1)
+        self.assertIn("recipient unavailable", broken["last_error"])
+        self.assertEqual(healthy["messages_delivered"], 1)
 
     def test_disabled_engine_cannot_be_routed(self) -> None:
         with self.assertRaisesRegex(ValueError, "route references disabled engine"):
