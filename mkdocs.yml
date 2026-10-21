@@ -46,6 +46,7 @@ plugins:
             Multi-microphone: Несколько микрофонов
             Settings reference: Настройки
             API reference: API
+            Custom engine example: Пример своего движка
 
 nav:
   - Home: index.md
@@ -56,6 +57,7 @@ nav:
   - Multi-microphone: multi-microphone.md
   - Settings reference: settings.md
   - API reference: api.md
+  - Custom engine example: custom-engine-example.md
 
 markdown_extensions:
   - admonition
