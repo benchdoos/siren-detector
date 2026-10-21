@@ -66,8 +66,6 @@ def main() -> None:
             [*routes["default"], *(engine_id for route in routes["by_source"].values()
                                     for engine_id in route)]
         ))
-        if not routed_ids:
-            pre.error("The saved engine graph has no engines assigned to any source")
         implementation_ids = set()
         for engine_id in routed_ids:
             config = stored_graph["engine_configs"][engine_id]
@@ -86,7 +84,6 @@ def main() -> None:
                 pre.error(f"Engine implementation {implementation!r} is assigned more than once")
             implementation_ids.add(implementation)
             graph_engines.append((engine_id, engine_cls, manifest, config))
-        engine_cls, manifest = graph_engines[0][1:3]
     else:
         try:
             engine_cls, manifest = engine_registry.resolve(pre_args.engine)
