@@ -199,7 +199,9 @@ class RuntimeHub:
 
     def __init__(self, event_bus: EventBus) -> None:
         self.event_bus = event_bus
-        self._outputs: list[OutputAdapter] = [EventBusOutput(event_bus)]
+        self._outputs: list[OutputAdapter] = []
+        self._output_stats: list[dict] = []
+        self._output_stats_lock = threading.Lock()
         self._audio_subscriptions: dict[str, AudioSubscription] = {}
         self._next_subscription_id = 1
         self._subscriptions_lock = threading.RLock()
@@ -209,10 +211,29 @@ class RuntimeHub:
         self._clip_storage: ClipStorageAdapter | None = None
         self._inputs: list[AudioInputAdapter] = []
         self._started_inputs: set[int] = set()
+        self.add_output(EventBusOutput(event_bus))
 
     def add_output(self, output: OutputAdapter) -> None:
         """Register an output adapter."""
         self._outputs.append(output)
+        adapter_name = getattr(output, "name", type(output).__name__)
+        self._output_stats.append({
+            "adapter_id": f"{adapter_name}:{len(self._output_stats) + 1}",
+            "name": adapter_name,
+            "messages_delivered": 0,
+            "failures": 0,
+            "last_error": None,
+        })
+
+    def output_status(self) -> list[dict]:
+        """Return delivery counters plus adapter-specific diagnostics."""
+        with self._output_stats_lock:
+            snapshots = [dict(item) for item in self._output_stats]
+        for output, snapshot in zip(self._outputs, snapshots):
+            get_status = getattr(output, "snapshot", None)
+            if callable(get_status):
+                snapshot.update(get_status())
+        return snapshots
 
     def set_clip_storage(self, storage: ClipStorageAdapter) -> None:
         """Register the adapter used to persist event clips."""
@@ -356,6 +377,10 @@ class RuntimeHub:
             subscriptions = tuple(self._audio_subscriptions.values())
         for subscription in subscriptions:
             subscription.stop()
+        for output in self._outputs:
+            stop = getattr(output, "stop", None)
+            if callable(stop):
+                stop()
         with self._subscriptions_lock:
             for component in self._components.values():
                 if component["state"] != "error":
@@ -401,6 +426,16 @@ class RuntimeHub:
         policy.process(result)
 
     def publish(self, message: RuntimeMessage) -> None:
-        """Route a score or event from a processing component to outputs."""
-        for output in self._outputs:
-            output.publish(message)
+        """Route a message, isolating failures and tracking every output."""
+        for index, (output, status) in enumerate(zip(self._outputs, self._output_stats)):
+            try:
+                output.publish(message)
+            except Exception as exc:
+                logger.exception("Output adapter %s failed", status["adapter_id"])
+                with self._output_stats_lock:
+                    current = self._output_stats[index]
+                    current["failures"] += 1
+                    current["last_error"] = f"{type(exc).__name__}: {exc}"
+            else:
+                with self._output_stats_lock:
+                    self._output_stats[index]["messages_delivered"] += 1
