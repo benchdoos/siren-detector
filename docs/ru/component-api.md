@@ -206,13 +206,32 @@ class MyPolicy:
 
 ### Manifest решения `engine-manifest.v1`
 
-Каждый движок объявляет `ENGINE_MANIFEST` со стабильным `engine_id`, именем,
+Каждый зарегистрированный движок объявляет `ENGINE_MANIFEST` со стабильным `engine_id`, именем,
 версией `MAJOR.MINOR.PATCH`, классами, входными/выходными контрактами,
 JSON Schema настроек, требованиями к ресурсам и Python entrypoint. Для
 встроенного решения manifest можно посмотреть командой
 `python -m detector.main --engine yamnet --show-engine-manifest`. Сторонний
 движок может объявить такой же `EngineManifest` в атрибуте класса. Пока manifest
 не публикуется через API/UI, а схема настроек не управляет формой Settings.
+
+Встраиваемое приложение может зарегистрировать short selector до запуска:
+
+```python
+from detector.engine.registry import engine_registry
+from detector.main import main
+
+engine_registry.register("my-engine", "mypackage.engine.MyEngine")
+main()  # запускать с аргументом --engine my-engine
+```
+
+Зарегистрированный движок обязан объявить `ENGINE_MANIFEST`, а его
+`engine_id` должен совпадать с selector. Список встроенных и зарегистрированных
+имён можно вывести командой `python -m detector.main --list-engines`.
+
+В текущем CLI можно также передать dotted path класса напрямую. Это сохраняет
+совместимость со старым интерфейсом `start(runtime, settings, args)`; такой
+класс без `ENGINE_MANIFEST` загружается с предупреждением. Реестр загружает
+Python-код в том же процессе, поэтому пакет должен быть установлен локально.
 
 Компонент должен объявлять стабильный ID, тип, версию, поддерживаемую версию
 контракта, схему собственных настроек и возможности. Настройки разделяются на
@@ -253,9 +272,12 @@ Hub. Текущая политика получает результат чер�
 публикует score/event в legacy-формате. Hub направляет итог в `EventBusOutput`,
 который сохраняет старый формат для `EventBus` (`detector/bus.py`), WebSocket и
 интеграций. Буферы и DSP-предобработка всё ещё находятся в `yamnet_engine.py`;
-политика вынесена в `detector/engine/event_policy.py`; сохранение WAV и sidecar
-проходит через `WavClipStorage` по запросу Runtime Hub. Политика ещё не имеет
-публичного контракта и registry. UDP Hub — отдельный сетевой relay.
+политика вынесена в `detector/engine/event_policy.py` и следует
+`event-policy.v1`; сохранение WAV и sidecar проходит через `WavClipStorage` по
+запросу Runtime Hub. Движки загружаются через `detector/engine/registry.py`:
+`yamnet` зарегистрирован по имени, сторонние классы можно зарегистрировать
+программно или передать как dotted path в `--engine`. Класс без manifest
+остаётся доступен через старый интерфейс с предупреждением. UDP Hub — отдельный сетевой relay.
 `RuntimeMessage` оборачивает legacy payload и не
 фиксирует финальную публичную схему `v1`.
 

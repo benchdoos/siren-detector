@@ -10,45 +10,20 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import importlib
 import json
 import threading
-from collections.abc import Mapping
 
 import uvicorn
 
 from .bus import EventBus
 from .config import WEB_PORT
+from .engine.registry import engine_registry
 from .integrations.mqtt import mqtt_connect, mqtt_subscribe
 from .runtime.clip_storage import WavClipStorage
 from .runtime.hub import RuntimeHub
-from .runtime.manifest import EngineManifest
 from .server.app import create_app
 from .settings import load_settings
 from .transport.udp import UDPSourceAdapter
-
-# Built-in engines: name → module.ClassName
-ENGINE_REGISTRY = {
-    "yamnet": "detector.engine.yamnet_engine.YAMNetEngine",
-}
-
-
-def _load_engine(name: str):
-    """Load engine class by registry name or dotted path."""
-    dotted = ENGINE_REGISTRY.get(name, name)
-    module_path, _, class_name = dotted.rpartition(".")
-    mod = importlib.import_module(module_path)
-    return getattr(mod, class_name)
-
-
-def _engine_manifest(engine_cls) -> EngineManifest | None:
-    """Load and validate an engine's declared manifest, if it has one."""
-    manifest = getattr(engine_cls, "ENGINE_MANIFEST", None)
-    if isinstance(manifest, EngineManifest):
-        return manifest
-    if isinstance(manifest, Mapping):
-        return EngineManifest(**manifest)
-    return None
 
 
 def main() -> None:
@@ -56,11 +31,18 @@ def main() -> None:
     pre = argparse.ArgumentParser(add_help=False)
     pre.add_argument("--engine", default="yamnet")
     pre.add_argument("--show-engine-manifest", action="store_true")
+    pre.add_argument("--list-engines", action="store_true")
     pre_args, _ = pre.parse_known_args()
 
-    engine_cls = _load_engine(pre_args.engine)
+    if pre_args.list_engines:
+        print(json.dumps(engine_registry.selectors(), indent=2))
+        return
+
+    try:
+        engine_cls, manifest = engine_registry.resolve(pre_args.engine)
+    except (AttributeError, ImportError, TypeError, ValueError) as exc:
+        pre.error(str(exc))
     if pre_args.show_engine_manifest:
-        manifest = _engine_manifest(engine_cls)
         if manifest is None:
             pre.error(f"Engine {pre_args.engine!r} does not declare ENGINE_MANIFEST")
         print(json.dumps(manifest.to_dict(), indent=2))
