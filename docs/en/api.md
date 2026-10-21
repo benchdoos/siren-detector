@@ -39,12 +39,16 @@ When authentication is enabled (`AUTH_ENABLED` in `hub/.env`), protected request
 
 Protected routes return `401` or `403` for invalid or missing tokens. See the [settings reference](settings.md) for setting names and ranges.
 
-`GET /api/runtime/status` returns `available` and a `subscribers` array. Each
-audio subscription includes `subscriber_id`, `state`, `queue_depth`,
+`GET /api/runtime/status` returns `available`, a `components` array, and a
+`subscribers` array. Each component includes `component_id`, `name`, `version`,
+`state`, `started_at`, `updated_at`, `error_count`, and `last_error`. Each audio
+subscription includes `subscriber_id`, `state`, `queue_depth`,
 `queue_capacity`, `overflow`, counters for `frames_received`,
 `frames_processed`, `frames_dropped`, `sequence_gaps`, `callback_errors`, and
-`last_error`. This covers audio delivery and callbacks; model startup lifecycle
-and errors in a separate inference loop are not included yet.
+`last_error`. YAMNet also reports errors from its parallel inference workers;
+third-party plugins with their own background threads should report failures
+through `runtime.set_component_state(component_id, "degraded", error)`. Hard
+timeouts and forced interruption of Python callbacks are not supported.
 
 ## WebSocket
 

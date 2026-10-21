@@ -39,12 +39,16 @@ REST API обслуживается тем же сервером, что и ве
 
 Защищённые маршруты при неверном или отсутствующем токене возвращают `401` либо `403`. Поля настроек и их диапазоны приведены в [справочнике настроек](settings.md).
 
-`GET /api/runtime/status` возвращает `available` и массив `subscribers`. Для
-каждой аудиоподписки доступны `subscriber_id`, `state`, `queue_depth`,
+`GET /api/runtime/status` возвращает `available`, массив `components` и массив
+`subscribers`. Компонент содержит `component_id`, `name`, `version`, `state`,
+`started_at`, `updated_at`, `error_count` и `last_error`. Для каждой аудиоподписки
+доступны `subscriber_id`, `state`, `queue_depth`,
 `queue_capacity`, `overflow`, счётчики `frames_received`, `frames_processed`,
 `frames_dropped`, `sequence_gaps`, `callback_errors` и `last_error`. Это статус
-доставки кадров и callback; lifecycle запуска модели и ошибки отдельного
-inference loop пока не входят в ответ.
+движка и доставки кадров. YAMNet также передаёт сюда ошибки parallel inference
+workers; произвольные фоновые потоки стороннего плагина должны сообщать свои
+сбои через `runtime.set_component_state(component_id, "degraded", error)`.
+Жёсткий timeout и принудительное прерывание Python callback не поддерживаются.
 
 ## WebSocket
 

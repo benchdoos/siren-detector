@@ -276,6 +276,14 @@ and timeouts; one component's stop or failure must not silently block the full
 graph. Process restart may be required for some component changes, and dynamic
 settings application must be declared explicitly.
 
+The current implementation registers the selected engine with its manifest
+`engine_id`, `name`, and `version`; state is available from
+`GET /api/runtime/status`. If a third-party engine starts additional background
+workers, it can report their state with
+`runtime.set_component_state(engine_id, "degraded", error)` and restore `ready`
+after recovery. If a child worker has failed, do not report the engine as fully
+healthy.
+
 The component registry and graph configuration belong to a management API.
 Arbitrary Python imports or uploading user code through the web UI should not
 be treated as a safe extension installation mechanism. The MVP can use

@@ -75,7 +75,25 @@ def main() -> None:
 
     # Engine in background thread
     engine = engine_cls()
-    threading.Thread(target=engine.start, args=(runtime, settings, args), daemon=True).start()
+    component_id = manifest.engine_id if manifest else pre_args.engine
+    component_name = manifest.name if manifest else component_id
+    component_version = manifest.version if manifest else None
+    runtime.register_component(component_id, component_name, component_version)
+
+    def run_engine() -> None:
+        try:
+            engine.start(runtime, settings, args)
+        except Exception as exc:
+            runtime.set_component_state(component_id, "error", exc)
+            print(f"[engine:{component_id}] failed: {type(exc).__name__}: {exc}", flush=True)
+        else:
+            # Engines that return after registering their own workers are ready;
+            # long-running engines become ready when they subscribe to audio.
+            runtime.set_component_state(component_id, "ready")
+
+    threading.Thread(
+        target=run_engine, daemon=True, name=f"engine-{component_id}",
+    ).start()
 
     # FastAPI in main thread (captures the event loop)
     app = create_app(bus, runtime)

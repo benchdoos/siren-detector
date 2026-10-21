@@ -44,10 +44,14 @@ def init(bus: EventBus, runtime: RuntimeHub | None = None) -> None:
 
 @router.get("/api/runtime/status", dependencies=[Depends(require_viewer)])
 async def get_runtime_status():
-    """Return in-process audio subscriber states and queue diagnostics."""
+    """Return engine lifecycle and audio queue diagnostics."""
     if _runtime is None:
-        return {"available": False, "subscribers": []}
-    return {"available": True, "subscribers": _runtime.audio_status()}
+        return {"available": False, "components": [], "subscribers": []}
+    return {
+        "available": True,
+        "components": _runtime.component_status(),
+        "subscribers": _runtime.audio_status(),
+    }
 
 
 @router.get("/api/settings", dependencies=[Depends(require_viewer)])

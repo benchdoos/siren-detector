@@ -363,9 +363,10 @@ DSP-фичи** (pitch, energy, centroid, HNR, ZCR) → rule-based или tiny CN
 - [x] MVP-критерий: пользователь может подключить один собственный движок к
   существующему аудиопотоку без изменений прошивки, транспорта, UI и MQTT.
 - [~] Показывать состояние компонентов в API/UI: `GET /api/runtime/status` и
-  Runtime panel показывают состояние аудиоподписки, очередь, пропуски и ошибки
-  callback. Стартовый lifecycle/version движка ещё не подключены; жёстко
-  прервать зависший callback Python не позволяет.
+  Runtime panel показывают lifecycle и версию engine, ошибки запуска, а также
+  очереди, пропуски и ошибки callback. YAMNet передаёт ошибки parallel workers;
+  сторонний engine со своими потоками сообщает их через Runtime Hub. Жёстко
+  прервать зависший Python callback нельзя.
 - [x] Изолировать подписчиков Runtime Hub: fan-out в ограниченные очереди,
   overflow и обработка ошибок одного callback без блокировки остальных.
 
