@@ -20,8 +20,10 @@ from detector.engine.registry import engine_registry
 from detector.runtime.manifest import EngineManifest
 from detector.runtime.engine_graph import route_for_source, validate_graph, validate_settings_schema
 from detector.runtime.contracts import AudioFrame
+from detector.runtime.engine_settings import settings_for_engine
 from detector.runtime.lifecycle import has_explicit_engine_option, run_engine_component
 from detector.settings import load_settings
+from detector import settings as settings_module
 
 
 class _FakeEventBus:
@@ -200,6 +202,27 @@ class EngineGraphTests(unittest.TestCase):
                 {"energy_event_threshold": 0.11},
                 {"type": "object", "properties": {}, "additionalProperties": False},
             )
+
+    def test_graph_engine_settings_do_not_mutate_legacy_process_settings(self) -> None:
+        legacy_defaults = {
+            "siren_threshold": 0.1,
+            "inference_interval_seconds": 0.5,
+            "dsp_source_overrides": {"3": {"dsp_enabled": 1}},
+        }
+        with patch.dict(settings_module.settings, legacy_defaults, clear=True):
+            graph_runtime = type("Runtime", (), {"engine_graph_active": True})()
+            graph_values = settings_for_engine(
+                graph_runtime,
+                {"siren_threshold": 0.8, "energy_event_threshold": 0.2},
+            )
+            self.assertEqual(graph_values["siren_threshold"], 0.8)
+            graph_values["dsp_source_overrides"]["3"]["dsp_enabled"] = 0
+            self.assertEqual(settings_module.settings, legacy_defaults)
+
+            legacy_runtime = type("Runtime", (), {"engine_graph_active": False})()
+            legacy_values = settings_for_engine(legacy_runtime, {"siren_threshold": 0.4})
+            self.assertIs(legacy_values, settings_module.settings)
+            self.assertEqual(settings_module.settings["siren_threshold"], 0.4)
 
 
 if __name__ == "__main__":

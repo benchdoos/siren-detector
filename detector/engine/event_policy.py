@@ -15,17 +15,18 @@ from .source_state import SourceState
 _EMPTY_PEAK = {"score": 0.0, "yamnet": 0.0, "mlp": None, "top": "", "yamnet_top3": [], "mlp_top3": []}
 
 
-def _dsp_stats_snapshot(dsp, sources: dict) -> dict | None:
+def _dsp_stats_snapshot(dsp, sources: dict, settings: dict | None = None) -> dict | None:
     if dsp is None:
         return None
+    settings = settings if settings is not None else settings_mod.settings
     stats = dsp.stats_snapshot()
-    disabled = set(settings_mod.settings.get("disabled_sources", []))
+    disabled = set(settings.get("disabled_sources", []))
     active_source_ids = set(sources) - disabled
-    overrides = settings_mod.settings.get("dsp_source_overrides", {})
+    overrides = settings.get("dsp_source_overrides", {})
     dsp_source_ids = {
         sid for sid in active_source_ids
         if bool(overrides.get(str(sid), {}).get(
-            "dsp_enabled", settings_mod.settings.get("dsp_enabled", 1),
+            "dsp_enabled", settings.get("dsp_enabled", 1),
         ))
     }
     skipping_ids = set(stats.pop("skipping_source_ids", []))
@@ -46,6 +47,7 @@ class EventPolicy:
         self._get_source = context.get_source
         self._sources = context.sources
         self._dsp = context.dsp
+        self._settings = context.settings if context.settings is not None else settings_mod.settings
 
     def process(self, result: InferenceResult) -> None:
         """Apply project event policy to generic model results from Runtime Hub."""
@@ -76,7 +78,7 @@ class EventPolicy:
         effective: dict[str, float] = {}
         for name in DETECTORS:
             if name == "siren" and mlp_score is not None:
-                if yamnet_scores["siren"] >= settings_mod.settings["yamnet_min_gate"]:
+                if yamnet_scores["siren"] >= self._settings["yamnet_min_gate"]:
                     if mlp_top1 == name or mlp_score >= 0.5:
                         effective[name] = mlp_score
                     else:
@@ -143,7 +145,9 @@ class EventPolicy:
             score_msg["dsp_confidence"] = round(dsp_result["confidence"], 3)
             score_msg["dsp_skipped_yamnet"] = False
         if dsp is not None:
-            score_msg["dsp_stats"] = _dsp_stats_snapshot(dsp, sources or {source.source_id: source})
+            score_msg["dsp_stats"] = _dsp_stats_snapshot(
+                dsp, sources or {source.source_id: source}, self._settings,
+            )
 
         score_msg.update(udp_stats_snapshot(runtime.event_bus.source_names))
         if sources:
@@ -162,9 +166,9 @@ class EventPolicy:
             if new_state == "confirmed":
                 clip_name = f"{prefix}{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.wav"
                 clip_duration = None
-                if settings_mod.settings.get("clip_from_possible") and source.possible_start[name] is not None:
+                if self._settings.get("clip_from_possible") and source.possible_start[name] is not None:
                     elapsed = time.monotonic() - source.possible_start[name] + 2.0
-                    clip_seconds = settings_mod.settings.get("clip_seconds", CLIP_SECONDS)
+                    clip_seconds = self._settings.get("clip_seconds", CLIP_SECONDS)
                     clip_duration = min(elapsed, clip_seconds)
                 meta = {
                     "event": name, "confidence": round(pk["score"], 3),
@@ -176,9 +180,9 @@ class EventPolicy:
                     "yamnet_top": pk["top"],
                     "yamnet_top3": pk.get("yamnet_top3", []),
                     "mlp_top3": pk.get("mlp_top3", []),
-                    "threshold": settings_mod.settings.get(thr_key, 0.15),
+                    "threshold": self._settings.get(thr_key, 0.15),
                     "triggers": source.smoothers[name].trigger_count,
-                    "triggers_needed": settings_mod.settings["confirmed_triggers"],
+                    "triggers_needed": self._settings["confirmed_triggers"],
                 }
                 if source.window_scores[name]:
                     meta["window_scores"] = source.window_scores[name]
@@ -203,9 +207,9 @@ class EventPolicy:
                 "yamnet_top": pk["top"],
                 "yamnet_top3": pk.get("yamnet_top3", []),
                 "mlp_top3": pk.get("mlp_top3", []),
-                "threshold": settings_mod.settings.get(thr_key, 0.15),
+                "threshold": self._settings.get(thr_key, 0.15),
                 "triggers": source.smoothers[name].trigger_count,
-                "triggers_needed": settings_mod.settings["confirmed_triggers"] if new_state == "confirmed" else settings_mod.settings["possible_triggers"],
+                "triggers_needed": self._settings["confirmed_triggers"] if new_state == "confirmed" else self._settings["possible_triggers"],
             }
             runtime.publish(RuntimeMessage.from_legacy(event))
             print(f"EVENT {json.dumps(event)}", flush=True)
@@ -237,7 +241,7 @@ class EventPolicy:
             smoother.push(0.0)
         score_msg.update(udp_stats_snapshot(self._runtime.event_bus.source_names))
         score_msg["dsp_stats"] = _dsp_stats_snapshot(
-            self._dsp, self._sources or {source.source_id: source},
+            self._dsp, self._sources or {source.source_id: source}, self._settings,
         )
         if self._sources:
             score_msg["source_names"] = {sid: src.name for sid, src in self._sources.items()}
