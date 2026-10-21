@@ -442,6 +442,7 @@ const VALID_LABELS = ['siren', 'background', 'uav', 'explosion', 'unknown'];
 const _knownSources = {};  // source_id → display name (custom or original)
 const _sourceCustomNames = {};  // source_id → custom name (from settings, survives heartbeat)
 const _sourceScores = {};  // source_id + engine_id → last score message
+const SOURCE_SCORE_TTL_MS = 5000;
 let _dspStats = null;  // aggregate DSP decisions across all sources
 const _STATE_PRIORITY = { idle: 0, possible: 1, confirmed: 2 };
 let activeEngineFilter = 'all';
@@ -561,8 +562,14 @@ function _updateSourcesDropdown() {
     // Current DSP state per source
     const nowEl = summary.querySelector('.dsp-now');
     const now = Date.now();
-    const dspSources = Object.values(_sourceScores).filter(s =>
-      s.dsp && now - (s._receivedAt || 0) < 5000);
+    const latestDspBySource = new Map();
+    for (const score of Object.values(_sourceScores)) {
+      if (!score.dsp || now - (score._receivedAt || 0) >= SOURCE_SCORE_TTL_MS) continue;
+      const sid = String(score.source_id);
+      const previous = latestDspBySource.get(sid);
+      if (!previous || score._receivedAt > previous._receivedAt) latestDspBySource.set(sid, score);
+    }
+    const dspSources = [...latestDspBySource.values()];
     if (dspSources.length) {
       nowEl.innerHTML = '<h3 style="color:#666;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 4px">Now</h3>'
         + dspSources.map(s => {
@@ -590,11 +597,21 @@ function _updateSourcesDropdown() {
     summary.querySelector('.dsp-summary-header').setAttribute('aria-expanded', 'false');
   }
 
-  const sources = Object.values(_sourceScores);
-  const sourceIds = new Set([
-    ...Object.keys(_knownSources),
-    ...sources.map(s => String(s.source_id)),
-  ]);
+  const freshScores = Object.values(_sourceScores).filter(s =>
+    Date.now() - (s._receivedAt || 0) < SOURCE_SCORE_TTL_MS);
+  const bySource = new Map();
+  for (const score of freshScores) {
+    const sid = String(score.source_id);
+    const previous = bySource.get(sid);
+    const hasModelScore = score.yamnet != null || score.mlp != null;
+    const previousHasModelScore = previous && (previous.yamnet != null || previous.mlp != null);
+    if (!previous || (hasModelScore && !previousHasModelScore)
+        || (hasModelScore === previousHasModelScore && score._receivedAt > previous._receivedAt)) {
+      bySource.set(sid, score);
+    }
+  }
+  const sources = [...bySource.values()];
+  const sourceIds = new Set(sources.map(s => String(s.source_id)));
   for (const sid of sourceIds) {
     if (!sources.some(s => String(s.source_id) === sid)) {
       sources.push({ source_id: Number(sid), source: _knownSources[sid] });
@@ -615,11 +632,16 @@ function _updateSourcesDropdown() {
     if (s.mlp_top3) wrap.querySelector('.dd-mlp').innerHTML = _renderTop3Html(s.mlp_top3);
     return;
   }
-  // Multiple source/engine streams: update in-place and keep them distinct.
+  // Keep one current score row per audio source, even when several engines
+  // publish messages for the same source ID.
   container.querySelector('[data-single]')?.remove();
+  const activeSourceIds = new Set(sources.map(s => String(s.source_id)));
+  container.querySelectorAll('.src-section').forEach(section => {
+    if (!activeSourceIds.has(String(section.dataset.sid))) section.remove();
+  });
   for (const s of sources) {
     const sid = s.source_id != null ? s.source_id : 0;
-    const scoreKey = `${sid}:${s.engine_id || 'legacy'}`;
+    const scoreKey = String(sid);
     let section = [...container.querySelectorAll('.src-section')]
       .find(item => item.dataset.scoreKey === scoreKey);
     if (!section) {
@@ -662,11 +684,15 @@ document.addEventListener('click', () => document.getElementById('top-dropdown')
 
 function updateScores(msg) {
   // Store per-source score and aggregate across all sources
+  const now = Date.now();
   const isHeartbeat = msg.source_id == null;
   if (!isHeartbeat) {
     const scoreKey = `${msg.source_id}:${msg.engine_id || 'legacy'}`;
-    _sourceScores[scoreKey] = {...msg, _receivedAt: Date.now()};
+    _sourceScores[scoreKey] = {...msg, _receivedAt: now};
     if (!_sourceCustomNames[msg.source_id]) _knownSources[msg.source_id] = msg.source;
+  }
+  for (const [key, score] of Object.entries(_sourceScores)) {
+    if (now - (score._receivedAt || 0) >= SOURCE_SCORE_TTL_MS) delete _sourceScores[key];
   }
   if (msg.source_names) {
     for (const [sid, name] of Object.entries(msg.source_names)) {
@@ -676,12 +702,10 @@ function updateScores(msg) {
   if (msg.dsp_stats) _dspStats = msg.dsp_stats;
 
   const scoredSources = Object.keys(_sourceScores).length > 0
-    ? Object.values(_sourceScores)
+    ? Object.values(_sourceScores).filter(s => now - (s._receivedAt || 0) < SOURCE_SCORE_TTL_MS)
     : [msg];
-  const sourceCount = new Set([
-    ...Object.keys(_knownSources),
-    ...scoredSources.map(s => String(s.source_id)).filter(sid => sid !== 'undefined'),
-  ]).size;
+  const sourceCount = new Set(scoredSources.map(s => String(s.source_id))
+    .filter(sid => sid !== 'undefined')).size;
   const sources = scoredSources;
 
   // Aggregate per detector: worst state, max score, max triggers
