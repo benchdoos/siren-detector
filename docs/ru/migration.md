@@ -37,8 +37,16 @@
 
    Запишите значение image reference из второй команды: Compose может
    использовать имя, отличающееся от `siren-detector`.
-2. На сервере сохраните volume `clips`, где лежат `settings.json` и клипы.
-   Узнать имя тома можно так:
+2. Чтобы сохранить только текущие настройки, на сервере выполните из папки,
+   куда нужно положить копию:
+
+   ```bash
+   docker cp siren-detector-engine:/clips/settings.json ./settings-before-upgrade.json
+   ```
+
+   Файл содержит как старые настройки, так и `engine_configs`/маршруты, если
+   граф уже настроен. Для сохранения также клипов и sidecar-метаданных сделайте
+   архив всего volume `clips`. Узнать имя тома можно так:
 
    ```bash
    docker inspect siren-detector-engine \
