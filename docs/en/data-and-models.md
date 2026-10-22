@@ -84,7 +84,7 @@ Pre-annotations from YAMNet can be imported via `ml/ls_import.py` to seed the an
 
 The detector web UI provides in-place labeling. When an event is confirmed, a clip is saved. Click the label buttons (siren / background / uav / unknown) to copy the clip to `dataset/<label>/` on the host. Segment labeling is also available: drag on the spectrogram to select a range, choose a label, and the segment is cut and saved.
 
-Background calibration records ambient sound from a selected source into `dataset/background/<source>/`. Calibration examples are useful for adapting the background model to a microphone's acoustic profile; collect representative quiet, typical, and loud conditions.
+Background calibration records ambient sound from one or more selected sources at the same time into `dataset/background/<source>/`. The selected sources share one duration, and each source is saved as a separate WAV file in its own directory. This helps adapt the background model to each microphone's acoustic profile; collect representative quiet, typical, and loud conditions.
 
 ## Pretrained models
 
