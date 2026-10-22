@@ -55,9 +55,18 @@ const I18n = (function() {
         if (el.placeholder) el.placeholder = translated;
       } else if (el.tagName === 'OPTION') {
         el.textContent = translated;
+      } else if (el.children.length > 0) {
+        // Preserve child elements (e.g. <label> with <span class="s-help">)
+        el.childNodes[0].textContent = translated + ' ';
       } else {
         el.textContent = translated;
       }
+    });
+    // data-i18n-html for elements with HTML content (tooltips)
+    document.querySelectorAll('[data-i18n-html]').forEach(el => {
+      const key = el.dataset.i18nHtml;
+      const translated = t(key);
+      if (translated !== key) el.innerHTML = translated;
     });
     // data-i18n-placeholder for inputs
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
