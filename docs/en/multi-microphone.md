@@ -13,6 +13,33 @@ The repository's `audio_source/` service captures a local microphone and sends i
 
 To run without Docker, install the requirements from `audio_source/requirements.txt` and start `audio_source/audio_source.py`; use `--list-devices` to find an input device.
 
+### If the USB source drops out
+
+The service reopens the audio stream after it stops or PortAudio raises an
+error, waiting two seconds between attempts. Audio processing and UDP sending
+run outside the microphone callback. The queue holds about one second of audio;
+when it fills, new chunks are dropped to keep latency bounded.
+
+Check the service state and recent messages:
+
+```bash
+docker compose ps
+docker compose logs --tail=100 audio-source
+```
+
+`Audio error` or `Audio stream stopped` indicates that the service is reopening
+the device. `Audio queue full` means processing or sending cannot keep up with
+capture. Check that the device is visible inside the container and available to
+the selected backend. Recreate the service after changing its configuration:
+
+```bash
+docker compose up -d --build --force-recreate audio-source
+```
+
+Compose restarts the container if its process exits, but UDP errors alone cannot
+confirm that the Hub is reachable: UDP does not establish a connection or
+guarantee delivery.
+
 ## Two INMP441 microphones on one ESP32
 
 The ESP32-S3 firmware has two separate I2S buses:
