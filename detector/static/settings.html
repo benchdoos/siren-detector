@@ -34,9 +34,11 @@
   .s-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
   .s-row label { width: 150px; flex-shrink: 0; font-size: 13px; color: #ccc; }
   .s-row input[type="number"], .s-row select { width: 80px; background: #222; border: 1px solid #444; color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
-  .s-row input[type="number"]:focus, .s-row select:focus { border-color: #4caf50; outline: none; }
+  .lang-switch { width: 58px; background: #222; border: 1px solid #444; color: #e0e0e0; padding: 3px 20px 3px 8px; border-radius: 4px; font-size: 12px; }
+  .s-row input[type="number"]:focus, .s-row select:focus, .lang-switch:focus { border-color: #4caf50; outline: none; }
   .s-row input.changed, .s-row select.changed { border-color: #ffa726; }
   .s-row select { cursor: pointer; -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; padding-right: 24px; }
+  .lang-switch { cursor: pointer; -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; margin-left: auto; }
   #s-detection_mode { width: 150px; }
   .s-default { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: #555; cursor: pointer; white-space: nowrap; user-select: none; width: 55px; }
   .s-default:hover { color: #aaa; }
@@ -146,7 +148,7 @@
 <div class="sp-header" onclick="goBack()">
   <span class="sp-back">&larr;</span>
   <h1><img src="/static/img/siren-detector-logo.svg" alt="Logo" class="header-logo"> <span data-i18n="header.title">Siren Detector</span> <span class="sp-subtitle">/ <span data-i18n="settings.subtitle">Settings</span></span></h1>
-  <select id="lang-switch" onchange="I18n.setLocale(this.value)" style="background:#222;border:1px solid #333;color:#888;padding:2px 4px;border-radius:4px;font-size:11px;cursor:pointer;margin-left:auto">
+  <select id="lang-switch" class="lang-switch" onclick="event.stopPropagation()" onchange="I18n.setLocale(this.value)">
     <option value="en">EN</option>
     <option value="ru">RU</option>
   </select>

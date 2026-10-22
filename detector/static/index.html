@@ -12,6 +12,8 @@
   .header-logo { width: 24px; height: 24px; background: #e0e0e0; border-radius: 50%; padding: 2px; flex-shrink: 0; }
   .header-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
   .header-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+  .lang-switch { width: 58px; background: #222; border: 1px solid #444; color: #e0e0e0; padding: 3px 20px 3px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; }
+  .lang-switch:focus { border-color: #4caf50; outline: none; }
   #status { font-size: 12px; padding: 2px 7px; border-radius: 4px; background: #333; color: #888; }
   #status.connected { background: transparent; color: transparent; font-size: 0; padding: 0; display: inline-block; width: 10px; height: 10px; border-radius: 50%; cursor: default; }
   @keyframes statusPulse { 0%,100% { background: #4caf50; } 50% { background: transparent; } }
@@ -305,7 +307,7 @@
     <button class="metrics-btn" onclick="showMetrics()" data-i18n="btn.metrics">Metrics</button>
     <button class="metrics-btn admin-only-btn" id="settings-btn" onclick="showSettings()" data-i18n="btn.settings">Settings</button>
     <button class="admin-btn" id="admin-btn" onclick="toggleAdmin()" data-i18n="btn.admin">Admin</button>
-    <select id="lang-switch" onchange="I18n.setLocale(this.value)" style="background:#222;border:1px solid #333;color:#888;padding:2px 4px;border-radius:4px;font-size:11px;cursor:pointer">
+    <select id="lang-switch" class="lang-switch" onchange="I18n.setLocale(this.value)">
       <option value="en">EN</option>
       <option value="ru">RU</option>
     </select>
