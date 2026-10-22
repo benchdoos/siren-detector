@@ -266,7 +266,7 @@
   "cal.tip1": "Record 5+ minutes of your typical environment",
   "cal.tip2": "Include varied sounds: appliances, street noise, conversations, 3D printers, etc.",
   "cal.tip3": "Record multiple sessions at different times of day",
-  "cal.tip4": "Each source (ESP32 mic, USB mic) needs its own calibration",
+  "cal.tip4": "Each source needs its own calibration",
   "cal.tip5": "After recording, run make retrain to apply",
   "cal.source": "Source",
   "cal.duration": "Duration (sec)",
