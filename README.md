@@ -45,7 +45,7 @@ For deployment, configuration, MQTT, and retraining details, see the [documentat
 
 - `esp32/` — ESPHome firmware and microphone capture.
 - `hub/` — UDP audio relay and Docker Compose deployment.
-- `detector/` — runtime result routing, inference engine, API, web UI, and integrations.
+- `detector/` — runtime result routing, inference engine, API, web UI (i18n: EN/RU), and integrations.
 - `audio_source/`, `recorder/` — USB microphone streaming and audio recording.
 - `dataset/`, `ml/` — data preparation, training, and evaluation tools.
 - `docs/` — bilingual project documentation.
