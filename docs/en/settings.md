@@ -37,6 +37,8 @@ An optional DSP model can skip YAMNet when it confidently identifies background 
 
 `dsp_source_overrides` is an object keyed by source ID. The Sources panel can enable or disable DSP and set per-source thresholds; unspecified values inherit the global settings.
 
+When DSP skips a window, YAMNet has not produced a new score. The live score bar therefore fades the source's last YAMNet/MLP score to zero over three seconds while skips continue. This is a display-only fade; it does not change trigger counts, event state, or cooldown.
+
 ## Smoothing and events
 
 | Setting | Default | Range | Purpose |

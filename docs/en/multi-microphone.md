@@ -38,3 +38,5 @@ For a custom source, use 16 kHz mono audio, SDR1 framing, monotonically increasi
 ## Round-robin and parallel inference
 
 Independent sources can be processed in `round_robin` mode (one loop rotates between sources) or `parallel` mode (one inference loop per source). Parallel work may increase CPU and memory use. These modes apply to independent SDR1 source IDs; the two microphones mixed by the current ESP32 firmware remain one source either way.
+
+The dashboard combines independent sources into one score bar: it shows the highest current score and the most urgent state (`confirmed` → `possible` → `idle`). The score and state can therefore come from different microphones; the bar label identifies the source contributing the score. When DSP skips YAMNet for a source, that source's last score fades to zero over three seconds until a new model score is available.
