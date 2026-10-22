@@ -1182,6 +1182,7 @@ function _calSetRecording(active) {
   sourceList.setAttribute('aria-disabled', active ? 'true' : 'false');
   sourceList.querySelectorAll('input').forEach(input => input.disabled = active);
   document.getElementById('cal-duration').disabled = active;
+  document.getElementById('cal-preset').disabled = active;
   document.getElementById('cal-start-btn').style.display = active ? 'none' : '';
   document.getElementById('cal-stop-btn').style.display = active ? '' : 'none';
   document.getElementById('cal-cancel-btn').style.display = active ? '' : 'none';
@@ -1268,6 +1269,7 @@ async function stopCalibration() {
       document.getElementById('cal-cancel-btn').style.display = 'none';
       document.querySelectorAll('#cal-source-list input').forEach(input => input.disabled = false);
       document.getElementById('cal-duration').disabled = false;
+      document.getElementById('cal-preset').disabled = false;
       document.getElementById('cal-start-btn').style.display = '';
       loadCalRecordings();
     } else {
