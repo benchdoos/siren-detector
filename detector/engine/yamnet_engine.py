@@ -388,14 +388,15 @@ class YAMNetEngine:
                 "max_width",
                 settings.get("click_removal_max_width", 5),
             )
+            click_removal_started = time.perf_counter()
             waveform, n_clicks = _remove_clicks(
                 waveform, threshold=cr_threshold, max_width=cr_max_width,
             )
-            if n_clicks:
-                print(
-                    f"[click-removal] source {source.source_id}: "
-                    f"removed {n_clicks} click(s)",
-                    flush=True,
+            click_removal_elapsed = time.perf_counter() - click_removal_started
+            if n_clicks >= 50 or click_removal_elapsed >= 0.1:
+                logger.warning(
+                    "Click-removal source=%s clicks=%s duration=%.3fs",
+                    source.source_id, n_clicks, click_removal_elapsed,
                 )
 
         # ── DSP pre-filter: skip YAMNet for confident background ────────
@@ -492,7 +493,14 @@ class YAMNetEngine:
             source.dsp_feature_buf.clear()
             dsp.reset_source_gate(source.source_id)
 
+        inference_started = time.perf_counter()
         prediction = model_stage.predict(source.source_id, waveform)
+        inference_elapsed = time.perf_counter() - inference_started
+        if inference_elapsed >= 0.75:
+            logger.warning(
+                "Slow inference source=%s duration=%.3fs",
+                source.source_id, inference_elapsed,
+            )
         metadata = dict(prediction.metadata)
         metadata.update({
             "det_engine": det_engine,

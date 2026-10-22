@@ -535,7 +535,8 @@ async def feedback_segments(body: dict):
     # Update in-memory event_history so WS replay includes segments
     if _bus:
         for ev in _bus.event_history:
-            if ev.get("clip_url", "").endswith("/" + filename):
+            clip_url = ev.get("clip_url")
+            if clip_url and clip_url.endswith("/" + filename):
                 ev["segments"] = clean
                 break
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import queue
 import threading
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Protocol
@@ -209,6 +210,9 @@ class RuntimeHub:
         self._event_policies: dict[str, EventPolicy] = {}
         self._engine_graph: dict | None = None
         self._clip_storage: ClipStorageAdapter | None = None
+        self._clip_queue: queue.Queue | None = None
+        self._clip_thread: threading.Thread | None = None
+        self._clip_stop = threading.Event()
         self._inputs: list[AudioInputAdapter] = []
         self._started_inputs: set[int] = set()
         self.add_output(EventBusOutput(event_bus))
@@ -238,12 +242,55 @@ class RuntimeHub:
     def set_clip_storage(self, storage: ClipStorageAdapter) -> None:
         """Register the adapter used to persist event clips."""
         self._clip_storage = storage
+        self._clip_queue = queue.Queue(maxsize=16)
+        self._clip_thread = threading.Thread(
+            target=self._save_clips, name="clip-storage", daemon=True,
+        )
+        self._clip_thread.start()
 
     def save_clip(self, request: ClipSaveRequest) -> str:
         """Route a clip artifact to the configured storage adapter."""
         if self._clip_storage is None:
             raise RuntimeError("No clip storage adapter is configured")
         return self._clip_storage.save_clip(request)
+
+    def save_clip_async(self, request: ClipSaveRequest, callback) -> None:
+        """Save a clip off the inference thread, then call callback with its URL."""
+        if self._clip_storage is None or self._clip_queue is None:
+            callback(None)
+            return
+        try:
+            self._clip_queue.put_nowait((request, callback, time.monotonic()))
+        except queue.Full:
+            logger.error("Clip save queue full; dropping clip %s", request.filename)
+            callback(None)
+
+    def _save_clips(self) -> None:
+        assert self._clip_queue is not None
+        while True:
+            try:
+                item = self._clip_queue.get(timeout=0.25)
+            except queue.Empty:
+                if self._clip_stop.is_set():
+                    return
+                continue
+            request, callback, queued_at = item
+            start_time = time.monotonic()
+            logger.info(
+                "Clip save started filename=%s queue_delay=%.3fs",
+                request.filename, start_time - queued_at,
+            )
+            try:
+                clip_url = self.save_clip(request)
+            except Exception:
+                logger.exception("Could not save clip %s", request.filename)
+                clip_url = None
+            elapsed = time.monotonic() - start_time
+            logger.info("Clip save finished filename=%s duration=%.3fs", request.filename, elapsed)
+            try:
+                callback(clip_url)
+            except Exception:
+                logger.exception("Clip completion callback failed filename=%s", request.filename)
 
     def add_input(self, input_adapter: AudioInputAdapter) -> None:
         """Register an input adapter; it starts when a processor subscribes."""
@@ -377,6 +424,9 @@ class RuntimeHub:
             subscriptions = tuple(self._audio_subscriptions.values())
         for subscription in subscriptions:
             subscription.stop()
+        if self._clip_queue is not None and self._clip_thread is not None:
+            self._clip_stop.set()
+            self._clip_thread.join(timeout=2.0)
         for output in self._outputs:
             stop = getattr(output, "stop", None)
             if callable(stop):

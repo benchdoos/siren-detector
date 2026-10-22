@@ -450,6 +450,7 @@ const _knownSources = {};  // source_id → display name (custom or original)
 const _sourceCustomNames = {};  // source_id → custom name (from settings, survives heartbeat)
 const _sourceScores = {};  // source_id + engine_id → last score message
 const SOURCE_SCORE_TTL_MS = 5000;
+const SCORE_DECAY_MS = 3000;
 let _dspStats = null;  // aggregate DSP decisions across all sources
 const _STATE_PRIORITY = { idle: 0, possible: 1, confirmed: 2 };
 let activeEngineFilter = 'all';
@@ -486,7 +487,7 @@ function setEngineFilter(select) {
   updateSelection();
 }
 
-function updateDetector(name, score, state, triggers, possibleNeeded, confirmedNeeded, cooldown, refractory, engineId) {
+function updateDetector(name, score, state, triggers, possibleNeeded, confirmedNeeded, cooldown, refractory, engineId, scoreSource) {
   const bar   = document.getElementById('bar-' + name);
   const val   = document.getElementById('val-' + name);
   const badge = document.getElementById('badge-' + name);
@@ -497,7 +498,10 @@ function updateDetector(name, score, state, triggers, possibleNeeded, confirmedN
   bar.style.background = color;
   val.textContent      = (score * 100).toFixed(1) + '%';
   const engineLabel = document.getElementById('score-engine-' + name);
-  if (engineLabel) engineLabel.textContent = engineId ? ` · peak from ${engineId}` : '';
+  if (engineLabel) {
+    const origin = [engineId, scoreSource].filter(Boolean).join(' · ');
+    engineLabel.textContent = origin ? ` · peak from ${origin}` : '';
+  }
   badge.textContent    = t('state.' + state) || state;
   badge.className      = 'state-badge ' + state;
   bar.classList.toggle('pulsing', state === 'possible' || state === 'confirmed');
@@ -695,7 +699,12 @@ function updateScores(msg) {
   const isHeartbeat = msg.source_id == null;
   if (!isHeartbeat) {
     const scoreKey = `${msg.source_id}:${msg.engine_id || 'legacy'}`;
-    _sourceScores[scoreKey] = {...msg, _receivedAt: now};
+    const previous = _sourceScores[scoreKey];
+    _sourceScores[scoreKey] = {
+      ...msg,
+      _receivedAt: now,
+      _scoreAt: msg.dsp_skipped_yamnet ? (previous?._scoreAt || now) : now,
+    };
     if (!_sourceCustomNames[msg.source_id]) _knownSources[msg.source_id] = msg.source;
   }
   for (const [key, score] of Object.entries(_sourceScores)) {
@@ -718,20 +727,28 @@ function updateScores(msg) {
   // Aggregate per detector: worst state, max score, max triggers
   for (const name of DETECTOR_NAMES) {
     let bestScore = 0, bestState = 'idle', bestTriggers = 0;
+    let stateScore = -1;
     let bestStatePriority = 0;
     let bestEngineId = '';
+    let bestScoreSource = '';
     let possNeeded = 4, confNeeded = 8, maxCooldown = 0, maxRefractory = 0;
     for (const s of sources) {
-      const sc = s[name + '_score'] || 0;
+      const rawScore = s[name + '_score'] || 0;
+      const scoreAge = Math.max(0, now - (s._scoreAt || now));
+      const sc = rawScore * Math.max(0, 1 - scoreAge / SCORE_DECAY_MS);
       const st = s[name + '_state'] || 'idle';
       const tr = s[name + '_triggers'] || 0;
       const statePriority = _STATE_PRIORITY[st] || 0;
-      if (statePriority > bestStatePriority || (statePriority === bestStatePriority && sc > bestScore)) {
+      if (sc > bestScore) {
         bestScore = sc;
+        bestEngineId = s.engine_id || '';
+        bestScoreSource = s.source || '';
+      }
+      if (statePriority > bestStatePriority || (statePriority === bestStatePriority && sc > stateScore)) {
         bestState = st;
         bestTriggers = tr;
-        bestEngineId = s.engine_id || '';
         bestStatePriority = statePriority;
+        stateScore = sc;
         if (s[name + '_possible_needed'] != null) possNeeded = s[name + '_possible_needed'];
         if (s[name + '_confirmed_needed'] != null) confNeeded = s[name + '_confirmed_needed'];
       }
@@ -740,7 +757,7 @@ function updateScores(msg) {
       if (cd > maxCooldown) maxCooldown = cd;
       if (rf > maxRefractory) maxRefractory = rf;
     }
-    updateDetector(name, bestScore, bestState, bestTriggers, possNeeded, confNeeded, maxCooldown, maxRefractory, bestEngineId);
+    updateDetector(name, bestScore, bestState, bestTriggers, possNeeded, confNeeded, maxCooldown, maxRefractory, bestEngineId, bestScoreSource);
   }
 
   registerEngineFilter(msg.engine_id);
