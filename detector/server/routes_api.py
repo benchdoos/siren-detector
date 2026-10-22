@@ -576,15 +576,19 @@ async def start_calibration(body: dict):
     """
     if _bus is None:
         raise HTTPException(status_code=503, detail="Detector not ready")
-    source_id = body.get("source_id", 0)
+    source_ids = body.get("source_ids", [body.get("source_id", 0)])
     duration = body.get("duration", 120)
     if not isinstance(duration, int) or not 10 <= duration <= 900:
         raise HTTPException(status_code=400, detail="duration must be 10-600 seconds")
-    if source_id not in _bus.source_names:
-        raise HTTPException(status_code=404, detail=f"Source {source_id} not found")
-    if not _bus.start_calibration(source_id, duration):
+    if not isinstance(source_ids, list) or not source_ids or any(type(sid) is not int for sid in source_ids):
+        raise HTTPException(status_code=400, detail="source_ids must be a non-empty list of integers")
+    source_ids = list(dict.fromkeys(source_ids))
+    unknown = [sid for sid in source_ids if sid not in _bus.source_names]
+    if unknown:
+        raise HTTPException(status_code=404, detail=f"Sources not found: {unknown}")
+    if not _bus.start_calibration(source_ids, duration):
         raise HTTPException(status_code=409, detail="Calibration already in progress")
-    return {"ok": True, "source_id": source_id, "duration": duration}
+    return {"ok": True, "source_ids": source_ids, "duration": duration}
 
 
 @router.get("/api/calibrate", dependencies=[Depends(require_viewer)])
@@ -606,11 +610,13 @@ async def stop_calibration():
     status = _bus.calibration_status()
     if status is None:
         raise HTTPException(status_code=404, detail="No calibration in progress")
-    source_name = _bus.source_names.get(status["source_id"], f"source-{status['source_id']}")
-    path = _bus.finish_calibration(source_name)
-    if path is None:
+    paths = _bus.finish_calibration()
+    if not paths:
         raise HTTPException(status_code=400, detail="Not enough audio recorded (need at least 1s)")
-    return {"ok": True, "path": path, "source": source_name}
+    return {"ok": True, "recordings": [
+        {"source_id": sid, "source": _bus.source_names.get(sid, f"source-{sid}"), "path": path}
+        for sid, path in paths.items()
+    ]}
 
 
 @router.post("/api/calibrate/cancel", dependencies=[Depends(require_admin)])

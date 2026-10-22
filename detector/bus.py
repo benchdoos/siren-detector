@@ -28,17 +28,20 @@ class _CalibrationRecorder:
     def __init__(self, source_id: int, max_samples: int) -> None:
         self.source_id = source_id
         self.max_samples = max_samples
-        self._buf: list[float] = []
+        self._buf: list[np.ndarray] = []
+        self._sample_count = 0
         self._done = threading.Event()
 
     def push(self, samples: np.ndarray) -> None:
-        remaining = self.max_samples - len(self._buf)
+        remaining = self.max_samples - self._sample_count
         if remaining <= 0:
             self._done.set()
             return
         chunk = samples[:remaining]
-        self._buf.extend(chunk.tolist())
-        if len(self._buf) >= self.max_samples:
+        if len(chunk):
+            self._buf.append(np.asarray(chunk, dtype=np.float32).copy())
+            self._sample_count += len(chunk)
+        if self._sample_count >= self.max_samples:
             self._done.set()
 
     @property
@@ -47,10 +50,10 @@ class _CalibrationRecorder:
 
     @property
     def progress(self) -> float:
-        return len(self._buf) / self.max_samples if self.max_samples > 0 else 1.0
+        return self._sample_count / self.max_samples if self.max_samples > 0 else 1.0
 
     def get_audio(self) -> np.ndarray:
-        return np.array(self._buf, dtype=np.float32)
+        return np.concatenate(self._buf) if self._buf else np.empty(0, dtype=np.float32)
 
 
 class EventBus:
@@ -74,8 +77,8 @@ class EventBus:
         # Source names (source_id → name), populated by engine
         self.source_names: dict[int, str] = {}
 
-        # Calibration recorder (at most one active at a time)
-        self._calibration: _CalibrationRecorder | None = None
+        # Active calibration recorders, keyed by source_id.
+        self._calibrations: dict[int, _CalibrationRecorder] = {}
         self._calibration_lock = threading.Lock()
 
         # Integration subscribers (called from asyncio loop context)
@@ -141,8 +144,8 @@ class EventBus:
     def broadcast_audio(self, samples: np.ndarray, source_id: int = 0) -> None:
         """Send raw float32 PCM to all listening audio WebSocket clients."""
         # Feed calibration recorder if active for this source
-        cal = self._calibration
-        if cal is not None and cal.source_id == source_id and not cal.done:
+        cal = self._calibrations.get(source_id)
+        if cal is not None and not cal.done:
             cal.push(samples)
 
         if not self.audio_queues or not self.loop or self.loop.is_closed():
@@ -152,56 +155,56 @@ class EventBus:
 
     # ── calibration ─────────────────────────────────────────────────────────
 
-    def start_calibration(self, source_id: int, duration_seconds: int) -> bool:
-        """Begin recording background audio from *source_id*.
-
-        Returns False if a calibration is already in progress.
-        """
+    def start_calibration(self, source_ids: list[int], duration_seconds: int) -> bool:
+        """Begin synchronized background recording for selected sources."""
         with self._calibration_lock:
-            if self._calibration is not None and not self._calibration.done:
+            if any(not c.done for c in self._calibrations.values()):
                 return False
-            self._calibration = _CalibrationRecorder(
-                source_id, max_samples=duration_seconds * SAMPLE_RATE,
-            )
-        print(f"[calibrate] started for source {source_id}, {duration_seconds}s", flush=True)
+            self._calibrations = {
+                sid: _CalibrationRecorder(sid, max_samples=duration_seconds * SAMPLE_RATE)
+                for sid in source_ids
+            }
+        print(f"[calibrate] started for sources {source_ids}, {duration_seconds}s", flush=True)
         return True
 
     def calibration_status(self) -> dict | None:
-        """Return current calibration progress, or None if idle."""
-        cal = self._calibration
-        if cal is None:
+        """Return progress per source, or None if idle."""
+        cals = self._calibrations
+        if not cals:
             return None
+        sources = {sid: {"progress": round(c.progress, 2), "done": c.done}
+                   for sid, c in cals.items()}
+        first = next(iter(cals.values()))
         return {
-            "source_id": cal.source_id,
-            "progress": round(cal.progress, 2),
-            "done": cal.done,
-            "duration": cal.max_samples // SAMPLE_RATE if SAMPLE_RATE else 0,
+            "source_ids": list(cals), "sources": sources,
+            "progress": min((x["progress"] for x in sources.values()), default=0),
+            "done": all(c.done for c in cals.values()),
+            "duration": first.max_samples // SAMPLE_RATE if SAMPLE_RATE else 0,
         }
 
     def cancel_calibration(self) -> None:
         """Discard current calibration recording."""
         with self._calibration_lock:
-            self._calibration = None
+            self._calibrations = {}
         print("[calibrate] cancelled", flush=True)
 
-    def finish_calibration(self, source_name: str) -> str | None:
-        """Save recorded audio as background WAV. Returns the file path or None."""
+    def finish_calibration(self) -> dict[int, str]:
+        """Save each recorded source as a background WAV; return paths by source."""
         with self._calibration_lock:
-            cal = self._calibration
-            if cal is None:
-                return None
-            self._calibration = None
-
-        audio = cal.get_audio()
-        if len(audio) < SAMPLE_RATE:
-            return None
-
-        out_dir = DATASET_DIR / "background" / source_name
-        out_dir.mkdir(parents=True, exist_ok=True)
+            cals = self._calibrations
+            self._calibrations = {}
         from datetime import datetime, timezone as tz
         ts = datetime.now(tz.utc).strftime("%Y%m%d_%H%M%S")
-        path = out_dir / f"calibration_{ts}.wav"
-        sf.write(str(path), audio, SAMPLE_RATE, subtype="PCM_16")
-        secs = len(audio) / SAMPLE_RATE
-        print(f"[calibrate] saved {path} ({secs:.1f}s)", flush=True)
-        return str(path)
+        paths = {}
+        for sid, cal in cals.items():
+            audio = cal.get_audio()
+            if len(audio) < SAMPLE_RATE:
+                continue
+            source_name = self.source_names.get(sid, f"source-{sid}")
+            out_dir = DATASET_DIR / "background" / source_name
+            out_dir.mkdir(parents=True, exist_ok=True)
+            path = out_dir / f"calibration_{ts}.wav"
+            sf.write(str(path), audio, SAMPLE_RATE, subtype="PCM_16")
+            paths[sid] = str(path)
+            print(f"[calibrate] saved {path} ({len(audio) / SAMPLE_RATE:.1f}s)", flush=True)
+        return paths

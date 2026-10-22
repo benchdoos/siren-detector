@@ -67,6 +67,14 @@
   .engine-route-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #292929; background: #171717; border-radius: 5px; font-size: 12px; }
   .engine-route-row input { accent-color: #4caf50; }
   .engine-error { margin-top: 8px; color: #ef9a9a; font-size: 12px; line-height: 1.5; }
+  .cal-source-list { display:flex; flex-direction:column; gap:7px; margin:8px 0 14px; }
+  .cal-source-item { display:flex; align-items:center; gap:11px; padding:10px 12px; border:1px solid #2b2b2b; border-radius:7px; background:#171717; cursor:pointer; transition:border-color .15s, background .15s; }
+  .cal-source-item:hover { border-color:#444; background:#1b1b1b; }
+  .cal-source-item:has(input:checked) { border-color:#397c43; background:#142017; }
+  .cal-source-item input { width:16px; height:16px; accent-color:#4caf50; cursor:pointer; }
+  .cal-source-name { flex:1; font-size:13px; color:#ddd; }
+  .cal-source-id { font-size:11px; color:#777; font-variant-numeric:tabular-nums; }
+  .cal-source-list[aria-disabled="true"] { opacity:.6; }
   .engine-remove { background: none; border: 1px solid #633; color: #e88; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px; }
   .engine-restart-note { border: 1px solid #6b531d; background: #29220f; color: #ffd166; border-radius: 5px; padding: 9px 11px; font-size: 12px; line-height: 1.5; margin: 0 0 14px; }
 
@@ -350,7 +358,8 @@
           &bull; <span data-i18n="cal.tip4">Each source (ESP32 mic, USB mic) needs its own calibration</span><br>
           &bull; <span data-i18n="cal.tip5">After recording, run</span> <code style="background:#222;padding:1px 4px;border-radius:3px">make retrain</code> <span data-i18n="cal.tip5_suffix">to apply</span>
         </div>
-        <div class="s-row"><label data-i18n="cal.source">Source</label><select id="cal-source" style="flex:1"></select></div>
+        <label style="display:block;font-size:13px;color:#ccc;margin:10px 0 6px" data-i18n="cal.source">Sources</label>
+        <div id="cal-source-list" class="cal-source-list"></div>
         <div class="s-row"><label data-i18n="cal.duration">Duration (sec)</label>
           <select id="cal-preset" onchange="document.getElementById('cal-duration').value=this.value" style="flex:1;max-width:140px">
             <option value="300" selected data-i18n="cal.preset_5min">5 min</option>
@@ -1169,7 +1178,9 @@ let _calPollTimer = null;
 let _calDuration = 300;
 
 function _calSetRecording(active) {
-  document.getElementById('cal-source').disabled = active;
+  const sourceList = document.getElementById('cal-source-list');
+  sourceList.setAttribute('aria-disabled', active ? 'true' : 'false');
+  sourceList.querySelectorAll('input').forEach(input => input.disabled = active);
   document.getElementById('cal-duration').disabled = active;
   document.getElementById('cal-start-btn').style.display = active ? 'none' : '';
   document.getElementById('cal-stop-btn').style.display = active ? '' : 'none';
@@ -1187,18 +1198,18 @@ function _calReset() {
 }
 
 async function loadCalibrationSources() {
-  const sel = document.getElementById('cal-source');
-  sel.innerHTML = '';
+  const list = document.getElementById('cal-source-list');
+  list.innerHTML = '';
   try {
     const res = await fetch('/api/sources', { headers: adminHeaders() });
     const data = await res.json();
     for (const s of data.sources || []) {
-      const opt = document.createElement('option');
-      opt.value = s.source_id;
-      opt.textContent = `${s.name} (id: ${s.source_id})`;
-      sel.appendChild(opt);
+      const label = document.createElement('label');
+      label.className = 'cal-source-item';
+      label.innerHTML = `<input type="checkbox" value="${Number(s.source_id)}"><span class="cal-source-name">${esc(s.name)}</span><span class="cal-source-id">ID ${Number(s.source_id)}</span>`;
+      list.appendChild(label);
     }
-  } catch(e) { sel.innerHTML = '<option value="0">default (0)</option>'; }
+  } catch(e) { list.innerHTML = '<label class="cal-source-item"><input type="checkbox" value="0"><span class="cal-source-name">default</span><span class="cal-source-id">ID 0</span></label>'; }
 }
 
 function syncPreset(val) {
@@ -1207,13 +1218,14 @@ function syncPreset(val) {
 }
 
 async function startCalibration() {
-  const sourceId = parseInt(document.getElementById('cal-source').value);
+  const sourceIds = [...document.querySelectorAll('#cal-source-list input:checked')].map(o => parseInt(o.value));
+  if (!sourceIds.length) { alert(t('cal.select_source') || 'Select at least one source'); return; }
   _calDuration = parseInt(document.getElementById('cal-duration').value) || 300;
   try {
     const res = await fetch('/api/calibrate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...adminHeaders() },
-      body: JSON.stringify({ source_id: sourceId, duration: _calDuration }),
+      body: JSON.stringify({ source_ids: sourceIds, duration: _calDuration }),
     });
     if (res.status === 401) { alert(t('msg.auth_required_short')); return; }
     if (!res.ok) { const err = await res.json(); alert(err.detail || t('msg.error')); return; }
@@ -1249,11 +1261,12 @@ async function stopCalibration() {
     const res = await fetch('/api/calibrate/stop', { method: 'POST', headers: adminHeaders() });
     if (res.ok) {
       const data = await res.json();
-      document.getElementById('cal-status').innerHTML = `Saved for <b>${data.source}</b>. Run <code style="background:#222;padding:1px 4px;border-radius:3px">make retrain</code> to apply.`;
+      const names = (data.recordings || []).map(r => r.source).join(', ');
+      document.getElementById('cal-status').innerHTML = `Saved for <b>${names}</b>. Run <code style="background:#222;padding:1px 4px;border-radius:3px">make retrain</code> to apply.`;
       document.getElementById('cal-status').style.color = '#4caf50';
       document.getElementById('cal-stop-btn').style.display = 'none';
       document.getElementById('cal-cancel-btn').style.display = 'none';
-      document.getElementById('cal-source').disabled = false;
+      document.querySelectorAll('#cal-source-list input').forEach(input => input.disabled = false);
       document.getElementById('cal-duration').disabled = false;
       document.getElementById('cal-start-btn').style.display = '';
       loadCalRecordings();
@@ -1506,8 +1519,8 @@ setInterval(loadRuntimeStatus, 3000);
       _calSetRecording(true);
       document.getElementById('cal-status').textContent = 'Recording in progress...';
       document.getElementById('cal-status').style.color = '#888';
-      const srcSel = document.getElementById('cal-source');
-      if (srcSel) srcSel.value = data.source_id;
+      const activeIds = new Set(data.source_ids || [data.source_id]);
+      document.querySelectorAll('#cal-source-list input').forEach(input => { input.checked = activeIds.has(parseInt(input.value)); });
       const pct = Math.round(data.progress * 100);
       const recorded = Math.round(data.progress * _calDuration);
       document.getElementById('cal-bar').style.width = pct + '%';
