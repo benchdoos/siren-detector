@@ -338,5 +338,12 @@
   "label.save_bg_segments": "Save background segments",
 
   "on": "On",
-  "off": "Off"
+  "off": "Off",
+  "gate.desc": "Controls when to trust the MLP classifier for siren detection.",
+  "smoothing.desc": "How many above-threshold inference windows are needed to change detection state.",
+  "clips.desc": "Saved when an event is confirmed. Used for review and retraining.",
+  "source.desc": "Enable or disable detection for each microphone. Disabled sources still receive audio (available for calibration) but their events are discarded. DSP and Click Removal settings inherit the global defaults unless you add a source override.",
+  "engine.default_route_desc": "This route applies to sources without a specific rule.",
+  "engine.source_route_desc": "Each source rule replaces the default list completely.",
+  "cal.tip5_suffix": "to apply"
 }

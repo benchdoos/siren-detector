@@ -218,7 +218,7 @@
       </div>
       <div class="s-section">
         <div class="s-title" data-i18n="section.mlp_gate">MLP Gate</div>
-        <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Controls when to trust the MLP classifier for siren detection.</p>
+        <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5" data-i18n="gate.desc">Controls when to trust the MLP classifier for siren detection.</p>
         <div class="s-row"><label data-i18n="label.yamnet_min_gate">YAMNet min gate <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-yamnet_min_gate" step="0.001" min="0" max="1"><span class="s-default" data-key="yamnet_min_gate"></span></div>
         <div class="s-tooltip" data-tip="yamnet_min_gate" data-i18n-html="tip.yamnet_min_gate"><strong>YAMNet Min Gate</strong><br>YAMNet must show at least this score for the MLP result to be trusted. Prevents MLP hallucinations on unfamiliar audio. Set to 0 to fully trust MLP.<hr><span class="s-tip-range">Range: <b>0.0 – 1.0</b></span><br><span class="s-tip-default">Default: <b>0.01</b></span></div>
       </div>
@@ -232,7 +232,7 @@
     <div class="sp-panel" id="sp-smoothing">
       <div class="s-section">
         <div class="s-title" data-i18n="section.trigger_counts">Trigger Counts</div>
-        <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">How many above-threshold inference windows are needed to change detection state.</p>
+        <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5" data-i18n="smoothing.desc">How many above-threshold inference windows are needed to change detection state.</p>
         <div class="s-row"><label data-i18n="label.possible_triggers">Possible triggers <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-possible_triggers" step="1" min="1" max="60"><span class="s-default" data-key="possible_triggers"></span></div>
         <div class="s-tooltip" data-tip="possible_triggers" data-i18n-html="tip.possible_triggers"><strong>Possible Triggers</strong><br>Windows needed for early warning (yellow badge). No clip saved yet.<hr><span class="s-tip-range">Range: <b>1 – 60</b></span><br><span class="s-tip-default">Default: <b>4</b></span></div>
         <div class="s-row"><label data-i18n="label.confirmed_triggers">Confirmed triggers <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-confirmed_triggers" step="1" min="1" max="60"><span class="s-default" data-key="confirmed_triggers"></span></div>
@@ -257,7 +257,7 @@
     <div class="sp-panel" id="sp-clips">
       <div class="s-section">
         <div class="s-title" data-i18n="section.audio_clips">Audio Clips</div>
-        <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5">Saved when an event is confirmed. Used for review and retraining.</p>
+        <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5" data-i18n="clips.desc">Saved when an event is confirmed. Used for review and retraining.</p>
         <div class="s-row"><label data-i18n="label.clip_length_sec">Clip length (sec) <span class="s-help" onclick="toggleTip(this)">?</span></label><input type="number" id="s-clip_seconds" step="1" min="5" max="60"><span class="s-default" data-key="clip_seconds"></span></div>
         <div class="s-tooltip" data-tip="clip_seconds" data-i18n-html="tip.clip_seconds"><strong>Clip Length</strong><br>Duration of saved audio clip. Shorter = less noise for retraining.<hr><span class="s-tip-range">Range: <b>5 – 60 sec</b></span><br><span class="s-tip-default">Default: <b>10</b></span></div>
         <div class="s-row"><label data-i18n="label.clip_from_possible">Clip from possible <span class="s-help" onclick="toggleTip(this)">?</span></label><select id="s-clip_from_possible"><option value="0" data-i18n="off">Off</option><option value="1" data-i18n="on">On</option></select><span class="s-default" data-key="clip_from_possible"></span></div>
@@ -280,7 +280,7 @@
     <div class="sp-panel" id="sp-sources">
       <div class="s-section">
         <div class="s-title" data-i18n="section.audio_sources">Audio Sources</div>
-        <p style="font-size:12px;color:#555;margin:0 0 12px 0;line-height:1.5">Enable or disable detection for each microphone. Disabled sources still receive audio (available for calibration) but their events are discarded. DSP and Click Removal settings inherit the global defaults unless you add a source override.</p>
+        <p style="font-size:12px;color:#555;margin:0 0 12px 0;line-height:1.5" data-i18n="source.desc">Enable or disable detection for each microphone. Disabled sources still receive audio (available for calibration) but their events are discarded. DSP and Click Removal settings inherit the global defaults unless you add a source override.</p>
         <div id="sources-list" style="display:flex;flex-direction:column;gap:8px">
           <div style="font-size:13px;color:#666">Loading sources...</div>
         </div>
@@ -294,18 +294,18 @@
     <div class="sp-panel" id="sp-engines">
       <div class="s-section">
         <div class="s-title" data-i18n="section.detection_engines">Detection Engines</div>
-        <p style="font-size:12px;color:#666;margin:0 0 12px;line-height:1.5">Enable locally available engines, edit their manifest-defined settings, and choose which audio sources they receive.</p>
-        <div class="engine-restart-note">Changes take effect after the detector restarts. Engine code can only be registered locally; this page does not install or import code.</div>
+        <p style="font-size:12px;color:#666;margin:0 0 12px;line-height:1.5" data-i18n="engine.desc">Enable locally available engines, edit their manifest-defined settings, and choose which audio sources they receive.</p>
+        <div class="engine-restart-note" data-i18n="engine.restart_note">Changes take effect after the detector restarts. Engine code can only be registered locally; this page does not install or import code.</div>
         <div id="engine-cards"><div style="font-size:13px;color:#666">Loading engines...</div></div>
       </div>
       <div class="s-section">
         <div class="s-title" data-i18n="section.default_sources">Default sources</div>
-        <p style="font-size:12px;color:#666;margin:0 0 10px;line-height:1.5">This route applies to sources without a specific rule.</p>
+        <p style="font-size:12px;color:#666;margin:0 0 10px;line-height:1.5" data-i18n="engine.default_route_desc">This route applies to sources without a specific rule.</p>
         <div class="engine-routes" id="engine-default-route"></div>
       </div>
       <div class="s-section">
         <div class="s-title" data-i18n="section.per_source_routes">Per-source routes</div>
-        <p style="font-size:12px;color:#666;margin:0 0 10px;line-height:1.5">Each source rule replaces the default list completely.</p>
+        <p style="font-size:12px;color:#666;margin:0 0 10px;line-height:1.5" data-i18n="engine.source_route_desc">Each source rule replaces the default list completely.</p>
         <div id="engine-source-routes"></div>
       </div>
       <div class="sp-panel-footer">
@@ -340,12 +340,12 @@
         <div class="s-title" data-i18n="section.bg_calibration">Background Calibration</div>
         <p style="font-size:12px;color:#555;margin:0 0 10px 0;line-height:1.5" data-i18n="cal.desc">Record ambient background from a microphone so the model learns what is not a siren through this audio source.</p>
         <div style="background:#1a1a1a;border:1px solid #222;border-radius:6px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:#888;line-height:1.6">
-          <b style="color:#ccc">How to get best results:</b><br>
-          &bull; Record <b>5+ minutes</b> of your typical environment<br>
-          &bull; Include varied sounds: appliances, street noise, conversations, 3D printers, etc.<br>
-          &bull; Record multiple sessions at different times of day<br>
-          &bull; Each source (ESP32 mic, USB mic) needs its own calibration<br>
-          &bull; After recording, run <code style="background:#222;padding:1px 4px;border-radius:3px">make retrain</code> to apply
+          <b style="color:#ccc" data-i18n="cal.tips_title">How to get best results:</b><br>
+          &bull; <span data-i18n="cal.tip1">Record 5+ minutes of your typical environment</span><br>
+          &bull; <span data-i18n="cal.tip2">Include varied sounds: appliances, street noise, conversations, 3D printers, etc.</span><br>
+          &bull; <span data-i18n="cal.tip3">Record multiple sessions at different times of day</span><br>
+          &bull; <span data-i18n="cal.tip4">Each source (ESP32 mic, USB mic) needs its own calibration</span><br>
+          &bull; <span data-i18n="cal.tip5">After recording, run</span> <code style="background:#222;padding:1px 4px;border-radius:3px">make retrain</code> <span data-i18n="cal.tip5_suffix">to apply</span>
         </div>
         <div class="s-row"><label data-i18n="cal.source">Source</label><select id="cal-source" style="flex:1"></select></div>
         <div class="s-row"><label data-i18n="cal.duration">Duration (sec)</label>
@@ -388,7 +388,7 @@
           <span data-i18n="about.disclaimer">This application and all its components are intended exclusively for peaceful purposes. Any use of this software for military, harmful, or destructive purposes is strictly prohibited.</span></p>
       </div>
       <p style="font-size:13px;color:#aaa;line-height:1.6;margin-bottom:12px" data-i18n="about.desc">Universal audio event detection platform. ESP32-S3 captures audio from an INMP441 microphone and streams it to a detection engine powered by YAMNet + MLP.</p>
-      <p style="font-size:13px;color:#aaa;line-height:1.6;margin-bottom:16px">Target classes: <span style="color:#ef5350;font-weight:600">siren</span>, <span style="color:#ff7043;font-weight:600">explosion</span>, <span style="color:#ffd54f;font-weight:600">UAVs</span>, <span style="color:#4caf50;font-weight:600">background</span>.</p>
+      <p style="font-size:13px;color:#aaa;line-height:1.6;margin-bottom:16px"><span data-i18n="about.target_classes">Target classes:</span> <span style="color:#ef5350;font-weight:600" data-i18n="label.siren">siren</span>, <span style="color:#ff7043;font-weight:600" data-i18n="label.explosion">explosion</span>, <span style="color:#ffd54f;font-weight:600" data-i18n="label.uav">UAVs</span>, <span style="color:#4caf50;font-weight:600" data-i18n="label.background">background</span>.</p>
       <div style="border-top:1px solid #222;padding-top:12px;margin-bottom:12px">
         <div style="font-size:12px;color:#888;font-weight:600;margin-bottom:4px" data-i18n="about.repo">Repository</div>
         <a href="https://github.com/benchdoos/siren-detector" target="_blank" rel="noopener" style="color:#4caf50;text-decoration:none;font-size:13px">github.com/benchdoos/siren-detector</a>
