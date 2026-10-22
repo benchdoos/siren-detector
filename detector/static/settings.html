@@ -83,6 +83,7 @@
   .src-card { flex-wrap: wrap; }
   .src-main-row { width: 100%; display: flex; align-items: center; gap: 12px; }
   .src-dsp-settings { width: 100%; border-top: 1px solid #292929; padding-top: 9px; margin-top: 2px; }
+  .src-dsp-settings > .s-tooltip, .src-dsp-control-group > .s-tooltip { width: 100%; box-sizing: border-box; }
   .src-dsp-heading { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #aaa; }
   .src-dsp-heading select, .src-dsp-fields select, .src-dsp-fields input { background: #222; border: 1px solid #444; color: #ddd; border-radius: 4px; padding: 4px 7px; font-size: 12px; }
   .src-dsp-fields { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 9px; }
@@ -319,15 +320,15 @@
     <div class="sp-panel" id="sp-runtime">
       <div class="s-section">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
-          <div class="s-title" style="margin:0;flex:1">Runtime Health</div>
+          <div class="s-title" style="margin:0;flex:1" data-i18n="section.runtime_health">Runtime Health</div>
           <button class="btn-reset-panel" onclick="loadRuntimeStatus()">Refresh</button>
         </div>
-        <p style="font-size:12px;color:#666;margin:0 0 12px 0;line-height:1.5">Live audio delivery health for processing components. Engine lifecycle, version, and startup errors appear in each engine card.</p>
-        <div class="s-title">Audio Subscribers</div>
+        <p style="font-size:12px;color:#666;margin:0 0 12px 0;line-height:1.5" data-i18n="runtime.desc">Live audio delivery health for processing components. Engine lifecycle, version, and startup errors appear in each engine card.</p>
+        <div class="s-title" data-i18n="section.audio_subscribers">Audio Subscribers</div>
         <div id="runtime-subscribers" style="display:flex;flex-direction:column;gap:8px">
           <div style="font-size:13px;color:#666">Loading runtime status...</div>
         </div>
-        <div class="s-title" style="margin-top:18px">Output Adapters</div>
+        <div class="s-title" style="margin-top:18px" data-i18n="section.output_adapters">Output Adapters</div>
         <div id="runtime-outputs" style="display:flex;flex-direction:column;gap:8px">
           <div style="font-size:13px;color:#666">Loading output status...</div>
         </div>
@@ -638,11 +639,12 @@ function renderEngineGraph() {
         } else {
           control = `<input type="text" data-engine-id="${esc(id)}" data-setting="${esc(key)}" value="${esc(String(value))}">`;
         }
-        const label = spec.title || key;
+        const label = t(`engine.${id}.${key}.title`) || spec.title || key;
+        const description = t(`engine.${id}.${key}.description`) || spec.description || '';
         const help = spec.description
           ? ` <span class="s-help" onclick="toggleTip(this)">?</span>` : '';
-        const tip = spec.description
-          ? `<div class="s-tooltip"><strong>${esc(label)}</strong><br>${esc(spec.description)}${spec.minimum !== undefined || spec.maximum !== undefined ? `<hr><span class="s-tip-range">Range: <b>${esc(String(spec.minimum ?? '—'))} – ${esc(String(spec.maximum ?? '—'))}</b></span>` : ''}${spec.default !== undefined ? `<br><span class="s-tip-default">Default: <b>${esc(String(spec.default))}</b></span>` : ''}</div>` : '';
+        const tip = description
+          ? `<div class="s-tooltip"><strong>${esc(label)}</strong><br>${esc(description)}${spec.minimum !== undefined || spec.maximum !== undefined ? `<hr><span class="s-tip-range">${t('tip.range')}: <b>${esc(String(spec.minimum ?? '—'))} – ${esc(String(spec.maximum ?? '—'))}</b></span>` : ''}${spec.default !== undefined ? `<br><span class="s-tip-default">${t('tip.default')}: <b>${esc(String(spec.default))}</b></span>` : ''}</div>` : '';
         return `<div class="s-row"><label>${esc(label)}${help}</label>${control}<span class="engine-meta">${esc(spec.type || '')}${spec.default !== undefined ? ` · default ${esc(String(spec.default))}` : ''}</span></div>${tip}`;
       }).join('') : '';
       return `<div class="engine-card">
@@ -654,7 +656,7 @@ function renderEngineGraph() {
           <span data-engine-runtime="${esc(id)}" class="engine-runtime-state" style="font-size:11px;color:#777">Not running</span>
           ${unavailable ? `<button class="engine-remove" data-remove-engine="${esc(id)}">Remove</button>` : ''}
         </div>
-        ${manifest?.description ? `<p class="engine-meta" style="display:block;margin:9px 0 0 27px;line-height:1.5">${esc(manifest.description)}</p>` : ''}
+        ${manifest?.description ? `<p class="engine-meta" style="display:block;margin:9px 0 0 27px;line-height:1.5">${esc(t(`engine.${id}.description`) || manifest.description)}</p>` : ''}
         ${unavailable ? `<div class="engine-error">Saved selector “${esc(selector)}” is not available locally. Its settings are preserved. Register the engine or remove this entry.</div>` : ''}
         <div data-engine-runtime-error="${esc(id)}"></div>
         ${fields ? `<div class="engine-settings">${fields}</div>` : ''}
@@ -902,42 +904,42 @@ async function loadSources() {
               style="background:#222;border:1px solid #333;color:#e0e0e0;padding:3px 8px;border-radius:4px;font-size:14px;font-weight:500;width:100%;max-width:200px"
               oninput="markSourceNameChanged(this)" onkeydown="if(event.key==='Enter')saveSourceName(this)">
             <button class="src-name-save" data-sid="${s.source_id}" onclick="saveSourceName(this.previousElementSibling)"
-              style="display:none;background:none;border:1px solid #4caf50;color:#4caf50;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap">Save</button>
+              style="display:none;background:none;border:1px solid #4caf50;color:#4caf50;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap">${t('btn.save')}</button>
           </div>
           <span class="src-id">id: ${s.source_id}${s.custom_name ? ' · ' + esc(s.original_name) : ''}</span>
         </div>
-        <button class="src-listen" data-sid="${s.source_id}" onclick="toggleSourceListen(this, ${s.source_id})">Listen</button>
+        <button class="src-listen" data-sid="${s.source_id}" onclick="toggleSourceListen(this, ${s.source_id})">${t('source.listen')}</button>
         <label class="src-toggle">
           <input type="checkbox" ${enabled ? 'checked' : ''} data-sid="${s.source_id}">
           <span class="slider"></span>
         </label></div>
         <div class="src-dsp-settings">
-          <div class="src-dsp-heading">DSP <span class="s-help" onclick="toggleTip(this)">?</span><select class="src-dsp-mode" data-sid="${s.source_id}" onchange="toggleSourceDspOverride(this)">
-            <option value="global" ${useOverride ? '' : 'selected'}>Use global defaults</option>
-            <option value="override" ${useOverride ? 'selected' : ''}>Override for this source</option>
+          <div class="src-dsp-heading">${t('section.dsp_prefilter')} <span class="s-help" onclick="toggleTip(this)">?</span><select class="src-dsp-mode" data-sid="${s.source_id}" onchange="toggleSourceDspOverride(this)">
+            <option value="global" ${useOverride ? '' : 'selected'}>${t('source.use_global')}</option>
+            <option value="override" ${useOverride ? 'selected' : ''}>${t('source.override')}</option>
           </select><span class="src-dsp-status" data-sid="${s.source_id}"></span></div>
-          <div class="s-tooltip"><strong>DSP for this source</strong><br>Choose whether this microphone uses the global DSP settings or its own override. Source overrides take effect after saving.</div>
+          <div class="s-tooltip"><strong>${t('source.dsp_title')}</strong><br>${t('source.dsp_desc')}</div>
           <div class="src-dsp-fields" data-sid="${s.source_id}" ${useOverride ? '' : 'hidden'}>
-            <div class="src-dsp-control-group"><div class="src-dsp-control-label">Enabled <span class="s-help" onclick="toggleTip(this)">?</span></div><select data-dsp-field="dsp_enabled"><option value="1" ${Number(dspEnabled) ? 'selected' : ''}>On</option><option value="0" ${Number(dspEnabled) ? '' : 'selected'}>Off</option></select><div class="s-tooltip"><strong>DSP enabled</strong><br>When on, the lightweight DSP classifier pre-screens audio before YAMNet. Confident background is skipped to reduce CPU use; turn it off to always run full inference.</div></div>
-            <div class="src-dsp-control-group"><div class="src-dsp-control-label">BG threshold <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="bg_threshold" min="0.5" max="1" step="0.01" value="${bgThreshold}"><div class="s-tooltip"><strong>BG threshold</strong><br>Minimum DSP confidence needed to skip YAMNet. Higher values skip less often and are more conservative; lower values save more CPU but may miss events.</div></div>
-            <div class="src-dsp-control-group"><div class="src-dsp-control-label">BG release <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="bg_release_threshold" min="0.5" max="1" step="0.01" value="${bgRelease}"><div class="s-tooltip"><strong>BG release threshold</strong><br>While YAMNet is being skipped, it resumes when background confidence drops below this value. Higher values resume sooner; lower values keep skipping longer.</div></div>
-            <div class="src-dsp-control-group"><div class="src-dsp-control-label">BG windows <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="bg_confirm_windows" min="1" max="10" step="1" value="${bgWindows}"><div class="s-tooltip"><strong>BG confirm windows</strong><br>Consecutive background predictions required before DSP starts skipping YAMNet. Higher values add caution but reduce CPU savings.</div></div>
-            <div class="src-dsp-control-group"><div class="src-dsp-control-label">Event gate <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="event_gate" min="0" max="0.5" step="0.01" value="${eventGate}"><div class="s-tooltip"><strong>Event gate</strong><br>If a siren, explosion, or UAV probability exceeds this value, YAMNet runs even when background confidence is high. Lower values are more sensitive. Set to 0 to disable.</div></div>
-            <div class="src-dsp-control-group"><div class="src-dsp-control-label">Max skips <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="max_consecutive_skips" min="0" max="200" step="1" value="${maxSkips}"><div class="s-tooltip"><strong>Max consecutive skips</strong><br>After this many consecutive DSP skips, force one YAMNet pass. Lower values catch events sooner; higher values save more CPU. Set to 0 to disable.</div></div>
-            <button class="src-dsp-save" onclick="saveSourceDspOverride(this, ${s.source_id})">Save</button>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">${t('label.dsp_enabled')} <span class="s-help" onclick="toggleTip(this)">?</span></div><select data-dsp-field="dsp_enabled"><option value="1" ${Number(dspEnabled) ? 'selected' : ''}>${t('on')}</option><option value="0" ${Number(dspEnabled) ? '' : 'selected'}>${t('off')}</option></select><div class="s-tooltip"><strong>${t('label.dsp_enabled')}</strong><br>${t('source.dsp_enabled_desc')}</div></div>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">${t('label.bg_threshold')} <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="bg_threshold" min="0.5" max="1" step="0.01" value="${bgThreshold}"><div class="s-tooltip"><strong>${t('label.bg_threshold')}</strong><br>${t('source.bg_threshold_desc')}</div></div>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">${t('label.bg_release_threshold')} <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="bg_release_threshold" min="0.5" max="1" step="0.01" value="${bgRelease}"><div class="s-tooltip"><strong>${t('label.bg_release_threshold')}</strong><br>${t('source.bg_release_desc')}</div></div>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">${t('label.bg_confirm_windows')} <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="bg_confirm_windows" min="1" max="10" step="1" value="${bgWindows}"><div class="s-tooltip"><strong>${t('label.bg_confirm_windows')}</strong><br>${t('source.bg_windows_desc')}</div></div>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">${t('label.event_gate')} <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="event_gate" min="0" max="0.5" step="0.01" value="${eventGate}"><div class="s-tooltip"><strong>${t('label.event_gate')}</strong><br>${t('source.event_gate_desc')}</div></div>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">${t('label.max_consecutive_skips')} <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-dsp-field="max_consecutive_skips" min="0" max="200" step="1" value="${maxSkips}"><div class="s-tooltip"><strong>${t('label.max_consecutive_skips')}</strong><br>${t('source.max_skips_desc')}</div></div>
+            <button class="src-dsp-save" onclick="saveSourceDspOverride(this, ${s.source_id})">${t('btn.save')}</button>
           </div>
         </div>
         <div class="src-dsp-settings">
-          <div class="src-dsp-heading">Click Removal <span class="s-help" onclick="toggleTip(this)">?</span><select class="src-cr-mode" data-sid="${s.source_id}" onchange="toggleSourceCrOverride(this)">
-            <option value="global" ${useCrOverride ? '' : 'selected'}>Use global defaults</option>
-            <option value="override" ${useCrOverride ? 'selected' : ''}>Override for this source</option>
+          <div class="src-dsp-heading">${t('section.click_removal')} <span class="s-help" onclick="toggleTip(this)">?</span><select class="src-cr-mode" data-sid="${s.source_id}" onchange="toggleSourceCrOverride(this)">
+            <option value="global" ${useCrOverride ? '' : 'selected'}>${t('source.use_global')}</option>
+            <option value="override" ${useCrOverride ? 'selected' : ''}>${t('source.override')}</option>
           </select><span class="src-cr-status" data-sid="${s.source_id}"></span></div>
-          <div class="s-tooltip"><strong>Click Removal for this source</strong><br>Choose whether this microphone uses the global click removal settings or its own override. Threshold controls click detection sensitivity; max width limits the duration of clicks that are removed. Source overrides take effect after saving.</div>
+          <div class="s-tooltip"><strong>${t('source.click_title')}</strong><br>${t('source.click_desc')}</div>
           <div class="src-dsp-fields src-cr-fields" data-sid="${s.source_id}" ${useCrOverride ? '' : 'hidden'}>
-            <div class="src-dsp-control-group"><div class="src-dsp-control-label">Enabled <span class="s-help" onclick="toggleTip(this)">?</span></div><select data-cr-field="enabled"><option value="1" ${Number(crEnabled) ? 'selected' : ''}>On</option><option value="0" ${Number(crEnabled) ? '' : 'selected'}>Off</option></select><div class="s-tooltip"><strong>Click removal enabled</strong><br>Detect impulse noise such as electrical clicks and replace spikes with interpolated audio before inference.</div></div>
-            <div class="src-dsp-control-group"><div class="src-dsp-control-label">Threshold <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-cr-field="threshold" min="3" max="50" step="0.5" value="${crThreshold}"><div class="s-tooltip"><strong>Threshold (MADs)</strong><br>How far a sample must exceed the local median absolute deviation to count as a click. Lower removes more spikes but may clip loud sounds; higher catches only extreme spikes.</div></div>
-            <div class="src-dsp-control-group"><div class="src-dsp-control-label">Max width <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-cr-field="max_width" min="1" max="20" step="1" value="${crMaxWidth}"><div class="s-tooltip"><strong>Max width</strong><br>Longest impulse, in samples, that can be removed. Wider sounds are left intact.</div></div>
-            <button class="src-dsp-save" onclick="saveSourceCrOverride(this, ${s.source_id})">Save</button>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">${t('label.click_removal')} <span class="s-help" onclick="toggleTip(this)">?</span></div><select data-cr-field="enabled"><option value="1" ${Number(crEnabled) ? 'selected' : ''}>${t('on')}</option><option value="0" ${Number(crEnabled) ? '' : 'selected'}>${t('off')}</option></select><div class="s-tooltip"><strong>${t('label.click_removal')}</strong><br>${t('source.click_enabled_desc')}</div></div>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">${t('label.threshold_mads')} <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-cr-field="threshold" min="3" max="50" step="0.5" value="${crThreshold}"><div class="s-tooltip"><strong>${t('label.threshold_mads')}</strong><br>${t('source.click_threshold_desc')}</div></div>
+            <div class="src-dsp-control-group"><div class="src-dsp-control-label">${t('label.max_click_width')} <span class="s-help" onclick="toggleTip(this)">?</span></div><input type="number" data-cr-field="max_width" min="1" max="20" step="1" value="${crMaxWidth}"><div class="s-tooltip"><strong>${t('label.max_click_width')}</strong><br>${t('source.click_width_desc')}</div></div>
+            <button class="src-dsp-save" onclick="saveSourceCrOverride(this, ${s.source_id})">${t('btn.save')}</button>
           </div>
         </div>`;
       card.querySelector('input[type="checkbox"]').addEventListener('change', (e) => toggleSource(s.source_id, e.target.checked, card));
@@ -1401,7 +1403,7 @@ async function loadCalRecordings() {
     // Avoid replacing a player while a recording is being listened to.
     if ([...container.querySelectorAll('audio')].some(audio => !audio.paused)) return;
     if (recs.length === 0) {
-      container.innerHTML = '<div style="font-size:13px;color:#666">No recordings yet. Use the form above to record background audio.</div>';
+      container.innerHTML = `<div style="font-size:13px;color:#666">${t('cal.no_recordings')}</div>`;
       return;
     }
     container.innerHTML = '';
