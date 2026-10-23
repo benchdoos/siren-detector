@@ -12,6 +12,8 @@ import asyncio
 import collections
 import threading
 import time
+import uuid
+from pathlib import Path
 from typing import Callable
 
 import numpy as np
@@ -31,18 +33,20 @@ class _CalibrationRecorder:
         self._buf: list[np.ndarray] = []
         self._sample_count = 0
         self._done = threading.Event()
+        self._lock = threading.Lock()
 
     def push(self, samples: np.ndarray) -> None:
-        remaining = self.max_samples - self._sample_count
-        if remaining <= 0:
-            self._done.set()
-            return
-        chunk = samples[:remaining]
-        if len(chunk):
-            self._buf.append(np.asarray(chunk, dtype=np.float32).copy())
-            self._sample_count += len(chunk)
-        if self._sample_count >= self.max_samples:
-            self._done.set()
+        with self._lock:
+            remaining = self.max_samples - self._sample_count
+            if remaining <= 0:
+                self._done.set()
+                return
+            chunk = samples[:remaining]
+            if len(chunk):
+                self._buf.append(np.asarray(chunk, dtype=np.float32).copy())
+                self._sample_count += len(chunk)
+            if self._sample_count >= self.max_samples:
+                self._done.set()
 
     @property
     def done(self) -> bool:
@@ -50,10 +54,12 @@ class _CalibrationRecorder:
 
     @property
     def progress(self) -> float:
-        return self._sample_count / self.max_samples if self.max_samples > 0 else 1.0
+        with self._lock:
+            return self._sample_count / self.max_samples if self.max_samples > 0 else 1.0
 
     def get_audio(self) -> np.ndarray:
-        return np.concatenate(self._buf) if self._buf else np.empty(0, dtype=np.float32)
+        with self._lock:
+            return np.concatenate(self._buf) if self._buf else np.empty(0, dtype=np.float32)
 
 
 class EventBus:
@@ -191,20 +197,48 @@ class EventBus:
     def finish_calibration(self) -> dict[int, str]:
         """Save each recorded source as a background WAV; return paths by source."""
         with self._calibration_lock:
-            cals = self._calibrations
-            self._calibrations = {}
+            cals = dict(self._calibrations)
         from datetime import datetime, timezone as tz
-        ts = datetime.now(tz.utc).strftime("%Y%m%d_%H%M%S")
+        # Microseconds prevent a second calibration from overwriting an
+        # existing recording when it is saved in the same second.
+        ts = datetime.now(tz.utc).strftime("%Y%m%d_%H%M%S_%f")
         paths = {}
-        for sid, cal in cals.items():
-            audio = cal.get_audio()
-            if len(audio) < SAMPLE_RATE:
-                continue
-            source_name = self.source_names.get(sid, f"source-{sid}")
-            out_dir = DATASET_DIR / "background" / source_name
-            out_dir.mkdir(parents=True, exist_ok=True)
-            path = out_dir / f"calibration_{ts}.wav"
-            sf.write(str(path), audio, SAMPLE_RATE, subtype="PCM_16")
-            paths[sid] = str(path)
-            print(f"[calibrate] saved {path} ({len(audio) / SAMPLE_RATE:.1f}s)", flush=True)
+        discard_ids: list[int] = []
+        tmp_path: Path | None = None
+        saving_sid: int | None = None
+        try:
+            for sid, cal in cals.items():
+                saving_sid = sid
+                audio = cal.get_audio()
+                if len(audio) < SAMPLE_RATE:
+                    discard_ids.append(sid)
+                    continue
+                source_name = self.source_names.get(sid, f"source-{sid}")
+                out_dir = DATASET_DIR / "background" / source_name
+                out_dir.mkdir(parents=True, exist_ok=True)
+                path = out_dir / f"calibration_{ts}.wav"
+                # Publish only a complete WAV.  A spectrogram request can race
+                # with saving immediately after the stop action, so write to a
+                # sibling temporary file and atomically rename it into place.
+                tmp_path = out_dir / f".{path.stem}.{uuid.uuid4().hex}.wav"
+                sf.write(
+                    str(tmp_path), audio, SAMPLE_RATE,
+                    subtype="PCM_16",
+                )
+                tmp_path.replace(path)
+                paths[sid] = str(path)
+                print(f"[calibrate] saved {path} ({len(audio) / SAMPLE_RATE:.1f}s)", flush=True)
+        except Exception as exc:
+            if tmp_path is not None:
+                tmp_path.unlink(missing_ok=True)
+            print(f"[calibrate] failed to save source {saving_sid}: {exc}", flush=True)
+            raise
+        finally:
+            # Do not discard a recording until its WAV is safely published.
+            # If saving fails, the active recorder remains available for a
+            # retry through the same Stop & Save action.
+            with self._calibration_lock:
+                for sid in [*discard_ids, *paths]:
+                    if self._calibrations.get(sid) is cals[sid]:
+                        self._calibrations.pop(sid)
         return paths
