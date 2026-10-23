@@ -12,6 +12,8 @@
   .header-logo { width: 24px; height: 24px; background: #e0e0e0; border-radius: 50%; padding: 2px; flex-shrink: 0; }
   .header-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
   .header-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+  .lang-switch { width: 58px; background: #222; border: 1px solid #444; color: #e0e0e0; padding: 3px 20px 3px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; }
+  .lang-switch:focus { border-color: #4caf50; outline: none; }
   #status { font-size: 12px; padding: 2px 7px; border-radius: 4px; background: #333; color: #888; }
   #status.connected { background: transparent; color: transparent; font-size: 0; padding: 0; display: inline-block; width: 10px; height: 10px; border-radius: 50%; cursor: default; }
   @keyframes statusPulse { 0%,100% { background: #4caf50; } 50% { background: transparent; } }
@@ -292,19 +294,23 @@
 <body>
 
 <header>
-  <h1><img src="/static/img/siren-detector-logo.svg" alt="Logo" class="header-logo"> Siren Detector</h1>
+  <h1><img src="/static/img/siren-detector-logo.svg" alt="Logo" class="header-logo"> <span data-i18n="header.title">Siren Detector</span></h1>
   <span class="header-badges">
-    <span id="status">disconnected</span>
+    <span id="status" data-i18n="status.disconnected">disconnected</span>
     <span class="audio-wrap"><span id="audio-status" onclick="toggleAudioDropdown(event)">audio: —</span><div id="audio-dropdown"></div></span>
   </span>
   <span class="header-actions">
     <span style="position:relative;display:inline-block">
-      <button class="metrics-btn" id="listen-btn" onclick="toggleListen()" style="min-width:72px;font-family:monospace;text-align:center">Listen</button>
+      <button class="metrics-btn" id="listen-btn" onclick="toggleListen()" style="min-width:72px;font-family:monospace;text-align:center" data-i18n="btn.listen">Listen</button>
       <div class="listen-picker" id="listen-picker"></div>
     </span>
-    <button class="metrics-btn" onclick="showMetrics()">Metrics</button>
-    <button class="metrics-btn admin-only-btn" id="settings-btn" onclick="showSettings()">Settings</button>
-    <button class="admin-btn" id="admin-btn" onclick="toggleAdmin()">Admin</button>
+    <button class="metrics-btn" onclick="showMetrics()" data-i18n="btn.metrics">Metrics</button>
+    <button class="metrics-btn admin-only-btn" id="settings-btn" onclick="showSettings()" data-i18n="btn.settings">Settings</button>
+    <button class="admin-btn" id="admin-btn" onclick="toggleAdmin()" data-i18n="btn.admin">Admin</button>
+    <select id="lang-switch" class="lang-switch" onchange="I18n.setLocale(this.value)">
+      <option value="en">EN</option>
+      <option value="ru">RU</option>
+    </select>
   </span>
 </header>
 
@@ -317,38 +323,38 @@
 
 <div class="score-panel">
   <div class="detector-row" data-detector="siren">
-    <div class="score-label">Siren <span class="score-engine" id="score-engine-siren"></span></div>
+    <div class="score-label"><span data-i18n="score.siren">Siren</span> <span class="score-engine" id="score-engine-siren"></span></div>
     <div class="score-bar-wrap">
       <div class="score-bar" id="bar-siren"></div>
       <span class="score-value" id="val-siren">—</span>
     </div>
     <div class="detector-info">
-      <span class="state-badge" id="badge-siren">idle</span>
+      <span class="state-badge" id="badge-siren" data-i18n="state.idle">idle</span>
       <span class="trigger-progress" id="triggers-siren"></span>
       <span id="timer-siren"></span>
       <span class="det-help" onclick="showDetectorHelp()">?</span>
     </div>
   </div>
   <div class="detector-row" data-detector="explosion" style="margin-top:12px">
-    <div class="score-label">Explosion <span class="score-engine" id="score-engine-explosion"></span></div>
+    <div class="score-label"><span data-i18n="score.explosion">Explosion</span> <span class="score-engine" id="score-engine-explosion"></span></div>
     <div class="score-bar-wrap">
       <div class="score-bar" id="bar-explosion"></div>
       <span class="score-value" id="val-explosion">—</span>
     </div>
     <div class="detector-info">
-      <span class="state-badge" id="badge-explosion">idle</span>
+      <span class="state-badge" id="badge-explosion" data-i18n="state.idle">idle</span>
       <span class="trigger-progress" id="triggers-explosion"></span>
       <span id="timer-explosion"></span>
     </div>
   </div>
   <div class="detector-row" data-detector="uav" style="margin-top:12px">
-    <div class="score-label">UAVs <span class="score-engine" id="score-engine-uav"></span></div>
+    <div class="score-label"><span data-i18n="score.uav">UAVs</span> <span class="score-engine" id="score-engine-uav"></span></div>
     <div class="score-bar-wrap">
       <div class="score-bar" id="bar-uav"></div>
       <span class="score-value" id="val-uav">—</span>
     </div>
     <div class="detector-info">
-      <span class="state-badge" id="badge-uav">idle</span>
+      <span class="state-badge" id="badge-uav" data-i18n="state.idle">idle</span>
       <span class="trigger-progress" id="triggers-uav"></span>
       <span id="timer-uav"></span>
     </div>
@@ -356,11 +362,11 @@
 </div>
 
 <div class="events-header">
-  <span>Events <span class="events-count" id="events-count"></span></span>
+  <span><span data-i18n="events.title">Events</span> <span class="events-count" id="events-count"></span></span>
   <span style="display:flex;gap:6px;align-items:center">
     <label class="admin-only-inline" id="select-all-label" style="font-size:11px;color:#666;cursor:pointer"><input type="checkbox" id="select-all" onchange="toggleSelectAll(this.checked)"> Select all</label>
-    <button class="admin-only-btn" id="manual-event-btn" onclick="createManualEvent()">+ Event</button>
-    <button onclick="clearEvents()">Clear</button>
+    <button class="admin-only-btn" id="manual-event-btn" onclick="createManualEvent()" data-i18n="btn.event_create">+ Event</button>
+    <button onclick="clearEvents()" data-i18n="btn.clear">Clear</button>
   </span>
 </div>
 <div class="batch-bar" id="batch-bar">
@@ -381,13 +387,13 @@
   <button class="fbtn" data-filter="explosion" onclick="setFilter(this)"><span style="color:#ff7043">•</span> explosion</button>
   <button class="fbtn" data-filter="unknown" onclick="setFilter(this)"><span style="color:#888">•</span> unknown</button>
 </div>
-<div id="events"><div class="empty" id="empty">No events yet</div></div>
+<div id="events"><div class="empty" id="empty" data-i18n="events.empty">No events yet</div></div>
 
 
 <div class="modal-overlay" id="login-overlay">
   <div class="modal" style="max-width:360px">
     <button class="close-btn" onclick="closeLogin()">&times;</button>
-    <h2>Admin Login</h2>
+    <h2 data-i18n="login.title">Admin Login</h2>
     <div class="login-row">
       <input type="password" id="login-token" placeholder="Token" onkeydown="if(event.key==='Enter')doLogin()">
       <button onclick="doLogin()">Login</button>
@@ -422,12 +428,13 @@
 <div class="modal-overlay" id="metrics-overlay">
   <div class="modal">
     <button class="close-btn" onclick="closeMetrics()">&times;</button>
-    <h2>Model Metrics</h2>
+    <h2 data-i18n="metrics.title">Model Metrics</h2>
     <div id="metrics-body"></div>
     <div id="audits-section"></div>
   </div>
 </div>
 
+<script src="/static/js/i18n.js"></script>
 <script src="/static/js/audio-player.js"></script>
 <script>
 const statusEl   = document.getElementById('status');
@@ -443,6 +450,7 @@ const _knownSources = {};  // source_id → display name (custom or original)
 const _sourceCustomNames = {};  // source_id → custom name (from settings, survives heartbeat)
 const _sourceScores = {};  // source_id + engine_id → last score message
 const SOURCE_SCORE_TTL_MS = 5000;
+const SCORE_DECAY_MS = 3000;
 let _dspStats = null;  // aggregate DSP decisions across all sources
 const _STATE_PRIORITY = { idle: 0, possible: 1, confirmed: 2 };
 let activeEngineFilter = 'all';
@@ -479,7 +487,7 @@ function setEngineFilter(select) {
   updateSelection();
 }
 
-function updateDetector(name, score, state, triggers, possibleNeeded, confirmedNeeded, cooldown, refractory, engineId) {
+function updateDetector(name, score, state, triggers, possibleNeeded, confirmedNeeded, cooldown, refractory, engineId, scoreSource) {
   const bar   = document.getElementById('bar-' + name);
   const val   = document.getElementById('val-' + name);
   const badge = document.getElementById('badge-' + name);
@@ -490,15 +498,18 @@ function updateDetector(name, score, state, triggers, possibleNeeded, confirmedN
   bar.style.background = color;
   val.textContent      = (score * 100).toFixed(1) + '%';
   const engineLabel = document.getElementById('score-engine-' + name);
-  if (engineLabel) engineLabel.textContent = engineId ? ` · peak from ${engineId}` : '';
-  badge.textContent    = state;
+  if (engineLabel) {
+    const origin = [engineId, scoreSource].filter(Boolean).join(' · ');
+    engineLabel.textContent = origin ? ` · peak from ${origin}` : '';
+  }
+  badge.textContent    = t('state.' + state) || state;
   badge.className      = 'state-badge ' + state;
   bar.classList.toggle('pulsing', state === 'possible' || state === 'confirmed');
   // trigger progress
   const trigEl = document.getElementById('triggers-' + name);
   if (trigEl && confirmedNeeded != null) {
-    const t = triggers || 0;
-    trigEl.innerHTML = `<span class="tp-count">${t}</span>/${possibleNeeded}p/${confirmedNeeded}c`;
+    const tc = triggers || 0;
+    trigEl.innerHTML = `<span class="tp-count">${tc}</span>/${possibleNeeded}p/${confirmedNeeded}c`;
   }
   // timer (cooldown / refractory)
   const timerEl = document.getElementById('timer-' + name);
@@ -592,7 +603,7 @@ function _updateSourcesDropdown() {
       nowEl.innerHTML = '';
     }
   } else {
-    summary.querySelector('.dsp-summary-title').textContent = 'DSP: waiting…';
+    summary.querySelector('.dsp-summary-title').textContent = t('dsp.waiting');
     summary.querySelector('.dsp-summary-detail').classList.remove('open');
     summary.querySelector('.dsp-summary-header').setAttribute('aria-expanded', 'false');
   }
@@ -688,7 +699,12 @@ function updateScores(msg) {
   const isHeartbeat = msg.source_id == null;
   if (!isHeartbeat) {
     const scoreKey = `${msg.source_id}:${msg.engine_id || 'legacy'}`;
-    _sourceScores[scoreKey] = {...msg, _receivedAt: now};
+    const previous = _sourceScores[scoreKey];
+    _sourceScores[scoreKey] = {
+      ...msg,
+      _receivedAt: now,
+      _scoreAt: msg.dsp_skipped_yamnet ? (previous?._scoreAt || now) : now,
+    };
     if (!_sourceCustomNames[msg.source_id]) _knownSources[msg.source_id] = msg.source;
   }
   for (const [key, score] of Object.entries(_sourceScores)) {
@@ -711,20 +727,28 @@ function updateScores(msg) {
   // Aggregate per detector: worst state, max score, max triggers
   for (const name of DETECTOR_NAMES) {
     let bestScore = 0, bestState = 'idle', bestTriggers = 0;
+    let stateScore = -1;
     let bestStatePriority = 0;
     let bestEngineId = '';
+    let bestScoreSource = '';
     let possNeeded = 4, confNeeded = 8, maxCooldown = 0, maxRefractory = 0;
     for (const s of sources) {
-      const sc = s[name + '_score'] || 0;
+      const rawScore = s[name + '_score'] || 0;
+      const scoreAge = Math.max(0, now - (s._scoreAt || now));
+      const sc = rawScore * Math.max(0, 1 - scoreAge / SCORE_DECAY_MS);
       const st = s[name + '_state'] || 'idle';
       const tr = s[name + '_triggers'] || 0;
       const statePriority = _STATE_PRIORITY[st] || 0;
-      if (statePriority > bestStatePriority || (statePriority === bestStatePriority && sc > bestScore)) {
+      if (sc > bestScore) {
         bestScore = sc;
+        bestEngineId = s.engine_id || '';
+        bestScoreSource = s.source || '';
+      }
+      if (statePriority > bestStatePriority || (statePriority === bestStatePriority && sc > stateScore)) {
         bestState = st;
         bestTriggers = tr;
-        bestEngineId = s.engine_id || '';
         bestStatePriority = statePriority;
+        stateScore = sc;
         if (s[name + '_possible_needed'] != null) possNeeded = s[name + '_possible_needed'];
         if (s[name + '_confirmed_needed'] != null) confNeeded = s[name + '_confirmed_needed'];
       }
@@ -733,7 +757,7 @@ function updateScores(msg) {
       if (cd > maxCooldown) maxCooldown = cd;
       if (rf > maxRefractory) maxRefractory = rf;
     }
-    updateDetector(name, bestScore, bestState, bestTriggers, possNeeded, confNeeded, maxCooldown, maxRefractory, bestEngineId);
+    updateDetector(name, bestScore, bestState, bestTriggers, possNeeded, confNeeded, maxCooldown, maxRefractory, bestEngineId, bestScoreSource);
   }
 
   registerEngineFilter(msg.engine_id);
@@ -932,15 +956,15 @@ function addEvent(ev) {
         </div>
         <audio controls preload="metadata"${isAdmin() ? ` src="${esc(ev.clip_url)}${_adminToken ? '?token=' + encodeURIComponent(_adminToken) : ''}"` : ''}></audio>
       </div>
-    </div>` : '<div class="clip-unavailable">Audio clip unavailable</div>'}
+    </div>` : `<div class="clip-unavailable">${t('events.clip_unavailable')}</div>`}
     <div class="label-row"${ev.clip_url ? '' : ' style="display:none"'}>
-      <span>Label:</span>
+      <span data-i18n="label.label">${t('label.label')}</span>
       ${VALID_LABELS.map(l =>
         `<button class="lbtn" data-label="${l}" onclick="sendLabel(this,'${filename}','${l}')">${l}</button>`
       ).join('')}
     </div>
     <div class="seg-section"${ev.clip_url ? '' : ' style="display:none"'}>
-      <button class="seg-toggle" onclick="toggleSegments(this)">segments ▸</button>
+      <button class="seg-toggle" onclick="toggleSegments(this)" data-i18n="events.segments">segments ▸</button>
       <div class="seg-body">
         <div class="seg-list"></div>
         <div class="seg-add-row">
@@ -1093,7 +1117,7 @@ async function batchLabel(label) {
 }
 
 function clearEvents() {
-  eventsEl.innerHTML = '<div class="empty" id="empty">No events yet</div>';
+  eventsEl.innerHTML = `<div class="empty" id="empty" data-i18n="events.empty">${t('events.empty')}</div>`;
   emptyEl = document.getElementById('empty');
   document.getElementById('select-all').checked = false;
   updateSelection();
@@ -1114,7 +1138,7 @@ function updateAdminUI() {
   const authed = isAdmin();
   const btn = document.getElementById('admin-btn');
   btn.style.display = _authEnabled ? '' : 'none';
-  btn.textContent = authed ? 'Admin ✓' : 'Admin';
+  btn.textContent = authed ? t('btn.admin_ok') : t('btn.admin');
   btn.classList.toggle('authed', authed);
   // show/hide admin-only elements
   document.querySelectorAll('.admin-only').forEach(el => el.classList.toggle('visible', authed));
@@ -1171,10 +1195,10 @@ async function doLogin() {
       closeLogin();
       updateAdminUI();
     } else {
-      document.getElementById('login-err').textContent = 'Invalid token';
+      document.getElementById('login-err').textContent = t('login.invalid');
     }
   } catch(e) {
-    document.getElementById('login-err').textContent = 'Network error';
+    document.getElementById('login-err').textContent = t('msg.network_error');
   }
 }
 
@@ -1199,8 +1223,8 @@ let _serverStartedAt = null;
 
 function connect() {
   const ws = new WebSocket(_wsUrl('/ws'));
-  ws.onopen  = () => { statusEl.textContent = ''; statusEl.title = 'Online'; statusEl.className = 'connected'; };
-  ws.onclose = () => { statusEl.textContent = 'reconnecting…'; statusEl.title = ''; statusEl.className = ''; setTimeout(connect, 2000); };
+  ws.onopen  = () => { statusEl.textContent = ''; statusEl.title = t('status.online'); statusEl.className = 'connected'; };
+  ws.onclose = () => { statusEl.textContent = t('status.reconnecting'); statusEl.title = ''; statusEl.className = ''; setTimeout(connect, 2000); };
   ws.onmessage = ({ data }) => {
     const msg = JSON.parse(data);
     if (msg.type === 'session') {
@@ -1210,7 +1234,7 @@ function connect() {
         const banner = document.createElement('div');
         banner.className = 'empty';
         banner.style.cssText = 'color:#4caf50;font-weight:600';
-        banner.textContent = 'Server restarted — events cleared';
+        banner.textContent = t('events.server_restarted');
         eventsEl.prepend(banner);
         setTimeout(() => banner.remove(), 8000);
       }
@@ -1517,7 +1541,7 @@ function stopListen() {
   if (_audioCtx) { _audioCtx.close(); _audioCtx = null; }
   const btn = document.getElementById('listen-btn');
   btn.classList.remove('listening');
-  btn.textContent = 'Listen';
+  btn.textContent = t('btn.listen');
 }
 
 // Close picker on click outside
@@ -1532,7 +1556,7 @@ document.addEventListener('click', e => {
 async function createManualEvent() {
   const btn = document.getElementById('manual-event-btn');
   btn.disabled = true;
-  btn.textContent = 'Saving…';
+  btn.textContent = t('btn.event_saving');
   try {
     const res = await fetch('/api/manual-event', {
       method: 'POST',
@@ -1541,13 +1565,13 @@ async function createManualEvent() {
     if (res.status === 401) { toggleAdmin(); return; }
     if (!res.ok) {
       const err = await res.json();
-      alert(err.detail || 'Error');
+      alert(err.detail || t('msg.error'));
     }
   } catch(e) {
-    alert('Network error');
+    alert(t('msg.network_error'));
   } finally {
     btn.disabled = false;
-    btn.textContent = '+ Event';
+    btn.textContent = t('btn.event_create');
   }
 }
 
@@ -1759,6 +1783,12 @@ async function saveSegments(card) {
     console.error('Failed to save segments:', e);
   }
 }
+
+// Initialize i18n
+I18n.init().then(() => {
+  const langSwitch = document.getElementById('lang-switch');
+  if (langSwitch) langSwitch.value = I18n.getLocale();
+});
 
 </script>
 

@@ -29,18 +29,21 @@ When authentication is enabled (`AUTH_ENABLED` in `hub/.env`), protected request
 | `GET /api/metrics` | Viewer | Validation metrics when available. |
 | `GET /api/audits` | Viewer | Recent model and dataset audits. |
 | `GET /api/calibrate` | Viewer | Background calibration status. |
-| `POST /api/calibrate` | Admin | Starts background calibration; see Swagger UI for the exact schema. |
-| `POST /api/calibrate/stop` | Admin | Stops and saves current calibration. |
+| `POST /api/calibrate` | Admin | Starts synchronized background recording for one or more sources. Body: `{"source_ids":[0,1],"duration":300}`; duration is 10–900 seconds. A single `source_id` is accepted for backwards compatibility. |
+| `POST /api/calibrate/stop` | Admin | Stops and saves each source separately; the response contains a `recordings` array with each `source_id`, source name, and file path. |
 | `POST /api/calibrate/cancel` | Admin | Cancels calibration. |
 | `GET /api/calibrate/recordings` | Viewer | Lists calibration recordings. |
 | `DELETE /api/calibrate/recordings` | Admin | Deletes calibration recordings. |
 | `GET /calibrate-audio/{source_name}/{filename}` | Viewer token in query or Authorization | Downloads calibration audio. |
 | `GET /calibrate-audio/{source_name}/{filename}/spectrogram` | No route-level check | Calibration recording spectrogram. |
+
 | `POST /feedback` | Admin | Labels a saved clip; body includes `filename` and `label`. |
 | `POST /feedback/segments` | Admin | Saves clip segment labels. |
 | `POST /api/manual-event` | Admin | Creates a manual event and records a clip. |
 | `GET /clips/{filename}` | Viewer token in query or Authorization | Downloads a WAV clip. |
 | `GET /clips/{filename}/spectrogram` | No route-level check | Returns a clip spectrogram. |
+
+`GET /api/calibrate` returns overall progress and a `sources` object containing per-source progress and `done` state. Overall progress follows the least advanced source; `done` is true when every source has recorded the requested duration.
 
 Protected routes return `401` or `403` for invalid or missing tokens. See the [settings reference](settings.md) for setting names and ranges.
 

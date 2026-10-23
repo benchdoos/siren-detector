@@ -29,18 +29,21 @@ REST API обслуживается тем же сервером, что и ве
 | `GET /api/metrics` | Viewer | Метрики валидации, если они смонтированы. |
 | `GET /api/audits` | Viewer | Последние аудиты модели и датасета. |
 | `GET /api/calibrate` | Viewer | Состояние фоновой калибровки. |
-| `POST /api/calibrate` | Admin | Начинает фоновую калибровку; точная схема доступна в Swagger UI. |
-| `POST /api/calibrate/stop` | Admin | Останавливает и сохраняет текущую калибровку. |
+| `POST /api/calibrate` | Admin | Начинает синхронную фоновую запись одного или нескольких источников. Тело: `{"source_ids":[0,1],"duration":300}`; длительность — 10–900 секунд. Для обратной совместимости можно передать один `source_id`. |
+| `POST /api/calibrate/stop` | Admin | Останавливает и сохраняет записи каждого источника отдельно; ответ содержит массив `recordings` с `source_id`, именем источника и путём файла. |
 | `POST /api/calibrate/cancel` | Admin | Отменяет калибровку. |
 | `GET /api/calibrate/recordings` | Viewer | Список записей калибровки. |
 | `DELETE /api/calibrate/recordings` | Admin | Удаляет записи калибровки. |
 | `GET /calibrate-audio/{source_name}/{filename}` | Viewer-токен в query или Authorization | Загружает аудиозапись калибровки. |
 | `GET /calibrate-audio/{source_name}/{filename}/spectrogram` | Нет проверки на маршруте | Спектрограмма записи калибровки. |
+
 | `POST /feedback` | Admin | Присваивает клипу метку; тело содержит `filename` и `label`. |
 | `POST /feedback/segments` | Admin | Сохраняет разметку сегментов клипа. |
 | `POST /api/manual-event` | Admin | Создаёт событие вручную с записью клипа. |
 | `GET /clips/{filename}` | Viewer-токен в query или Authorization | Получает WAV-клип. |
 | `GET /clips/{filename}/spectrogram` | Нет проверки на маршруте | Получает спектрограмму клипа. |
+
+`GET /api/calibrate` возвращает общий прогресс и `sources` — объект с прогрессом и статусом `done` для каждого выбранного ID. Общий прогресс отражает наименее продвинутый источник; `done` становится `true`, когда все источники записали заданную длительность.
 
 Защищённые маршруты при неверном или отсутствующем токене возвращают `401` либо `403`. Поля настроек и их диапазоны приведены в [справочнике настроек](settings.md).
 

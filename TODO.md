@@ -142,6 +142,7 @@
 - [x] Audio badge: при 2+ источниках — кликабельный dropdown с per-source статистикой пакетов.
 - [x] Синхронизация feedback-лейблов и сегментов между браузерами в реальном времени через WebSocket (`feedback_update`, `segments_update`).
 - [x] `make settings` — дамп текущих runtime-настроек из контейнера (JSON).
+- [x] i18n Web UI: переключатель языка EN/RU, JSON-файлы переводов (`static/i18n/en.json`, `ru.json`), модуль `static/js/i18n.js` с `data-i18n` атрибутами и функцией `t()`.
 - [ ] Персистентность лейблов между перезапусками контейнера (сейчас in-memory).
 
 ## 9. Локальный inference на ESP32-S3 — новый подход: DSP-фичи

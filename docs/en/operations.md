@@ -38,6 +38,8 @@ docker compose logs -f detector
 
 The web UI is served at `http://<host>:8080`. It displays live scores, sources, event history, and saved clips. The settings page controls class thresholds, smoothing, cooldowns, audio sources, and inference mode. Persistent detector settings and clips are stored in the Docker `clips` volume. Defaults, valid ranges, and parameter descriptions are listed in the [settings reference](settings.md).
 
+The dashboard and settings page support English and Russian. Use the language selector in the page header to switch languages; the choice is saved in this browser. On first visit, the UI uses the browser's preferred language when it is Russian and English otherwise.
+
 Authentication is controlled by `AUTH_ENABLED` and `ADMIN_TOKEN` in `hub/.env`. If authentication is enabled and no token is set, the detector generates a token at startup; check container logs. Keep the token private.
 
 ## MQTT and Home Assistant

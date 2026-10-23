@@ -14,9 +14,11 @@ Or via Docker (see Dockerfile in this directory).
 from __future__ import annotations
 
 import argparse
+import queue
 import socket
 import struct
 import sys
+import threading
 import time
 import wave
 
@@ -73,7 +75,6 @@ def run(
 ) -> None:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     target = (target_host, target_port)
-    seq = 0
 
     native_rate = _query_native_rate(device)
     resample = _build_resampler(native_rate, TARGET_RATE)
@@ -84,28 +85,46 @@ def run(
     print(f"Device rate: {native_rate} Hz → target: {TARGET_RATE} Hz, "
           f"chunk: {chunk_samples} samples", flush=True)
 
+    # Keep PortAudio's real-time callback small. Processing and UDP I/O can
+    # occasionally take longer than one audio block, especially on a Pi.
+    audio_q: queue.Queue[np.ndarray | None] = queue.Queue(maxsize=32)
+    overflow_logged = False
+
     def audio_callback(indata: np.ndarray, frames: int, time_info, status):
-        nonlocal seq
+        nonlocal overflow_logged
         if status:
             print(f"Audio status: {status}", file=sys.stderr, flush=True)
+        audio = indata[:, 0].copy() if indata.ndim > 1 else indata.ravel().copy()
+        try:
+            audio_q.put_nowait(audio)
+            overflow_logged = False
+        except queue.Full:
+            if not overflow_logged:
+                print("Audio queue full, dropping audio chunks", file=sys.stderr, flush=True)
+                overflow_logged = True
 
-        # Convert to mono float32
-        audio = indata[:, 0] if indata.ndim > 1 else indata.ravel()
-        audio = audio.astype(np.float32) * gain
+    def sender() -> None:
+        seq = 0
+        while True:
+            chunk = audio_q.get()
+            if chunk is None:
+                return
+            try:
+                audio = chunk.astype(np.float32) * gain
+                if resample is not None:
+                    audio = resample(audio)
+                i32 = (audio * 32768.0).clip(-32768, 32767).astype(np.int32) << 16
+                payload = i32.tobytes()
+                header = HEADER.pack(MAGIC, seq, len(payload), source_id)
+                sock.sendto(header + payload, target)
+                seq = (seq + 1) & 0xFFFFFFFF
+            except (OSError, ValueError, OverflowError) as exc:
+                # A transient send or bad block must not kill the sender and
+                # leave capture running into a permanently full queue.
+                print(f"Audio packet error: {exc}; dropping chunk", file=sys.stderr, flush=True)
 
-        # Resample to 16 kHz if needed
-        if resample is not None:
-            audio = resample(audio)
-
-        # Convert to I2S-like 32-bit int (matches INMP441 format)
-        # The detector's i2s32_to_float32() does: (i32 >> 16) / 32768.0
-        # So we need: float → int32 with data in upper 16 bits
-        i32 = (audio * 32768.0).clip(-32768, 32767).astype(np.int32) << 16
-
-        payload = i32.tobytes()
-        header = HEADER.pack(MAGIC, seq, len(payload), source_id)
-        sock.sendto(header + payload, target)
-        seq = (seq + 1) & 0xFFFFFFFF
+    sender_thread = threading.Thread(target=sender, name="audio-sender", daemon=True)
+    sender_thread.start()
 
     try:
         while True:
@@ -129,6 +148,18 @@ def run(
     except KeyboardInterrupt:
         print("\nStopped.", flush=True)
     finally:
+        # Make room for the shutdown marker so shutdown cannot hang when the
+        # consumer has stopped and the bounded queue is full.
+        while True:
+            try:
+                audio_q.put_nowait(None)
+                break
+            except queue.Full:
+                try:
+                    audio_q.get_nowait()
+                except queue.Empty:
+                    pass
+        sender_thread.join(timeout=2.0)
         sock.close()
 
 

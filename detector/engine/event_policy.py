@@ -94,6 +94,7 @@ class EventPolicy:
         state_changes: dict[str, str | None] = {}
         for name, smoother in source.smoothers.items():
             state_changes[name] = smoother.push(effective[name])
+            source.last_scores[name] = effective[name]
 
         for name in DETECTORS:
             if source.smoothers[name].state == "idle":
@@ -167,6 +168,7 @@ class EventPolicy:
             event_id = f"{result.engine_id}:{source.source_id}:{name}:{time.time_ns()}"
             thr_key = f"{name}_threshold"
             clip_url = None
+            clip_request = None
             if new_state == "confirmed":
                 clip_name = f"{prefix}{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.wav"
                 clip_duration = None
@@ -191,22 +193,12 @@ class EventPolicy:
                 }
                 if source.window_scores[name]:
                     meta["window_scores"] = source.window_scores[name]
-                try:
-                    clip_url = runtime.save_clip(ClipSaveRequest(
-                        filename=clip_name,
-                        sample_rate_hz=SAMPLE_RATE,
-                        samples=source.clip_buf.snapshot(last_seconds=clip_duration),
-                        metadata=meta,
-                    ))
-                    print(f"[{ts}] {name} clip saved: {clip_url} (source: {source.name})", flush=True)
-                except Exception:
-                    # A full or unavailable clips volume must not suppress the
-                    # detection event itself. The event remains useful without
-                    # its optional audio artifact.
-                    logger.exception(
-                        "Could not save confirmed %s clip for source %s; publishing event without clip",
-                        name, source.name,
-                    )
+                clip_request = ClipSaveRequest(
+                    filename=clip_name,
+                    sample_rate_hz=SAMPLE_RATE,
+                    samples=source.clip_buf.snapshot(last_seconds=clip_duration),
+                    metadata=meta,
+                )
                 source.possible_start[name] = None
                 source.window_scores[name] = []
 
@@ -226,10 +218,28 @@ class EventPolicy:
                 "triggers": source.smoothers[name].trigger_count,
                 "triggers_needed": self._settings["confirmed_triggers"] if new_state == "confirmed" else self._settings["possible_triggers"],
             }
-            runtime.publish(RuntimeMessage.from_legacy(event))
-            print(f"EVENT {json.dumps(event)}", flush=True)
             if new_state == "confirmed":
                 source.peaks[name] = dict(_EMPTY_PEAK)
+                queued_at = time.monotonic()
+
+                def clip_saved(url: str | None, event=event, event_name=name,
+                               source_name=source.name, queued_at=queued_at,
+                               event_ts=ts) -> None:
+                    event["clip_url"] = url
+                    if url:
+                        print(f"[{event_ts}] {event_name} clip saved: {url} (source: {source_name})", flush=True)
+                    logger.info(
+                        "Confirmed event published event=%s source=%s clip_ready_delay=%.3fs",
+                        event_name, source_name, time.monotonic() - queued_at,
+                    )
+                    runtime.publish(RuntimeMessage.from_legacy(event))
+                    print(f"EVENT {json.dumps(event)}", flush=True)
+
+                assert clip_request is not None
+                runtime.save_clip_async(clip_request, clip_saved)
+            else:
+                runtime.publish(RuntimeMessage.from_legacy(event))
+                print(f"EVENT {json.dumps(event)}", flush=True)
 
     def _publish_dsp_skipped_score(
         self, source: SourceState, dsp_result: dict, engine_id: str,
@@ -246,10 +256,12 @@ class EventPolicy:
         }
         for name in DETECTORS:
             smoother = source.smoothers[name]
-            # A DSP skip means YAMNet did not evaluate this window. Treating
-            # missing inference as a negative score drains the smoother and
-            # makes active score/progress bars flicker back to idle.
-            score_msg[f"{name}_score"] = source.peaks[name]["score"]
+            # A DSP skip means YAMNet did not evaluate this window. Keep the
+            # latest model score for display; event peaks are reset at
+            # confirmation and must not be used as live UI score state.
+            score_msg[f"{name}_score"] = source.last_scores.get(
+                name, source.peaks[name]["score"],
+            )
             score_msg[f"{name}_state"] = smoother.state
             score_msg[f"{name}_triggers"] = smoother.trigger_count
             score_msg[f"{name}_possible_needed"] = smoother.possible_needed
