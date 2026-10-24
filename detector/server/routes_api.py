@@ -611,7 +611,13 @@ async def stop_calibration():
     status = _bus.calibration_status()
     if status is None:
         raise HTTPException(status_code=404, detail="No calibration in progress")
-    paths = _bus.finish_calibration()
+    try:
+        paths = _bus.finish_calibration()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not save calibration WAV: {exc}",
+        ) from exc
     if not paths:
         raise HTTPException(status_code=400, detail="Not enough audio recorded (need at least 1s)")
     return {"ok": True, "recordings": [
@@ -678,9 +684,11 @@ async def delete_calibration_recording(body: dict):
         raise HTTPException(status_code=404, detail="Recording not found")
     # Also remove cached spectrogram
     spec_cache = target.with_suffix(".spec")
-    target.unlink()
+    # Remove the cache first: if deletion is interrupted, keep the WAV that
+    # backs the recording instead of leaving an orphaned .spec file.
     if spec_cache.exists():
         spec_cache.unlink()
+    target.unlink()
     # Clean up empty source dir
     parent = target.parent
     if parent != bg_dir and parent.is_dir() and not any(parent.iterdir()):

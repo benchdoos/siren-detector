@@ -267,7 +267,7 @@
   "cal.tip2": "Include varied sounds: appliances, street noise, conversations, 3D printers, etc.",
   "cal.tip3": "Record multiple sessions at different times of day",
   "cal.tip4": "Each source needs its own calibration",
-  "cal.tip5": "After recording, run make retrain to apply",
+  "cal.tip5": "After recording, run",
   "cal.source": "Source",
   "cal.duration": "Duration (sec)",
   "cal.preset_5min": "5 min",

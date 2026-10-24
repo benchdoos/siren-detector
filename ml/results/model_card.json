@@ -1,75 +1,75 @@
 {
-  "audit_timestamp": "2026-10-22T20:13:30+00:00",
-  "model_trained_at": "2026-10-22T20:13:25+00:00",
+  "audit_timestamp": "2026-10-24T10:28:29+00:00",
+  "model_trained_at": "2026-10-24T10:28:25+00:00",
   "dsp_metrics": {
-    "trained_at": "2026-10-22T20:12:38+00:00",
+    "trained_at": "2026-10-24T10:27:48+00:00",
     "labels": [
       "siren",
       "background",
       "explosion",
       "uav"
     ],
-    "validation_windows": 2914,
-    "accuracy": 0.8847,
+    "validation_windows": 2937,
+    "accuracy": 0.8492,
     "classes": [
       {
         "label": "siren",
-        "windows": 383,
-        "precision": 0.7606,
-        "recall": 0.564,
-        "f1": 0.6477
+        "windows": 389,
+        "precision": 0.558,
+        "recall": 0.581,
+        "f1": 0.5693
       },
       {
         "label": "background",
-        "windows": 2160,
-        "precision": 0.9124,
-        "recall": 0.9736,
-        "f1": 0.942
+        "windows": 2135,
+        "precision": 0.9097,
+        "recall": 0.9157,
+        "f1": 0.9127
       },
       {
         "label": "explosion",
-        "windows": 188,
-        "precision": 0.8095,
-        "recall": 0.7234,
-        "f1": 0.764
+        "windows": 232,
+        "precision": 0.8394,
+        "recall": 0.7888,
+        "f1": 0.8133
       },
       {
         "label": "uav",
-        "windows": 183,
-        "precision": 0.7834,
-        "recall": 0.6721,
-        "f1": 0.7235
+        "windows": 181,
+        "precision": 0.7879,
+        "recall": 0.7182,
+        "f1": 0.7514
       }
     ],
     "confusion_matrix": [
       [
-        216,
-        153,
-        5,
+        226,
+        156,
+        0,
+        7
+      ],
+      [
+        148,
+        1955,
+        13,
+        19
+      ],
+      [
+        4,
+        36,
+        183,
         9
       ],
       [
-        42,
-        2103,
-        7,
-        8
-      ],
-      [
-        5,
-        30,
-        136,
-        17
-      ],
-      [
-        21,
-        19,
-        20,
-        123
+        27,
+        2,
+        22,
+        130
       ]
     ],
     "background_gate_threshold": 0.92,
-    "siren_confident_background_rate": 0.0679,
-    "siren_argmax_background_rate": 0.3995,
+    "siren_confident_background_rate": 0.0874,
+    "siren_argmax_background_rate": 0.401,
     "quantized_model_size_bytes": 29968
   },
   "labels": [
@@ -80,64 +80,64 @@
   ],
   "val_accuracy": {
     "siren": {
-      "accuracy": 0.788,
-      "windows": 3689
+      "accuracy": 0.778,
+      "windows": 3729
     },
     "background": {
-      "accuracy": 0.84,
+      "accuracy": 0.781,
       "windows": 8700
     },
     "explosion": {
-      "accuracy": 0.692,
-      "windows": 1007
+      "accuracy": 0.719,
+      "windows": 966
     },
     "uav": {
-      "accuracy": 0.703,
-      "windows": 468
+      "accuracy": 0.679,
+      "windows": 508
     }
   },
   "confusion_matrix": [
     [
-      2908,
-      375,
-      106,
-      300
+      2900,
+      314,
+      155,
+      360
     ],
     [
-      584,
-      7309,
-      556,
-      251
+      649,
+      6796,
+      995,
+      260
     ],
     [
-      36,
-      241,
-      697,
-      33
+      45,
+      188,
+      695,
+      38
     ],
     [
-      60,
-      41,
-      38,
-      329
+      63,
+      28,
+      72,
+      345
     ]
   ],
   "file_counts": {
     "siren": {
-      "total": 301,
-      "real": 129,
+      "total": 302,
+      "real": 130,
       "aug": 172,
-      "aug_pct": 57.1,
+      "aug_pct": 57.0,
       "aug_real_ratio": 1.3,
-      "max_recommended_aug": 258
+      "max_recommended_aug": 260
     },
     "background": {
-      "total": 898,
-      "real": 898,
+      "total": 902,
+      "real": 902,
       "aug": 0,
       "aug_pct": 0.0,
       "aug_real_ratio": 0.0,
-      "max_recommended_aug": 1796
+      "max_recommended_aug": 1804
     },
     "explosion": {
       "total": 441,
@@ -157,6 +157,6 @@
     }
   },
   "issues": [
-    "background: 18.6× more windows than smallest class"
+    "background: 17.1× more windows than smallest class"
   ]
 }

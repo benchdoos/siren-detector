@@ -136,7 +136,7 @@ _wait-calibration:
 		_done=$$(echo "$$_status" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('done',False) or not d.get('active',False))"); \
 		if [ "$$_done" = "True" ]; then break; fi; \
 		_progress=$$(echo "$$_status" | python3 -c "import sys,json; print(json.load(sys.stdin).get('progress',0))"); \
-		printf "\r  progress: %s%%" "$$_progress"; \
+		printf "\r  progress: %s" "$$_progress"; \
 		sleep 2; \
 	done; \
 	echo ""; \

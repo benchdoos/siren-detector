@@ -74,6 +74,10 @@ def run(
     gain: float,
 ) -> None:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # UDP packets are disposable audio frames.  Never let a full kernel
+    # transmit buffer stall the capture pipeline; the sender drops that frame
+    # and immediately continues with the next one.
+    sock.setblocking(False)
     target = (target_host, target_port)
 
     native_rate = _query_native_rate(device)
@@ -85,25 +89,31 @@ def run(
     print(f"Device rate: {native_rate} Hz → target: {TARGET_RATE} Hz, "
           f"chunk: {chunk_samples} samples", flush=True)
 
-    # Keep PortAudio's real-time callback small. Processing and UDP I/O can
-    # occasionally take longer than one audio block, especially on a Pi.
+    # Keep PortAudio's real-time callback small. Processing, UDP I/O and even
+    # writing to Docker's log driver can take longer than one audio block.
     audio_q: queue.Queue[np.ndarray | None] = queue.Queue(maxsize=32)
-    overflow_logged = False
+    input_overflows = 0
+    queue_drops = 0
+    send_drops = 0
+    metrics_stop = threading.Event()
 
     def audio_callback(indata: np.ndarray, frames: int, time_info, status):
-        nonlocal overflow_logged
+        nonlocal input_overflows, queue_drops
         if status:
-            print(f"Audio status: {status}", file=sys.stderr, flush=True)
+            # This is PortAudio's real-time callback.  Do not log here: a
+            # synchronous write to Docker logs can itself cause more input
+            # overflows.  The reporter below emits an aggregate instead.
+            input_overflows += 1
         audio = indata[:, 0].copy() if indata.ndim > 1 else indata.ravel().copy()
         try:
             audio_q.put_nowait(audio)
-            overflow_logged = False
         except queue.Full:
-            if not overflow_logged:
-                print("Audio queue full, dropping audio chunks", file=sys.stderr, flush=True)
-                overflow_logged = True
+            # Fresh capture takes priority over waiting.  Dropping this block
+            # keeps the PortAudio callback within its deadline.
+            queue_drops += 1
 
     def sender() -> None:
+        nonlocal send_drops
         seq = 0
         while True:
             chunk = audio_q.get()
@@ -117,14 +127,40 @@ def run(
                 payload = i32.tobytes()
                 header = HEADER.pack(MAGIC, seq, len(payload), source_id)
                 sock.sendto(header + payload, target)
+            except (OSError, ValueError, OverflowError):
+                # UDP either accepts the complete datagram or rejects it.
+                # Skip a rejected/bad chunk and let the receiver reconstruct
+                # the sequence gap as silence.
+                send_drops += 1
+            except Exception:
+                # A malformed block must not silently kill this consumer: if
+                # it died, capture would only fill and discard the queue.
+                send_drops += 1
+            finally:
+                # Advance even when the packet was dropped.  Reusing its
+                # sequence number would conceal the gap at the receiver.
                 seq = (seq + 1) & 0xFFFFFFFF
-            except (OSError, ValueError, OverflowError) as exc:
-                # A transient send or bad block must not kill the sender and
-                # leave capture running into a permanently full queue.
-                print(f"Audio packet error: {exc}; dropping chunk", file=sys.stderr, flush=True)
+
+    def report_metrics() -> None:
+        """Log capture health outside PortAudio's real-time callback."""
+        previous = (0, 0, 0)
+        while not metrics_stop.wait(5.0):
+            current = (input_overflows, queue_drops, send_drops)
+            delta = tuple(now - then for now, then in zip(current, previous))
+            previous = current
+            if any(delta):
+                print(
+                    "Audio drops in last 5s: "
+                    f"input_overflow={delta[0]}, queue_full={delta[1]}, "
+                    f"send_failed={delta[2]}",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
     sender_thread = threading.Thread(target=sender, name="audio-sender", daemon=True)
     sender_thread.start()
+    metrics_thread = threading.Thread(target=report_metrics, name="audio-metrics", daemon=True)
+    metrics_thread.start()
 
     try:
         while True:
@@ -148,6 +184,7 @@ def run(
     except KeyboardInterrupt:
         print("\nStopped.", flush=True)
     finally:
+        metrics_stop.set()
         # Make room for the shutdown marker so shutdown cannot hang when the
         # consumer has stopped and the bounded queue is full.
         while True:
@@ -160,6 +197,7 @@ def run(
                 except queue.Empty:
                     pass
         sender_thread.join(timeout=2.0)
+        metrics_thread.join(timeout=2.0)
         sock.close()
 
 
