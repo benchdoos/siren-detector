@@ -97,6 +97,9 @@ async def ws_audio_endpoint(ws: WebSocket):
 
 @router.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
+    if not ws_check_token(ws):
+        await ws.close(code=4401, reason="Authentication required")
+        return
     await ws.accept()
     # Subscribe before replaying history so events arriving during the replay
     # are queued instead of being lost. The UI de-duplicates replay/live copies.

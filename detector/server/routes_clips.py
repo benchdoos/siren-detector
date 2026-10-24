@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import soundfile as sf
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
-from ..auth import AUTH_ENABLED, check_token
+from ..auth import require_viewer
 from ..config import CLIP_DIR, DATASET_DIR, VALID_LABELS
 from ..runtime.contracts import normalize_detector_event
 
@@ -100,9 +100,9 @@ def generate_spectrogram(path: "Path") -> dict:
     return result
 
 
-@router.get("/clips/{filename}/spectrogram")
+@router.get("/clips/{filename}/spectrogram", dependencies=[Depends(require_viewer)])
 async def clip_spectrogram(filename: str):
-    """Return spectrogram data for visualization (no auth required)."""
+    """Return spectrogram data for an authenticated viewer."""
     path = (CLIP_DIR / filename).resolve()
     if not path.is_relative_to(CLIP_DIR.resolve()):
         raise HTTPException(status_code=400, detail="Invalid filename")
@@ -111,12 +111,8 @@ async def clip_spectrogram(filename: str):
     return generate_spectrogram(path)
 
 
-@router.get("/clips/{filename}")
-async def serve_clip(filename: str, token: str = "", authorization: str = Header("")):
-    if AUTH_ENABLED:
-        hdr_token = authorization.removeprefix("Bearer ").strip()
-        if not ((hdr_token and check_token(hdr_token)) or (token and check_token(token))):
-            raise HTTPException(status_code=401, detail="Authentication required")
+@router.get("/clips/{filename}", dependencies=[Depends(require_viewer)])
+async def serve_clip(filename: str):
     path = (CLIP_DIR / filename).resolve()
     if not path.is_relative_to(CLIP_DIR.resolve()):
         raise HTTPException(status_code=400, detail="Invalid filename")

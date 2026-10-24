@@ -10,7 +10,7 @@
   "btn.metrics": "Metrics",
   "btn.settings": "Settings",
   "btn.admin": "Admin",
-  "btn.admin_ok": "Admin \u2713",
+  "btn.admin_ok": "Signed in \u2713",
   "btn.clear": "Clear",
   "btn.event_create": "+ Event",
   "btn.event_saving": "Saving\u2026",
@@ -91,6 +91,7 @@
   "help.note": "Each detector (siren, explosion, UAVs) has its own independent counters and timers.",
 
   "login.title": "Admin Login",
+  "login.oidc": "Sign in with SSO",
   "login.placeholder": "Token",
   "login.invalid": "Invalid token",
 

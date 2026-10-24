@@ -420,9 +420,15 @@
 <script>
 /* ── Auth (shared with index.html via sessionStorage) ── */
 const _adminToken = sessionStorage.getItem('adminToken') || '';
+let _csrfToken = '';
 function adminHeaders() {
-  return _adminToken ? {'Authorization': 'Bearer ' + _adminToken} : {};
+  return {...(_adminToken ? {'Authorization': 'Bearer ' + _adminToken} : {}),
+    ...(_csrfToken ? {'X-CSRF-Token': _csrfToken} : {})};
 }
+fetch('/api/auth/status').then(r => r.json()).then(d => {
+  _csrfToken = d.csrf_token || '';
+  if (d.auth_enabled !== false && d.role !== 'admin' && !_adminToken) location.replace('/');
+}).catch(() => location.replace('/'));
 
 // Any API request can be the first one to discover that the shared session
 // token has expired. Leave Settings immediately instead of showing stale UI

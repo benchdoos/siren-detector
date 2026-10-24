@@ -398,6 +398,7 @@
       <input type="password" id="login-token" placeholder="Token" onkeydown="if(event.key==='Enter')doLogin()">
       <button onclick="doLogin()">Login</button>
     </div>
+    <button id="oidc-login" style="display:none;margin-top:10px;width:100%" onclick="location.href='/auth/login'" data-i18n="login.oidc">Sign in with SSO</button>
     <div class="login-err" id="login-err"></div>
   </div>
 </div>
@@ -948,13 +949,13 @@ function addEvent(ev) {
     <div class="ev-details">${detailsHtml}</div>
     ${ev.clip_url ? `<div class="clip-player" data-clip-url="${esc(ev.clip_url)}">
       <canvas class="spec-canvas"></canvas>
-      <div class="player-controls"${isAdmin() ? '' : ' style="display:none"'}>
+      <div class="player-controls"${isViewer() ? '' : ' style="display:none"'}>
         <div class="pc-buttons">
           <button class="pc-btn pc-skip-back" onclick="pcSkip(this,-1)">&#9664; 5s</button>
           <button class="pc-btn pc-skip-fwd" onclick="pcSkip(this,1)">5s &#9654;</button>
           <button class="pc-btn pc-speed" onclick="pcSpeed(this)">1&times;</button>
         </div>
-        <audio controls preload="metadata"${isAdmin() ? ` src="${esc(ev.clip_url)}${_adminToken ? '?token=' + encodeURIComponent(_adminToken) : ''}"` : ''}></audio>
+        <audio controls preload="metadata"${isViewer() ? ` src="${esc(ev.clip_url)}${_adminToken ? '?token=' + encodeURIComponent(_adminToken) : ''}"` : ''}></audio>
       </div>
     </div>` : `<div class="clip-unavailable">${t('events.clip_unavailable')}</div>`}
     <div class="label-row"${ev.clip_url ? '' : ' style="display:none"'}>
@@ -996,10 +997,9 @@ function addEvent(ev) {
     renderSegments(card);
   }
   if (ev.clip_url) initClipPlayer(card);
-  const authed = isAdmin();
-  card.querySelectorAll('.ev-check').forEach(el => el.classList.toggle('visible', authed));
-  card.querySelectorAll('.label-row').forEach(el => el.classList.toggle('visible', authed));
-  card.querySelectorAll('.seg-section').forEach(el => el.classList.toggle('visible', authed));
+  card.querySelectorAll('.ev-check').forEach(el => el.classList.toggle('visible', isEditor()));
+  card.querySelectorAll('.label-row').forEach(el => el.classList.toggle('visible', isEditor()));
+  card.querySelectorAll('.seg-section').forEach(el => el.classList.toggle('visible', isEditor()));
   updateEventsCount();
 }
 
@@ -1080,7 +1080,7 @@ function updateSelection() {
   const count = checked.length;
   document.getElementById('selected-count').textContent = count;
   const bar = document.getElementById('batch-bar');
-  bar.classList.toggle('visible', count > 0 && isAdmin());
+  bar.classList.toggle('visible', count > 0 && isEditor());
   const selectAll = document.getElementById('select-all');
   selectAll.checked = visible.length > 0 && count === visible.length;
   selectAll.indeterminate = count > 0 && count < visible.length;
@@ -1127,35 +1127,42 @@ function clearEvents() {
 /* ── Admin auth ──────────────────────────────────── */
 let _adminToken = sessionStorage.getItem('adminToken') || '';
 let _authEnabled = true;  // assume enabled until server says otherwise
+let _role = _adminToken ? 'admin' : null;
+let _oidcEnabled = false;
+let _csrfToken = '';
 
-function isAdmin() { return !_authEnabled || !!_adminToken; }
+function isAdmin() { return !_authEnabled || _role === 'admin'; }
+function isEditor() { return !_authEnabled || _role === 'editor' || _role === 'admin'; }
+function isViewer() { return !_authEnabled || ['viewer','editor','admin'].includes(_role); }
 
 function adminHeaders() {
-  return _adminToken ? {'Authorization': 'Bearer ' + _adminToken} : {};
+  return {...(_adminToken ? {'Authorization': 'Bearer ' + _adminToken} : {}),
+    ...(_csrfToken ? {'X-CSRF-Token': _csrfToken} : {})};
 }
 
 function updateAdminUI() {
   const authed = isAdmin();
   const btn = document.getElementById('admin-btn');
   btn.style.display = _authEnabled ? '' : 'none';
-  btn.textContent = authed ? t('btn.admin_ok') : t('btn.admin');
+  document.getElementById('oidc-login').style.display = _oidcEnabled ? '' : 'none';
+  btn.textContent = isViewer() ? t('btn.admin_ok') : t('btn.admin');
   btn.classList.toggle('authed', authed);
   // show/hide admin-only elements
   document.querySelectorAll('.admin-only').forEach(el => el.classList.toggle('visible', authed));
   document.querySelectorAll('.admin-only-inline').forEach(el => el.classList.toggle('visible', authed));
   document.querySelectorAll('.admin-only-btn').forEach(el => el.classList.toggle('visible', authed));
   // show/hide label rows and checkboxes in event cards
-  document.querySelectorAll('.label-row').forEach(el => el.classList.toggle('visible', authed));
-  document.querySelectorAll('.ev-check').forEach(el => el.classList.toggle('visible', authed));
-  document.querySelectorAll('.seg-section').forEach(el => el.classList.toggle('visible', authed));
+  document.querySelectorAll('.label-row').forEach(el => el.classList.toggle('visible', isEditor()));
+  document.querySelectorAll('.ev-check').forEach(el => el.classList.toggle('visible', isEditor()));
+  document.querySelectorAll('.seg-section').forEach(el => el.classList.toggle('visible', isEditor()));
   // update clip players: show/hide controls, set/remove audio src
   document.querySelectorAll('.clip-player').forEach(player => {
     const controls = player.querySelector('.player-controls');
-    if (controls) controls.style.display = authed ? '' : 'none';
+    if (controls) controls.style.display = isViewer() ? '' : 'none';
     const audio = player.querySelector('audio');
     const url = player.dataset.clipUrl;
     if (audio && url) {
-      if (authed) {
+      if (isViewer()) {
         const newSrc = url + (_adminToken ? '?token=' + encodeURIComponent(_adminToken) : '');
         if (!audio.src || !audio.src.includes(url.split('/').pop())) {
           audio.src = newSrc;
@@ -1168,8 +1175,11 @@ function updateAdminUI() {
 }
 
 function toggleAdmin() {
-  if (isAdmin()) {
+  if (isViewer() && !_adminToken && _oidcEnabled) {
+    fetch('/auth/logout', {method:'POST', headers:adminHeaders()}).finally(() => location.reload());
+  } else if (isAdmin() || isEditor() || isViewer()) {
     _adminToken = '';
+    _role = null;
     sessionStorage.removeItem('adminToken');
     updateAdminUI();
   } else {
@@ -1191,6 +1201,7 @@ async function doLogin() {
     });
     if (res.ok) {
       _adminToken = token;
+      _role = 'admin';
       sessionStorage.setItem('adminToken', token);
       closeLogin();
       updateAdminUI();
@@ -1208,6 +1219,9 @@ document.getElementById('login-overlay').addEventListener('click', e => { if (e.
 // check if auth is enabled on the server
 fetch('/api/auth/status').then(r => r.json()).then(d => {
   _authEnabled = d.auth_enabled !== false;
+  _oidcEnabled = d.oidc_enabled === true;
+  _csrfToken = d.csrf_token || '';
+  _role = _authEnabled ? (d.role || (_adminToken ? 'admin' : null)) : 'admin';
   updateAdminUI();
 }).catch(() => {});
 

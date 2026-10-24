@@ -37,7 +37,11 @@ const SPEC_CMAP = new Uint8Array(256 * 3);
 function loadSpectrogram(player, spectrogramUrl) {
   const url = spectrogramUrl || player.dataset.clipUrl;
   if (!url) return;
-  const specUrl = spectrogramUrl || (url + '/spectrogram');
+  let specUrl = spectrogramUrl || (url + '/spectrogram');
+  const adminToken = sessionStorage.getItem('adminToken') || '';
+  if (adminToken && !/[?&]token=/.test(specUrl)) {
+    specUrl += (specUrl.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(adminToken);
+  }
   const canvas = player.querySelector('.spec-canvas');
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#1a1a1a';
