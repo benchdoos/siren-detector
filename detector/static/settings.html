@@ -424,6 +424,19 @@ function adminHeaders() {
   return _adminToken ? {'Authorization': 'Bearer ' + _adminToken} : {};
 }
 
+// Any API request can be the first one to discover that the shared session
+// token has expired. Leave Settings immediately instead of showing stale UI
+// or a series of authentication alerts (notably on iOS Safari).
+const _settingsFetch = window.fetch.bind(window);
+window.fetch = async (...args) => {
+  const response = await _settingsFetch(...args);
+  if (response.status === 401 && new URL(args[0], location.href).pathname.startsWith('/api/')) {
+    window.location.replace('/');
+    return new Promise(() => {});
+  }
+  return response;
+};
+
 /* ── Settings keys & panel mapping ── */
 const SETTINGS_KEYS = [
   'detection_mode','inference_interval_seconds',
