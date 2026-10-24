@@ -1,0 +1,46 @@
+name: "🐛 Сообщить об ошибке · Русский"
+description: Сообщите о проблеме в работе проекта.
+title: "[Ошибка]: "
+body:
+  - type: markdown
+    attributes:
+      value: "Спасибо, что помогаете улучшать Siren Detector. Укажите только важные детали; логи и скриншоты помогут разобраться."
+  - type: textarea
+    id: problem
+    attributes:
+      label: "🐛 Что произошло?"
+      placeholder: Кратко опишите проблему...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: "🔁 Как повторить проблему?"
+      description: Что вы сделали перед тем, как она появилась?
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "✅ Как должно было работать?"
+      placeholder: Опишите ожидаемое поведение...
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: "🧩 Среда"
+      description: Укажите важные версии, оборудование и операционную систему.
+      placeholder: "Например: ESP32, прошивка v1.2, Ubuntu 24.04"
+    validations:
+      required: false
+  - type: textarea
+    id: evidence
+    attributes:
+      label: "📎 Логи или скриншоты"
+      description: Прикрепите скриншоты или вставьте логи, если они есть.
+    validations:
+      required: false

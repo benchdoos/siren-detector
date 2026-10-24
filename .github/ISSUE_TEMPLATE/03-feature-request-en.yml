@@ -1,0 +1,28 @@
+name: "✨ Feature request · English"
+description: Suggest a feature or improvement.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: "Have an idea for Siren Detector? A short description is enough to get started."
+  - type: textarea
+    id: idea
+    attributes:
+      label: "✨ What would you like to see?"
+      placeholder: Describe the feature...
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: "🎯 What problem would it solve?"
+      placeholder: Who would benefit, and how?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: "💡 Any ideas for how it could work?"
+      description: Optional
+    validations:
+      required: false

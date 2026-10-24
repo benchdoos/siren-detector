@@ -1,0 +1,28 @@
+name: "✨ Предложить улучшение · Русский"
+description: Предложите новую функцию или улучшение.
+title: "[Идея]: "
+body:
+  - type: markdown
+    attributes:
+      value: "Есть идея для Siren Detector? Для начала достаточно короткого описания."
+  - type: textarea
+    id: idea
+    attributes:
+      label: "✨ Что хотелось бы добавить?"
+      placeholder: Опишите функцию или улучшение...
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: "🎯 Какую проблему это решит?"
+      placeholder: Кому и чем это поможет?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: "💡 Есть идеи по реализации?"
+      description: Необязательно
+    validations:
+      required: false
