@@ -43,6 +43,7 @@ plugins:
             Getting started: Начало работы
             Architecture: Архитектура
             Operations: Эксплуатация
+            Authentication and roles: Авторизация и роли
             Upgrading and migration: Обновление и переход
             Data and models: Данные и модели
             Multi-microphone: Несколько микрофонов
@@ -56,6 +57,7 @@ nav:
   - Getting started: getting-started.md
   - Architecture: architecture.md
   - Operations: operations.md
+  - Authentication and roles: authentication.md
   - Upgrading and migration: migration.md
   - Data and models: data-and-models.md
   - Multi-microphone: multi-microphone.md

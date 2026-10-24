@@ -8,7 +8,7 @@ diagrams are in [Architecture](architecture.md).
 
 The REST API is served by the same server as the web UI. For a running instance, FastAPI's interactive docs are at `http://<host>:8080/docs` and OpenAPI JSON at `http://<host>:8080/openapi.json`. OpenAPI is generated automatically from the application's REST routes. WebSocket routes are not included and are documented below.
 
-When authentication is enabled, protected requests accept the admin bearer token or an OIDC session cookie. Roles are `viewer` (read), `editor` (read and label/segment events), and `admin` (settings and calibration). Cookie-authenticated editor/admin writes also require the `X-CSRF-Token` returned by `/api/auth/status`. `ADMIN_TOKEN` remains available for CLI tools. With authentication disabled, access checks are off.
+See [Authentication and roles](authentication.md) for the token and OIDC modes. When authentication is enabled, protected requests accept the admin bearer token or an OIDC session cookie. Cookie-authenticated editor/admin writes also require the `X-CSRF-Token` returned by `/api/auth/status`. `ADMIN_TOKEN` remains available for CLI tools.
 
 ## REST routes
 
