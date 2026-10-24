@@ -111,6 +111,13 @@
 
 ## Web UI — реализован и задеплоен
 
+### Web UI authorization — OIDC and roles
+- [ ] Introduce a shared authorization model with `viewer`, `editor` (viewer + event labeling), and `admin` permissions while preserving disabled-auth and admin-token modes.
+- [ ] Add configurable OIDC login (Authorization Code flow), secure server-side session cookie, logout, and role/group claim mapping for Keycloak-compatible providers.
+- [ ] Apply permissions to pages, REST endpoints, WebSocket, clips/audio, and event labeling; keep UI visibility consistent with server enforcement.
+- [ ] Keep retrain independent of browser roles; preserve the existing token access used by `make retrain` calibration polling and other CLI scripts.
+- [ ] Add focused authorization tests and document configuration, reverse-proxy requirements, and migration/rollback.
+
 - [x] FastAPI + WebSocket: реал-тайм score bar и события.
 - [x] История событий (последние 100) — реплицируется новым клиентам при подключении.
 - [x] Аудиоплеер для confirmed-событий (30-секундный клип до момента события).
