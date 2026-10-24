@@ -969,6 +969,7 @@ async function loadSources() {
       card.querySelector('input[type="checkbox"]').addEventListener('change', (e) => toggleSource(s.source_id, e.target.checked, card));
       list.appendChild(card);
     }
+    list.querySelectorAll('.src-listen').forEach(button => { button.disabled = _calRecording; });
   } catch(e) {
     list.innerHTML = '<div style="font-size:13px;color:#ef5350">Failed to load sources.</div>';
   }
@@ -1189,8 +1190,16 @@ async function toggleSource(sourceId, enabled, card) {
 /* ── Calibration ── */
 let _calPollTimer = null;
 let _calDuration = 300;
+let _calRecording = false;
+
+function _calSetSourceSelectionLocked(locked) {
+  _calRecording = locked;
+  document.querySelectorAll('.src-listen').forEach(button => { button.disabled = locked; });
+  if (locked && _listenWs) stopSourceListen();
+}
 
 function _calSetRecording(active) {
+  _calSetSourceSelectionLocked(active);
   const sourceList = document.getElementById('cal-source-list');
   sourceList.setAttribute('aria-disabled', active ? 'true' : 'false');
   sourceList.querySelectorAll('input').forEach(input => input.disabled = active);
@@ -1223,6 +1232,7 @@ async function loadCalibrationSources() {
       label.innerHTML = `<input type="checkbox" value="${Number(s.source_id)}"><span class="cal-source-name">${esc(s.name)}</span><span class="cal-source-id">ID ${Number(s.source_id)}</span>`;
       list.appendChild(label);
     }
+    list.querySelectorAll('input').forEach(input => { input.disabled = _calRecording; });
   } catch(e) { list.innerHTML = '<label class="cal-source-item"><input type="checkbox" value="0"><span class="cal-source-name">default</span><span class="cal-source-id">ID 0</span></label>'; }
 }
 
@@ -1360,6 +1370,7 @@ function _wsUrl(path) {
 }
 
 function toggleSourceListen(btn, sourceId) {
+  if (_calRecording) return;
   if (_listenSid === sourceId && _listenWs) {
     stopSourceListen();
     return;
