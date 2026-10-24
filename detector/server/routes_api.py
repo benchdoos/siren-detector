@@ -9,10 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse
 
-from ..auth import AUTH_ENABLED, check_token, require_admin, require_viewer
+from ..auth import (AUTH_ENABLED, OIDC_ENABLED, check_token, get_principal,
+                    require_admin, require_editor, require_viewer)
 from ..config import (
     CLIP_DIR,
     DATASET_DIR,
@@ -87,7 +88,7 @@ def _stored_engine_graph() -> dict:
     })
 
 
-@router.get("/api/engine-graph", dependencies=[Depends(require_viewer)])
+@router.get("/api/engine-graph", dependencies=[Depends(require_admin)])
 async def get_engine_graph():
     """Return the stored graph with availability information for each engine."""
     graph = _stored_engine_graph()
@@ -150,7 +151,7 @@ async def put_engine_graph(body: dict = Body(...)):
     return graph
 
 
-@router.get("/api/settings", dependencies=[Depends(require_viewer)])
+@router.get("/api/settings", dependencies=[Depends(require_admin)])
 async def get_settings():
     dsp_paths = (DSP_MODEL_PATH, DSP_NORM_STATS_PATH, DSP_LABELS_PATH)
     missing_dsp_files = [Path(path).name for path in dsp_paths if not Path(path).is_file()]
@@ -163,8 +164,14 @@ async def get_settings():
 
 
 @router.get("/api/auth/status")
-async def auth_status():
-    return {"auth_enabled": AUTH_ENABLED}
+async def auth_status(request: Request):
+    principal = await get_principal(request)
+    return {
+        "auth_enabled": AUTH_ENABLED,
+        "oidc_enabled": OIDC_ENABLED,
+        "role": principal.role.name.lower() if principal else None,
+        "csrf_token": principal.csrf_token if principal and principal.session else "",
+    }
 
 
 @router.post("/api/auth/check")
@@ -362,7 +369,7 @@ def _clean_dataset_artifacts(stem: str) -> int:
     return removed
 
 
-@router.post("/feedback", dependencies=[Depends(require_admin)])
+@router.post("/feedback", dependencies=[Depends(require_editor)])
 async def feedback(body: dict):
     filename = body.get("filename", "")
     label = body.get("label", "")
@@ -482,7 +489,7 @@ def _save_segment_slices(src: Path, segments: list[dict]) -> None:
 SEGMENT_LABELS = {"siren", "explosion", "uav"}
 
 
-@router.post("/feedback/segments", dependencies=[Depends(require_admin)])
+@router.post("/feedback/segments", dependencies=[Depends(require_editor)])
 async def feedback_segments(body: dict):
     filename = body.get("filename", "")
     segments = body.get("segments", [])
@@ -697,16 +704,11 @@ async def delete_calibration_recording(body: dict):
     return {"ok": True}
 
 
-@router.get("/calibrate-audio/{source_name}/{filename}")
+@router.get("/calibrate-audio/{source_name}/{filename}", dependencies=[Depends(require_viewer)])
 async def serve_calibration_audio(
     source_name: str, filename: str,
-    token: str = "", authorization: str = Header(""),
 ):
     """Serve a calibration WAV file."""
-    if AUTH_ENABLED:
-        hdr_token = authorization.removeprefix("Bearer ").strip()
-        if not ((hdr_token and check_token(hdr_token)) or (token and check_token(token))):
-            raise HTTPException(status_code=401, detail="Authentication required")
     bg_dir = DATASET_DIR / "background"
     path = (bg_dir / source_name / filename).resolve()
     if not path.is_relative_to(bg_dir.resolve()):
@@ -716,7 +718,7 @@ async def serve_calibration_audio(
     return FileResponse(str(path), media_type="audio/wav")
 
 
-@router.get("/calibrate-audio/{source_name}/{filename}/spectrogram")
+@router.get("/calibrate-audio/{source_name}/{filename}/spectrogram", dependencies=[Depends(require_viewer)])
 async def calibration_spectrogram(source_name: str, filename: str):
     """Return spectrogram for a calibration recording."""
     bg_dir = DATASET_DIR / "background"
