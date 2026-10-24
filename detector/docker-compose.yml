@@ -1,8 +1,6 @@
 services:
   detector:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/benchdoos/siren-detector-engine:${IMAGE_TAG:-latest}
     container_name: siren-detector-engine
     restart: unless-stopped
     network_mode: host

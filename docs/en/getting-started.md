@@ -4,6 +4,7 @@
 
 - ESP32-S3 and one INMP441 microphone (the second microphone is optional).
 - A Linux host for Docker Compose; Raspberry Pi is the documented deployment target.
+- For published Raspberry Pi images, use a 64-bit operating system (the images target `linux/arm64`).
 - An ESPHome installation to compile and flash the firmware.
 - Network access from the ESP32 to the host running the Hub.
 
@@ -49,6 +50,8 @@ docker compose up -d hub detector
 
 The Hub listens for ESP32 audio on UDP port `9000` and forwards packets to the detector on `9002`. The detector web interface is served on port `8080`.
 
+Compose pulls the `latest` images automatically. To pin a release, set `IMAGE_TAG` in `hub/.env`, for example `IMAGE_TAG=v0.5.0`, then run `docker compose pull hub detector` before starting the services. The same setting applies to the other service Compose files.
+
 Open `http://<host-ip>:8080`. On first start, YAMNet model files are downloaded and cached; allow network access and time for the initial startup.
 
 ## 4. Check the audio path
@@ -57,7 +60,13 @@ Confirm that the ESP32 is online and sending packets, then check the detector's 
 
 ## Local development
 
-The detector can also run directly with Python. Install dependencies from `detector/requirements.txt`, then start `python -m detector.main`; the default UDP port is `9000`, web port `8080`. If running the Hub separately, set the detector UDP port to `9002` as in `hub/docker-compose.yml`.
+To build and run the Hub and Detector from the checked-out source on the Raspberry Pi, run this from `hub/`:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build hub detector
+```
+
+The USB audio source and recorder have matching `docker-compose.build.yml` overlays in their directories. Compose files without the build overlay continue to pull published images. The detector can also run directly with Python: install dependencies from `detector/requirements.txt`, then start `python -m detector.main`; the default UDP port is `9000`, web port `8080`.
 
 ## Next steps
 

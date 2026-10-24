@@ -9,7 +9,7 @@
 
 services:
   audio-source:
-    build: .
+    image: ghcr.io/benchdoos/siren-audio-source:${IMAGE_TAG:-latest}
     container_name: siren-audio-source
     restart: unless-stopped
     network_mode: host

@@ -1,8 +1,6 @@
 services:
   recorder:
-    build:
-      context: ./recorder-files
-      dockerfile: Dockerfile
+    image: ghcr.io/benchdoos/siren-audio-recorder:${IMAGE_TAG:-latest}
     container_name: siren-audio-recorder
     network_mode: host
     volumes:

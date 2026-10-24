@@ -6,6 +6,8 @@
 
 <p align="right"><b>English</b> • <a href="README.ru.md">Русский</a></p>
 
+<p align="center"><a href="https://github.com/benchdoos/siren-detector/releases/latest"><img src="https://img.shields.io/github/v/release/benchdoos/siren-detector?label=container%20release" alt="Latest container release"></a></p>
+
 Open-source project for detecting civil-alert sirens, explosions, and nearby UAV sounds. An ESP32-S3 captures audio; a Linux host runs inference and exposes events through a web interface and optional MQTT.
 
 > [!WARNING]
@@ -18,6 +20,8 @@ Open-source project for detecting civil-alert sirens, explosions, and nearby UAV
 ## Quick start
 
 Requirements: ESP32-S3 + INMP441 microphone, a Linux host with Docker Compose, and an ESPHome installation.
+
+The Hub, Detector, USB audio source, and recorder container images are published to [GitHub Container Registry](https://github.com/benchdoos?tab=packages&repo_name=siren-detector) for each release. Compose uses the latest images by default. Set `IMAGE_TAG=vX.Y.Z` to pin a release; local builds are also supported for development.
 
 1. Configure the environment and device secrets:
 

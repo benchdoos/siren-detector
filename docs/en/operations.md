@@ -30,7 +30,7 @@ For Compose-managed updates on the host:
 
 ```bash
 cd hub
-docker compose up -d --build detector
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build detector
 docker compose logs -f detector
 ```
 

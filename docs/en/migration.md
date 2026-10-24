@@ -86,7 +86,7 @@ make deploy-audio
 files using your normal method, then run from its `hub/` directory:
 
 ```bash
-docker compose up -d --build detector
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build detector
 docker compose logs -f detector
 ```
 

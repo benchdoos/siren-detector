@@ -6,9 +6,7 @@
 
 services:
   hub:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/benchdoos/siren-detector-hub:${IMAGE_TAG:-latest}
     container_name: siren-hub
     restart: unless-stopped
     network_mode: host
@@ -28,9 +26,7 @@ services:
       - "127.0.0.1:${DETECTOR_PORT:-9002}"
 
   detector:
-    build:
-      context: ../detector
-      dockerfile: Dockerfile
+    image: ghcr.io/benchdoos/siren-detector-engine:${IMAGE_TAG:-latest}
     container_name: siren-detector-engine
     restart: unless-stopped
     network_mode: host

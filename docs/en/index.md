@@ -1,5 +1,7 @@
 # Siren Detector
 
+[![Latest container release](https://img.shields.io/github/v/release/benchdoos/siren-detector?label=container%20release)](https://github.com/benchdoos/siren-detector/releases/latest)
+
 An open-source, non-commercial project for detecting civil-alert sirens, explosions, and nearby uavs used as a proxy for UAV-like sound. An ESP32-S3 audio node streams microphone audio to a Linux host, where the detector analyzes it and exposes events through a web interface and optional MQTT integration.
 
 > [!WARNING]

@@ -13,6 +13,12 @@ Detector принимает независимые аудиоисточники 
 
 Для запуска без Docker установите зависимости из `audio_source/requirements.txt` и запустите `audio_source/audio_source.py`; список устройств можно получить с помощью `--list-devices`.
 
+Чтобы проверить локальные изменения в контейнере, выполните команду из `audio_source/`:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
 ### Если USB-источник пропадает
 
 Сервис повторно открывает аудиопоток после его остановки или ошибки PortAudio;
@@ -33,7 +39,7 @@ docker compose logs --tail=100 audio-source
 доступно выбранному backend; после изменения настроек пересоздайте сервис:
 
 ```bash
-docker compose up -d --build --force-recreate audio-source
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build --force-recreate audio-source
 ```
 
 Compose настроен на автоматический перезапуск контейнера после его завершения,

@@ -1,0 +1,5 @@
+services:
+  recorder:
+    build:
+      context: ./recorder-files
+      dockerfile: Dockerfile

@@ -1,5 +1,7 @@
 # Siren Detector
 
+[![Последний релиз контейнеров](https://img.shields.io/github/v/release/benchdoos/siren-detector?label=container%20release)](https://github.com/benchdoos/siren-detector/releases/latest)
+
 Открытый проект для некоммерческого обнаружения сирен гражданского оповещения, взрывов и звуков приближающегося мотоцикла как приближения к звуку БПЛА. Аудиоузел на ESP32-S3 передаёт звук с микрофонов на Linux-хост, где детектор анализирует его и показывает события в веб-интерфейсе и, при желании, публикует их через MQTT.
 
 > [!WARNING]

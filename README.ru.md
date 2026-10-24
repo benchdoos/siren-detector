@@ -6,6 +6,8 @@
 
 <p align="right"><a href="README.md">English</a> • <b>Русский</b></p>
 
+<p align="center"><a href="https://github.com/benchdoos/siren-detector/releases/latest"><img src="https://img.shields.io/github/v/release/benchdoos/siren-detector?label=container%20release" alt="Последний релиз контейнеров"></a></p>
+
 Открытый проект для обнаружения сирен гражданского оповещения, взрывов и звуков приближающегося мотоцикла. ESP32-S3 получает аудио, Linux-хост выполняет распознавание и показывает события в веб-интерфейсе, а при необходимости — передаёт их через MQTT.
 
 > [!WARNING]
@@ -18,6 +20,8 @@
 ## Быстрый запуск
 
 Понадобятся ESP32-S3 с микрофоном INMP441, Linux-хост с Docker Compose и установленный ESPHome.
+
+Образы Hub, Detector, USB audio source и recorder публикуются в [GitHub Container Registry](https://github.com/benchdoos?tab=packages&repo_name=siren-detector) при каждом релизе. Compose по умолчанию использует последние образы. Для фиксации версии задайте `IMAGE_TAG=vX.Y.Z`; для разработки можно собирать образы локально.
 
 1. Настройте окружение и секреты устройства:
 

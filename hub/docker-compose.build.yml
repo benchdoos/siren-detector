@@ -1,0 +1,10 @@
+services:
+  hub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+  detector:
+    build:
+      context: ../detector
+      dockerfile: Dockerfile

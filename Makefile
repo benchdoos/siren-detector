@@ -14,13 +14,14 @@ LABELS      = siren background uav explosion unknown
 deploy:
 	rsync -av --delete --exclude='__pycache__' detector/ $(RPI):$(RPI_BASE)/detector/
 	scp hub/docker-compose.yml $(RPI):$(RPI_BASE)/hub/
+	scp hub/docker-compose.build.yml $(RPI):$(RPI_BASE)/hub/
 	@test -f hub/.env && scp hub/.env $(RPI):$(RPI_BASE)/hub/.env || true
-	ssh $(RPI) "cd $(RPI_BASE)/hub && docker compose up --build -d detector && docker image prune -f"
+	ssh $(RPI) "cd $(RPI_BASE)/hub && docker compose -f docker-compose.yml -f docker-compose.build.yml up --build -d detector && docker image prune -f"
 
 ## Deploy audio_source to RPi and rebuild
 deploy-audio:
 	rsync -av --delete --exclude='__pycache__' audio_source/ $(RPI):$(RPI_BASE)/audio_source/
-	ssh $(RPI) "cd $(RPI_BASE)/audio_source && docker compose up --build -d"
+	ssh $(RPI) "cd $(RPI_BASE)/audio_source && docker compose -f docker-compose.yml -f docker-compose.build.yml up --build -d"
 
 ## Deploy only frontend (no rebuild needed)
 deploy-ui:
@@ -44,6 +45,7 @@ logs-esp:
 ## Deploy docker-compose.yml to RPi
 deploy-compose:
 	scp hub/docker-compose.yml $(RPI):$(RPI_BASE)/hub/
+	scp hub/docker-compose.build.yml $(RPI):$(RPI_BASE)/hub/
 
 ## Restart detector container (no rebuild)
 restart:
@@ -75,6 +77,7 @@ deploy-model:
 		ml/results/model_card.json \
 		$(RPI):$(RPI_BASE)/ml/results/
 	scp hub/docker-compose.yml $(RPI):$(RPI_BASE)/hub/docker-compose.yml
+	scp hub/docker-compose.build.yml $(RPI):$(RPI_BASE)/hub/docker-compose.build.yml
 	@if [ -f ml/results/dsp_metrics.json ]; then \
 		scp ml/results/dsp_metrics.json $(RPI):$(RPI_BASE)/ml/results/; \
 	fi
