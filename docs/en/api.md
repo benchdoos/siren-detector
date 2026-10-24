@@ -8,20 +8,21 @@ diagrams are in [Architecture](architecture.md).
 
 The REST API is served by the same server as the web UI. For a running instance, FastAPI's interactive docs are at `http://<host>:8080/docs` and OpenAPI JSON at `http://<host>:8080/openapi.json`. OpenAPI is generated automatically from the application's REST routes. WebSocket routes are not included and are documented below.
 
-When authentication is enabled (`AUTH_ENABLED` in `hub/.env`), protected requests must include a token checked for viewer or admin access. Reads generally require viewer access; settings updates, feedback, and calibration controls require admin access. Public exceptions include `/api/auth/status`, `/api/auth/check`, clip downloads, and calibration audio downloads; check the deployed configuration. With authentication disabled, requests are not restricted by tokens.
+When authentication is enabled, protected requests accept the admin bearer token or an OIDC session cookie. Roles are `viewer` (read), `editor` (read and label/segment events), and `admin` (settings and calibration). Cookie-authenticated editor/admin writes also require the `X-CSRF-Token` returned by `/api/auth/status`. `ADMIN_TOKEN` remains available for CLI tools. With authentication disabled, access checks are off.
 
 ## REST routes
 
 | Method and path | Access when auth is enabled | Purpose |
 |---|---|---|
-| `GET /api/auth/status` | Public | Reports whether authentication is enabled. |
+| `GET /api/auth/status` | Public | Reports auth mode, current role, and session CSRF token. |
 | `POST /api/auth/check` | Public | Checks a token from JSON body `{"token":"…"}`. |
-| `GET /api/settings` | Viewer | Current settings, defaults, and DSP model availability. |
+| `/auth/login`, `/auth/callback`, `/auth/logout` | Public/session | OIDC sign-in and sign-out routes when OIDC is configured. |
+| `GET /api/settings` | Admin | Current settings, defaults, and DSP model availability. |
 | `GET /api/runtime/status` | Viewer | Audio subscriber states, queue depth, dropped frames, and callback errors. |
 | `GET /metrics` | Viewer | Prometheus 0.0.4 text metrics for engine, audio queue, and output health. |
 | `GET /events` | Viewer | One-way SSE stream of the current snapshot and score/event updates. |
 | `GET /api/engines/manifests` | Viewer | Locally registered engine manifests. |
-| `GET /api/engine-graph` | Viewer | Stored graph and configured engine availability. |
+| `GET /api/engine-graph` | Admin | Stored graph and configured engine availability. |
 | `PUT /api/engine-graph` | Admin | Validates and stores `engine-graph.v1`. |
 | `POST /api/settings` | Admin | Updates provided settings; invalid types, ranges, or modes return `400`. |
 | `POST /api/settings/reset` | Admin | Resets settings to defaults. |
@@ -34,14 +35,14 @@ When authentication is enabled (`AUTH_ENABLED` in `hub/.env`), protected request
 | `POST /api/calibrate/cancel` | Admin | Cancels calibration. |
 | `GET /api/calibrate/recordings` | Viewer | Lists calibration recordings. |
 | `DELETE /api/calibrate/recordings` | Admin | Deletes calibration recordings. |
-| `GET /calibrate-audio/{source_name}/{filename}` | Viewer token in query or Authorization | Downloads calibration audio. |
-| `GET /calibrate-audio/{source_name}/{filename}/spectrogram` | No route-level check | Calibration recording spectrogram. |
+| `GET /calibrate-audio/{source_name}/{filename}` | Viewer session or token | Downloads calibration audio. |
+| `GET /calibrate-audio/{source_name}/{filename}/spectrogram` | Viewer | Calibration recording spectrogram. |
 
-| `POST /feedback` | Admin | Labels a saved clip; body includes `filename` and `label`. |
-| `POST /feedback/segments` | Admin | Saves clip segment labels. |
+| `POST /feedback` | Editor | Labels a saved clip; body includes `filename` and `label`. |
+| `POST /feedback/segments` | Editor | Saves clip segment labels. |
 | `POST /api/manual-event` | Admin | Creates a manual event and records a clip. |
-| `GET /clips/{filename}` | Viewer token in query or Authorization | Downloads a WAV clip. |
-| `GET /clips/{filename}/spectrogram` | No route-level check | Returns a clip spectrogram. |
+| `GET /clips/{filename}` | Viewer session or token | Downloads a WAV clip. |
+| `GET /clips/{filename}/spectrogram` | Viewer | Returns a clip spectrogram. |
 
 `GET /api/calibrate` returns overall progress and a `sources` object containing per-source progress and `done` state. Overall progress follows the least advanced source; `done` is true when every source has recorded the requested duration.
 
@@ -76,11 +77,11 @@ oldest message is dropped when their bounded queue fills.
 
 ### `/ws`
 
-Connect to `ws://<host>:8080/ws` (or `wss://` behind a TLS proxy). The server first sends `{"type":"session","started_at":...}`, then the latest score snapshot and available event history, followed by updates from the event bus. This route does not check a token.
+Connect to `ws://<host>:8080/ws` (or `wss://` behind a TLS proxy). The server first sends `{"type":"session","started_at":...}`, then the latest score snapshot and available event history, followed by updates from the event bus. Viewer authentication is required when enabled.
 
 ### `/ws/audio`
 
-Connect to `ws://<host>:8080/ws/audio` to receive binary float32 PCM audio. The optional `?source_id=<ID>` parameter filters to one source. When authentication is enabled, this route requires a viewer token; rejected connections close with code `4401`.
+Connect to `ws://<host>:8080/ws/audio` to receive binary float32 PCM audio. The optional `?source_id=<ID>` parameter filters to one source. When authentication is enabled, this route requires viewer access; rejected connections close with code `4401`.
 
 ## Specification source
 

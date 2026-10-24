@@ -40,7 +40,9 @@ The web UI is served at `http://<host>:8080`. It displays live scores, sources, 
 
 The dashboard and settings page support English and Russian. Use the language selector in the page header to switch languages; the choice is saved in this browser. On first visit, the UI uses the browser's preferred language when it is Russian and English otherwise.
 
-Authentication is controlled by `AUTH_ENABLED` and `ADMIN_TOKEN` in `hub/.env`. If authentication is enabled and no token is set, the detector generates a token at startup; check container logs. Keep the token private.
+Authentication modes are controlled by `AUTH_ENABLED`, `ADMIN_TOKEN`, and the optional `OIDC_*` variables in `hub/.env`. With no OIDC settings, the existing bearer-token flow remains available; if no admin token is set, the detector generates one at startup. The admin token remains valid for CLI tools, including `make retrain` calibration polling. `AUTH_ENABLED=false` disables all access checks.
+
+To enable Keycloak or another OpenID Connect provider, set `OIDC_ISSUER_URL` to the realm issuer URL, plus `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, and a long random `OIDC_SESSION_SECRET`. Register `https://<public-host>/auth/callback` as the client's redirect URI. Set `OIDC_ROLE_CLAIM` to the role claim path (Keycloak realm roles: `realm_access.roles`) and `OIDC_ROLE_MAP` to comma-separated `provider-role=viewer|editor|admin` mappings, for example `detector-viewer=viewer,detector-editor=editor,detector-admin=admin`. Users without a mapped role are denied. `viewer` can read; `editor` can also label and segment events; `admin` can manage settings and calibration. The OIDC session is held server-side in memory and expires after 12 hours, so run one detector worker and expect users to sign in again after a restart. Set `OIDC_COOKIE_SECURE=true` behind HTTPS; keep the detector port private behind the TLS reverse proxy. For local HTTP development only, set it to `false`. To return to token-only mode, remove the `OIDC_*` settings and keep `AUTH_ENABLED=true` with `ADMIN_TOKEN` configured.
 
 ## MQTT and Home Assistant
 
