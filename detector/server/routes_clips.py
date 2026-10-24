@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import soundfile as sf
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from ..auth import require_viewer
+from ..auth import OIDC_ENABLED, require_viewer
 from ..config import CLIP_DIR, DATASET_DIR, VALID_LABELS
 from ..runtime.contracts import normalize_detector_event
 
@@ -100,9 +100,11 @@ def generate_spectrogram(path: "Path") -> dict:
     return result
 
 
-@router.get("/clips/{filename}/spectrogram", dependencies=[Depends(require_viewer)])
-async def clip_spectrogram(filename: str):
-    """Return spectrogram data for an authenticated viewer."""
+@router.get("/clips/{filename}/spectrogram")
+async def clip_spectrogram(filename: str, request: Request):
+    """Return a spectrogram; require a viewer session when OIDC is enabled."""
+    if OIDC_ENABLED:
+        await require_viewer(request)
     path = (CLIP_DIR / filename).resolve()
     if not path.is_relative_to(CLIP_DIR.resolve()):
         raise HTTPException(status_code=400, detail="Invalid filename")
